@@ -13,7 +13,7 @@ interface BadgeProps {
 
 const variantColors: Record<BadgeVariant, { bg: string; text: string }> = {
   primary: { bg: `${colors.primary}20`, text: colors.primary },
-  secondary: { bg: `${colors.secondary}30`, text: colors.secondaryDark },
+  secondary: { bg: `${colors.secondary}30`, text: colors.secondary },
   success: { bg: `${colors.success}20`, text: '#059669' },
   warning: { bg: `${colors.warning}20`, text: '#B45309' },
   error: { bg: `${colors.error}20`, text: colors.error },

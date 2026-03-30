@@ -18,4 +18,10 @@ export const matchesApi = {
 
   getMyMatches: (tournamentId: string) =>
     apiClient.get(`/tournaments/${tournamentId}/my-matches`),
+
+  updateStatus: (matchId: string, dto: { status: string; winnerId?: string; notes?: string }) =>
+    apiClient.patch(`/matches/${matchId}/status`, dto),
+
+  getMatch: (matchId: string) =>
+    apiClient.get(`/matches/${matchId}`),
 };
