@@ -15,24 +15,23 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { tournamentsApi } from '../../api/tournaments.api';
 import { StatusBadge } from '../../components/ui/StatusBadge';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
 import { useTournamentStore } from '../../store/tournamentStore';
 import { Tournament, TournamentStatus, TournamentCategory } from '../../types/tournament.types';
 import { colors, spacing, typography, borderRadius, shadows } from '../../config/theme';
 import { OrgTournamentsStackParamList } from '../../navigation/types';
-import apiClient from '../../api/client';
+
+const NAVY = '#001E40';
+const BLUE_ACCENT = '#2196F3';
 
 type NavProp = NativeStackNavigationProp<OrgTournamentsStackParamList, 'TournamentManage'>;
 type RouteType = RouteProp<OrgTournamentsStackParamList, 'TournamentManage'>;
 
-// Status transitions
-const STATUS_ACTIONS: Record<TournamentStatus, { label: string; next: TournamentStatus } | null> = {
-  draft: { label: 'Publish', next: 'published' },
-  published: { label: 'Open Registration', next: 'registration_open' },
-  registration_open: { label: 'Close Registration', next: 'registration_closed' },
-  registration_closed: { label: 'Start Tournament', next: 'in_progress' },
-  in_progress: { label: 'Complete Tournament', next: 'completed' },
+const STATUS_ACTIONS: Record<TournamentStatus, { label: string; next: TournamentStatus; desc: string } | null> = {
+  draft: { label: 'PUBLISH', next: 'published', desc: 'Make tournament visible to players' },
+  published: { label: 'OPEN REGISTRATION', next: 'registration_open', desc: 'Allow players to register' },
+  registration_open: { label: 'CLOSE REGISTRATION', next: 'registration_closed', desc: 'Stop accepting registrations' },
+  registration_closed: { label: 'GENERATE BRACKETS', next: 'in_progress', desc: 'Generate draw and start tournament' },
+  in_progress: { label: 'MARK COMPLETE', next: 'completed', desc: 'Mark tournament as finished' },
   completed: null,
   cancelled: null,
 };
@@ -40,22 +39,21 @@ const STATUS_ACTIONS: Record<TournamentStatus, { label: string; next: Tournament
 interface DashboardStats {
   totalRegistrations: number;
   confirmedCount: number;
-  pendingCount: number;
+  waitlistedCount: number;
   revenue: number;
 }
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+function StatBox({ label, value, accent }: { label: string; value: string | number; accent?: boolean }) {
   return (
-    <View style={statStyles.card}>
-      <Text style={statStyles.value}>{value}</Text>
-      <Text style={statStyles.label}>{label}</Text>
-      {sub ? <Text style={statStyles.sub}>{sub}</Text> : null}
+    <View style={[statBoxStyles.box, accent && statBoxStyles.boxAccent]}>
+      <Text style={[statBoxStyles.value, accent && statBoxStyles.valueAccent]}>{value}</Text>
+      <Text style={statBoxStyles.label}>{label}</Text>
     </View>
   );
 }
 
-const statStyles = StyleSheet.create({
-  card: {
+const statBoxStyles = StyleSheet.create({
+  box: {
     flex: 1,
     backgroundColor: colors.surfaceContainerLowest,
     borderRadius: borderRadius.md,
@@ -63,13 +61,19 @@ const statStyles = StyleSheet.create({
     alignItems: 'center',
     ...shadows.sm,
   },
+  boxAccent: {
+    backgroundColor: NAVY,
+  },
   value: {
     fontSize: typography.fontSize['2xl'],
-    fontWeight: '800',
-    color: colors.primary,
+    fontWeight: '900',
+    color: NAVY,
+  },
+  valueAccent: {
+    color: '#FFFFFF',
   },
   label: {
-    fontSize: typography.fontSize['2xs'],
+    fontSize: 9,
     fontWeight: '700',
     color: colors.textTertiary,
     letterSpacing: 1,
@@ -77,20 +81,14 @@ const statStyles = StyleSheet.create({
     marginTop: 2,
     textAlign: 'center',
   },
-  sub: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
 });
 
 export default function TournamentDashboardScreen() {
   const navigation = useNavigation<NavProp>();
   const route = useRoute<RouteType>();
   const { tournamentId } = route.params;
-
   const { updateTournament } = useTournamentStore();
+
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -117,7 +115,7 @@ export default function TournamentDashboardScreen() {
         setStats({
           totalRegistrations: d.totalRegistrations ?? d.registrationsCount ?? 0,
           confirmedCount: d.confirmedCount ?? d.confirmed ?? 0,
-          pendingCount: d.pendingCount ?? d.pending ?? 0,
+          waitlistedCount: d.waitlistedCount ?? d.waitlisted ?? 0,
           revenue: d.revenue ?? d.totalRevenue ?? 0,
         });
       }
@@ -140,7 +138,7 @@ export default function TournamentDashboardScreen() {
 
     Alert.alert(
       action.label,
-      `Change status to "${action.next.replace(/_/g, ' ')}"?`,
+      action.desc,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -148,11 +146,8 @@ export default function TournamentDashboardScreen() {
           onPress: async () => {
             setStatusUpdating(true);
             try {
-              const res = await apiClient.patch(`/tournaments/${tournamentId}/status`, {
-                status: action.next,
-              });
-              const updated = res.data?.data ?? res.data;
-              const newStatus: TournamentStatus = updated?.status ?? action.next;
+              await tournamentsApi.changeStatus(tournamentId, action.next);
+              const newStatus = action.next;
               setTournament((prev) => prev ? { ...prev, status: newStatus } : prev);
               updateTournament(tournamentId, { status: newStatus });
             } catch (err: any) {
@@ -169,8 +164,14 @@ export default function TournamentDashboardScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
+        <View style={styles.navBar}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Text style={styles.backIcon}>←</Text>
+            <Text style={styles.backLabel}>BACK</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={NAVY} />
         </View>
       </SafeAreaView>
     );
@@ -179,6 +180,11 @@ export default function TournamentDashboardScreen() {
   if (!tournament) {
     return (
       <SafeAreaView style={styles.safeArea}>
+        <View style={styles.navBar}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Text style={styles.backIcon}>←</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.centered}>
           <Text style={styles.emptyText}>Tournament not found.</Text>
         </View>
@@ -191,19 +197,18 @@ export default function TournamentDashboardScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+      <StatusBar barStyle="light-content" backgroundColor={NAVY} />
 
       {/* Nav bar */}
       <View style={styles.navBar}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          style={styles.backTouchable}
+          style={styles.backBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.backIcon}>{'←'}</Text>
+          <Text style={styles.backIcon}>←</Text>
           <Text style={styles.backLabel}>BACK</Text>
         </TouchableOpacity>
-        <View style={styles.navSpacer} />
       </View>
 
       <ScrollView
@@ -213,19 +218,17 @@ export default function TournamentDashboardScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => fetchData(true)}
-            tintColor={colors.onPrimary}
-            colors={[colors.onPrimary]}
+            tintColor={colors.primaryFixedDim}
+            colors={[colors.primaryFixedDim]}
           />
         }
       >
-        {/* Hero header */}
-        <View style={styles.heroSection}>
-          <Text style={styles.tournamentName}>{tournament.name.toUpperCase()}</Text>
+        {/* Hero */}
+        <View style={styles.hero}>
+          <Text style={styles.heroName}>{tournament.name.toUpperCase()}</Text>
           <View style={styles.heroMeta}>
             <StatusBadge status={tournament.status} size="md" />
-            <Text style={styles.heroDates}>
-              {tournament.startDate} – {tournament.endDate}
-            </Text>
+            <Text style={styles.heroDates}>{tournament.startDate} – {tournament.endDate}</Text>
           </View>
           <Text style={styles.heroVenue}>{tournament.venueName}, {tournament.city}</Text>
         </View>
@@ -233,62 +236,55 @@ export default function TournamentDashboardScreen() {
         {/* Status action button */}
         {statusAction && (
           <View style={styles.actionSection}>
-            <Button
-              title={statusUpdating ? 'Updating…' : statusAction.label}
-              variant="primary"
-              size="lg"
-              fullWidth
+            <TouchableOpacity
+              style={[styles.statusBtn, statusUpdating && styles.statusBtnDisabled]}
               onPress={handleStatusAction}
               disabled={statusUpdating}
-            />
+              activeOpacity={0.85}
+            >
+              {statusUpdating ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.statusBtnText}>{statusAction.label}</Text>
+              )}
+            </TouchableOpacity>
           </View>
         )}
 
         {/* Stats row */}
-        {stats && (
+        <View style={styles.statsSection}>
+          <Text style={styles.sectionTitle}>OVERVIEW</Text>
           <View style={styles.statsRow}>
-            <StatCard
-              label="Registrations"
-              value={stats.totalRegistrations}
+            <StatBox
+              label="Total Registrations"
+              value={stats?.totalRegistrations ?? 0}
+              accent
             />
-            <StatCard
-              label="Confirmed"
-              value={stats.confirmedCount}
-            />
-            {stats.revenue > 0 && (
-              <StatCard
-                label="Revenue"
-                value={`₹${stats.revenue.toLocaleString()}`}
-              />
-            )}
+            <StatBox label="Confirmed" value={stats?.confirmedCount ?? 0} />
+            <StatBox label="Waitlisted" value={stats?.waitlistedCount ?? 0} />
           </View>
-        )}
+        </View>
 
-        {/* Quick actions */}
+        {/* Quick nav */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>MANAGE</Text>
-          <Card variant="filled" style={styles.quickLinksCard}>
+          <View style={styles.quickNavGrid}>
             <TouchableOpacity
-              style={styles.quickLink}
+              style={styles.quickNavCard}
               onPress={() => (navigation as any).navigate('RegistrationManage', { tournamentId })}
-              activeOpacity={0.75}
+              activeOpacity={0.8}
             >
-              <View style={styles.quickLinkLeft}>
-                <Text style={styles.quickLinkIcon}>📋</Text>
-                <View>
-                  <Text style={styles.quickLinkLabel}>Registrations</Text>
-                  <Text style={styles.quickLinkSub}>
-                    {stats ? `${stats.totalRegistrations} total · ${stats.confirmedCount} confirmed` : 'View all'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.quickLinkChevron}>›</Text>
+              <Text style={styles.quickNavIcon}>📋</Text>
+              <Text style={styles.quickNavLabel}>REGISTRATIONS</Text>
+              {stats && (
+                <Text style={styles.quickNavSub}>
+                  {stats.totalRegistrations} total
+                </Text>
+              )}
             </TouchableOpacity>
 
-            <View style={styles.divider} />
-
             <TouchableOpacity
-              style={styles.quickLink}
+              style={styles.quickNavCard}
               onPress={() => {
                 if (categories.length > 0) {
                   (navigation as any).navigate('BracketManage', {
@@ -299,52 +295,53 @@ export default function TournamentDashboardScreen() {
                   Alert.alert('No Categories', 'Add categories before managing brackets.');
                 }
               }}
-              activeOpacity={0.75}
+              activeOpacity={0.8}
             >
-              <View style={styles.quickLinkLeft}>
-                <Text style={styles.quickLinkIcon}>🏆</Text>
-                <View>
-                  <Text style={styles.quickLinkLabel}>Brackets & Draw</Text>
-                  <Text style={styles.quickLinkSub}>Generate draw, manage scores</Text>
-                </View>
-              </View>
-              <Text style={styles.quickLinkChevron}>›</Text>
+              <Text style={styles.quickNavIcon}>🏆</Text>
+              <Text style={styles.quickNavLabel}>BRACKETS</Text>
+              <Text style={styles.quickNavSub}>Draw & manage</Text>
             </TouchableOpacity>
-          </Card>
+
+            <TouchableOpacity
+              style={styles.quickNavCard}
+              onPress={() => {
+                if (categories.length > 0) {
+                  (navigation as any).navigate('ScoreEntry', {
+                    tournamentId,
+                    categoryId: categories[0].id,
+                  });
+                } else {
+                  Alert.alert('No Categories', 'Add categories first.');
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.quickNavIcon}>✏️</Text>
+              <Text style={styles.quickNavLabel}>SCORE ENTRY</Text>
+              <Text style={styles.quickNavSub}>Enter results</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Categories */}
         {categories.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>CATEGORIES</Text>
+            <Text style={styles.sectionTitle}>CATEGORIES ({categories.length})</Text>
             {categories.map((cat) => (
-              <Card key={cat.id} variant="outlined" style={styles.categoryCard}>
-                <View style={styles.categoryRow}>
-                  <View style={styles.categoryInfo}>
-                    <Text style={styles.categoryName}>{cat.name}</Text>
-                    <Text style={styles.categoryMeta}>
-                      {cat.format.toUpperCase()} · {cat.gender.toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={styles.categoryRight}>
-                    <Text style={styles.categoryTeams}>
-                      {cat.registeredTeams ?? 0}/{cat.maxTeams}
-                    </Text>
-                    <Text style={styles.categoryTeamsLabel}>teams</Text>
-                    <TouchableOpacity
-                      onPress={() =>
-                        (navigation as any).navigate('BracketManage', {
-                          tournamentId,
-                          categoryId: cat.id,
-                        })
-                      }
-                      style={styles.categoryAction}
-                    >
-                      <Text style={styles.categoryActionText}>BRACKET</Text>
-                    </TouchableOpacity>
-                  </View>
+              <View key={cat.id} style={styles.catCard}>
+                <View style={styles.catCardLeft}>
+                  <Text style={styles.catName}>{cat.name}</Text>
+                  <Text style={styles.catMeta}>
+                    {cat.format.toUpperCase()} · {cat.gender.toUpperCase()}
+                  </Text>
                 </View>
-              </Card>
+                <View style={styles.catCardRight}>
+                  <Text style={styles.catTeams}>
+                    {cat.registeredTeams ?? 0}/{cat.maxTeams}
+                  </Text>
+                  <Text style={styles.catTeamsLabel}>teams</Text>
+                </View>
+              </View>
             ))}
           </View>
         )}
@@ -373,39 +370,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.base,
     paddingVertical: spacing.md,
-    backgroundColor: colors.primary,
+    backgroundColor: NAVY,
   },
-  backTouchable: {
+  backBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
   },
   backIcon: {
     fontSize: typography.fontSize.lg,
-    color: colors.onPrimary,
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   backLabel: {
     fontSize: typography.fontSize['2xs'],
     fontWeight: '700',
-    color: colors.onPrimary,
+    color: '#FFFFFF',
     letterSpacing: 1.5,
-  },
-  navSpacer: {
-    flex: 1,
   },
   scrollContent: {
     paddingBottom: spacing['3xl'],
   },
-  heroSection: {
-    backgroundColor: colors.primary,
+  hero: {
+    backgroundColor: NAVY,
     paddingHorizontal: spacing.base,
     paddingBottom: spacing['2xl'],
   },
-  tournamentName: {
+  heroName: {
     fontSize: typography.fontSize['2xl'],
     fontWeight: '900',
-    color: colors.onPrimary,
+    color: '#FFFFFF',
     letterSpacing: typography.letterSpacing.tight,
     lineHeight: 28,
     marginBottom: spacing.sm,
@@ -429,16 +423,35 @@ const styles = StyleSheet.create({
   },
   actionSection: {
     paddingHorizontal: spacing.base,
-    paddingTop: spacing.base,
-    paddingBottom: spacing.sm,
+    paddingVertical: spacing.md,
     backgroundColor: colors.surfaceContainerLowest,
     ...shadows.sm,
+  },
+  statusBtn: {
+    backgroundColor: BLUE_ACCENT,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  statusBtnDisabled: {
+    opacity: 0.6,
+  },
+  statusBtnText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 1.5,
+  },
+  statsSection: {
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.lg,
   },
   statsRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    paddingHorizontal: spacing.base,
-    paddingTop: spacing.base,
   },
   section: {
     paddingHorizontal: spacing.base,
@@ -452,96 +465,73 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: spacing.sm,
   },
-  quickLinksCard: {
-    overflow: 'hidden',
-  },
-  quickLink: {
+  quickNavGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.base,
-    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
-  quickLinkLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
+  quickNavCard: {
     flex: 1,
+    backgroundColor: colors.surfaceContainerLowest,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    ...shadows.sm,
   },
-  quickLinkIcon: {
-    fontSize: 22,
+  quickNavIcon: {
+    fontSize: 24,
+    marginBottom: spacing.xs,
   },
-  quickLinkLabel: {
-    fontSize: typography.fontSize.base,
-    fontWeight: '700',
-    color: colors.text,
+  quickNavLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: NAVY,
+    letterSpacing: 1,
+    textAlign: 'center',
+    marginBottom: 2,
   },
-  quickLinkSub: {
-    fontSize: typography.fontSize.sm,
+  quickNavSub: {
+    fontSize: 9,
     fontWeight: '500',
-    color: colors.textSecondary,
-    marginTop: 1,
-  },
-  quickLinkChevron: {
-    fontSize: typography.fontSize.xl,
     color: colors.textTertiary,
-    fontWeight: '300',
+    textAlign: 'center',
   },
-  divider: {
-    height: 1,
-    backgroundColor: colors.borderLight,
-    marginHorizontal: spacing.base,
-  },
-  categoryCard: {
-    marginBottom: spacing.sm,
-  },
-  categoryRow: {
+  catCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    backgroundColor: colors.surfaceContainerLowest,
+    borderRadius: borderRadius.md,
+    padding: spacing.base,
+    marginBottom: spacing.sm,
+    ...shadows.sm,
   },
-  categoryInfo: {
+  catCardLeft: {
     flex: 1,
   },
-  categoryName: {
+  catName: {
     fontSize: typography.fontSize.base,
     fontWeight: '700',
     color: colors.text,
   },
-  categoryMeta: {
+  catMeta: {
     fontSize: typography.fontSize.xs,
     fontWeight: '500',
     color: colors.textTertiary,
     marginTop: 2,
     letterSpacing: 0.5,
   },
-  categoryRight: {
+  catCardRight: {
     alignItems: 'flex-end',
-    gap: 2,
   },
-  categoryTeams: {
-    fontSize: typography.fontSize.lg,
+  catTeams: {
+    fontSize: typography.fontSize.xl,
     fontWeight: '800',
-    color: colors.primary,
+    color: NAVY,
   },
-  categoryTeamsLabel: {
-    fontSize: typography.fontSize['2xs'],
+  catTeamsLabel: {
+    fontSize: 9,
     fontWeight: '700',
     color: colors.textTertiary,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
-  },
-  categoryAction: {
-    marginTop: spacing.xs,
-    backgroundColor: colors.primaryFixed,
-    borderRadius: borderRadius.DEFAULT,
-    paddingVertical: 4,
-    paddingHorizontal: spacing.sm,
-  },
-  categoryActionText: {
-    fontSize: typography.fontSize['2xs'],
-    fontWeight: '700',
-    color: colors.primary,
-    letterSpacing: 1,
   },
 });

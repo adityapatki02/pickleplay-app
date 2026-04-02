@@ -10,6 +10,7 @@ import {
   SafeAreaView,
   StatusBar,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -21,23 +22,31 @@ import { TournamentCategory } from '../../types/tournament.types';
 import { colors, spacing, typography, borderRadius, shadows } from '../../config/theme';
 import { OrgTournamentsStackParamList } from '../../navigation/types';
 
+const NAVY = '#001E40';
+
 type NavProp = NativeStackNavigationProp<OrgTournamentsStackParamList, 'RegistrationManage'>;
 type RouteType = RouteProp<OrgTournamentsStackParamList, 'RegistrationManage'>;
 
 interface Registration {
   id: string;
   categoryId: string;
-  categoryName?: string;
   status: string;
   createdAt: string;
   playerName?: string;
   teamName?: string;
   partnerName?: string;
-  paymentMethod?: string;
   player?: { name?: string; displayName?: string; phone?: string };
   partner?: { name?: string; displayName?: string };
   category?: { name?: string };
 }
+
+const STATUS_FILTERS = [
+  { label: 'ALL', value: 'all' },
+  { label: 'CONFIRMED', value: 'confirmed' },
+  { label: 'PENDING', value: 'pending' },
+  { label: 'WAITLISTED', value: 'waitlisted' },
+  { label: 'CANCELLED', value: 'cancelled' },
+];
 
 function formatDate(dateStr: string): string {
   try {
@@ -51,6 +60,10 @@ function formatDate(dateStr: string): string {
   }
 }
 
+function getPlayerName(reg: Registration): string {
+  return reg.playerName ?? reg.player?.displayName ?? reg.player?.name ?? reg.teamName ?? 'Unknown Player';
+}
+
 export default function RegistrationManagementScreen() {
   const navigation = useNavigation<NavProp>();
   const route = useRoute<RouteType>();
@@ -58,7 +71,7 @@ export default function RegistrationManagementScreen() {
 
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [categories, setCategories] = useState<TournamentCategory[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -83,7 +96,7 @@ export default function RegistrationManagementScreen() {
         setCategories(Array.isArray(data) ? data : []);
       }
     } catch (err: any) {
-      Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to load registrations');
+      Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to load');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -94,7 +107,7 @@ export default function RegistrationManagementScreen() {
     fetchData();
   }, [fetchData]);
 
-  const handleStatusUpdate = async (registrationId: string, newStatus: 'confirmed' | 'rejected') => {
+  const handleStatusUpdate = async (registrationId: string, newStatus: string) => {
     setUpdatingId(registrationId);
     try {
       await registrationsApi.updateStatus(registrationId, newStatus);
@@ -102,14 +115,13 @@ export default function RegistrationManagementScreen() {
         prev.map((r) => (r.id === registrationId ? { ...r, status: newStatus } : r))
       );
     } catch (err: any) {
-      Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to update status');
+      Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to update');
     } finally {
       setUpdatingId(null);
     }
   };
 
-  const confirmAction = (registrationId: string, action: 'confirmed' | 'rejected') => {
-    const label = action === 'confirmed' ? 'Confirm' : 'Reject';
+  const confirmAction = (registrationId: string, action: string, label: string) => {
     Alert.alert(
       `${label} Registration`,
       `Are you sure you want to ${label.toLowerCase()} this registration?`,
@@ -117,56 +129,38 @@ export default function RegistrationManagementScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: label,
-          style: action === 'rejected' ? 'destructive' : 'default',
+          style: action === 'cancelled' ? 'destructive' : 'default',
           onPress: () => handleStatusUpdate(registrationId, action),
         },
       ]
     );
   };
 
-  // Build category filter options
-  const filterOptions: { id: string | null; label: string }[] = [
-    { id: null, label: 'ALL' },
-    ...categories.map((c) => ({ id: c.id, label: c.name })),
-  ];
-
-  const filtered = selectedCategoryId
-    ? registrations.filter((r) => r.categoryId === selectedCategoryId || r.category?.name === selectedCategoryId)
-    : registrations;
-
-  const getPlayerName = (reg: Registration): string => {
-    return (
-      reg.playerName ??
-      reg.player?.displayName ??
-      reg.player?.name ??
-      reg.teamName ??
-      'Unknown Player'
-    );
-  };
+  const filtered = registrations.filter((r) => {
+    if (statusFilter === 'all') return true;
+    if (statusFilter === 'pending') return r.status === 'pending' || r.status === 'pending_payment';
+    return r.status === statusFilter;
+  });
 
   const getCategoryName = (reg: Registration): string => {
-    return (
-      reg.categoryName ??
-      reg.category?.name ??
-      categories.find((c) => c.id === reg.categoryId)?.name ??
-      '—'
-    );
+    return reg.category?.name ?? categories.find((c) => c.id === reg.categoryId)?.name ?? '—';
   };
 
   const renderItem = ({ item }: { item: Registration }) => {
     const isPending = item.status === 'pending' || item.status === 'pending_payment';
+    const isConfirmed = item.status === 'confirmed';
     const isUpdating = updatingId === item.id;
 
     return (
       <View style={styles.regCard}>
-        <View style={styles.regCardTop}>
-          <View style={styles.regCardLeft}>
+        <View style={styles.regTop}>
+          <View style={styles.regLeft}>
             <Text style={styles.playerName}>{getPlayerName(item)}</Text>
-            {item.partnerName || item.partner ? (
+            {(item.partnerName || item.partner) && (
               <Text style={styles.partnerName}>
                 + {item.partnerName ?? item.partner?.displayName ?? item.partner?.name}
               </Text>
-            ) : null}
+            )}
             <Text style={styles.regMeta}>
               {getCategoryName(item)}  ·  {formatDate(item.createdAt)}
             </Text>
@@ -174,25 +168,27 @@ export default function RegistrationManagementScreen() {
           <StatusBadge status={item.status} size="sm" />
         </View>
 
-        {isPending && (
+        {(isPending || isConfirmed) && (
           <View style={styles.regActions}>
             {isUpdating ? (
-              <ActivityIndicator size="small" color={colors.primary} />
+              <ActivityIndicator size="small" color={NAVY} />
             ) : (
               <>
+                {isPending && (
+                  <TouchableOpacity
+                    style={styles.confirmBtn}
+                    onPress={() => confirmAction(item.id, 'confirmed', 'Confirm')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.confirmBtnText}>CONFIRM</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
-                  style={[styles.actionBtn, styles.confirmBtn]}
-                  onPress={() => confirmAction(item.id, 'confirmed')}
+                  style={styles.cancelBtn}
+                  onPress={() => confirmAction(item.id, 'cancelled', 'Cancel')}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.confirmBtnText}>CONFIRM</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.rejectBtn]}
-                  onPress={() => confirmAction(item.id, 'rejected')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.rejectBtnText}>REJECT</Text>
+                  <Text style={styles.cancelBtnText}>CANCEL</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -204,48 +200,48 @@ export default function RegistrationManagementScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+      <StatusBar barStyle="light-content" backgroundColor={NAVY} />
 
-      {/* Nav bar */}
-      <View style={styles.navBar}>
+      {/* Header */}
+      <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          style={styles.backTouchable}
+          style={styles.backBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.backIcon}>{'←'}</Text>
+          <Text style={styles.backIcon}>←</Text>
           <Text style={styles.backLabel}>BACK</Text>
         </TouchableOpacity>
-        <Text style={styles.navTitle}>REGISTRATIONS</Text>
+        <Text style={styles.headerTitle}>REGISTRATIONS</Text>
         <View style={{ width: 60 }} />
       </View>
 
-      {/* Category filter tabs */}
+      {/* Status filter chips */}
       <View style={styles.filterBar}>
-        <FlatList
+        <ScrollView
           horizontal
-          data={filterOptions}
-          keyExtractor={(item) => item.id ?? 'all'}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterContent}
-          renderItem={({ item: opt }) => {
-            const active = selectedCategoryId === opt.id;
+        >
+          {STATUS_FILTERS.map((opt) => {
+            const active = statusFilter === opt.value;
             return (
               <TouchableOpacity
-                style={[styles.filterTab, active && styles.filterTabActive]}
-                onPress={() => setSelectedCategoryId(opt.id)}
+                key={opt.value}
+                style={[styles.filterChip, active && styles.filterChipActive]}
+                onPress={() => setStatusFilter(opt.value)}
                 activeOpacity={0.75}
               >
-                <Text style={[styles.filterTabText, active && styles.filterTabTextActive]}>
+                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
                   {opt.label}
                 </Text>
               </TouchableOpacity>
             );
-          }}
-        />
+          })}
+        </ScrollView>
       </View>
 
-      {/* Registrations count */}
+      {/* Count */}
       {!loading && (
         <View style={styles.countBar}>
           <Text style={styles.countText}>
@@ -257,7 +253,7 @@ export default function RegistrationManagementScreen() {
       {/* Content */}
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={NAVY} />
         </View>
       ) : (
         <FlatList
@@ -273,15 +269,15 @@ export default function RegistrationManagementScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => fetchData(true)}
-              tintColor={colors.primary}
-              colors={[colors.primary]}
+              tintColor={NAVY}
+              colors={[NAVY]}
             />
           }
           ListEmptyComponent={
             <EmptyState
               icon="📋"
-              title="No registrations yet"
-              subtitle="Registrations will appear here once players sign up."
+              title="No registrations"
+              subtitle={statusFilter === 'all' ? 'Registrations will appear here once players sign up.' : `No ${statusFilter} registrations.`}
             />
           }
         />
@@ -300,14 +296,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  navBar: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.base,
     paddingVertical: spacing.md,
-    backgroundColor: colors.primary,
+    backgroundColor: NAVY,
   },
-  backTouchable: {
+  backBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
@@ -315,20 +311,20 @@ const styles = StyleSheet.create({
   },
   backIcon: {
     fontSize: typography.fontSize.lg,
-    color: colors.onPrimary,
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   backLabel: {
     fontSize: typography.fontSize['2xs'],
     fontWeight: '700',
-    color: colors.onPrimary,
+    color: '#FFFFFF',
     letterSpacing: 1.5,
   },
-  navTitle: {
+  headerTitle: {
     fontSize: typography.fontSize.sm,
-    fontWeight: '700',
-    color: colors.onPrimary,
-    letterSpacing: 1.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 2,
     textTransform: 'uppercase',
   },
   filterBar: {
@@ -340,23 +336,23 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     gap: spacing.sm,
   },
-  filterTab: {
+  filterChip: {
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.full,
     backgroundColor: colors.surfaceContainerHigh,
   },
-  filterTabActive: {
-    backgroundColor: colors.primary,
+  filterChipActive: {
+    backgroundColor: NAVY,
   },
-  filterTabText: {
+  filterChipText: {
     fontSize: typography.fontSize.xs,
     fontWeight: '700',
     color: colors.textTertiary,
     letterSpacing: 0.5,
   },
-  filterTabTextActive: {
-    color: colors.onPrimary,
+  filterChipTextActive: {
+    color: '#FFFFFF',
   },
   countBar: {
     paddingHorizontal: spacing.base,
@@ -383,13 +379,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     ...shadows.sm,
   },
-  regCardTop: {
+  regTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  regCardLeft: {
+  regLeft: {
     flex: 1,
   },
   playerName: {
@@ -408,7 +404,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.textTertiary,
     marginTop: spacing.xs,
-    letterSpacing: 0.3,
   },
   regActions: {
     flexDirection: 'row',
@@ -416,24 +411,25 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     justifyContent: 'flex-end',
   },
-  actionBtn: {
+  confirmBtn: {
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.DEFAULT,
-  },
-  confirmBtn: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#198754',
   },
   confirmBtnText: {
     fontSize: typography.fontSize['2xs'],
     fontWeight: '700',
-    color: colors.onPrimary,
+    color: '#FFFFFF',
     letterSpacing: 1,
   },
-  rejectBtn: {
+  cancelBtn: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.DEFAULT,
     backgroundColor: colors.errorContainer,
   },
-  rejectBtnText: {
+  cancelBtnText: {
     fontSize: typography.fontSize['2xs'],
     fontWeight: '700',
     color: colors.error,

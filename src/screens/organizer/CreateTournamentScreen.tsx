@@ -11,66 +11,61 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  TextInput,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { tournamentsApi } from '../../api/tournaments.api';
-import { Input } from '../../components/ui/Input';
-import { Button } from '../../components/ui/Button';
-import { Card } from '../../components/ui/Card';
 import { useTournamentStore } from '../../store/tournamentStore';
 import {
   CategoryFormat,
   CategoryGender,
-  KnockoutFormat,
   PaymentMode,
   CreateCategoryInput,
 } from '../../types/tournament.types';
 import { colors, spacing, typography, borderRadius, shadows } from '../../config/theme';
 
+const NAVY = '#001E40';
+const BLUE_ACCENT = '#2196F3';
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface CategoryDraft extends CreateCategoryInput {
-  _id: string; // local key
+  _id: string;
   paymentMode: PaymentMode;
   advancingPerGroup: number;
 }
 
-interface CourtDraft {
-  _id: string;
-  name: string;
-}
-
 interface FormData {
-  // Step 1
+  // Step 1 — BASICS
   name: string;
   description: string;
-  // Step 2
-  venueName: string;
-  venueAddress: string;
   city: string;
   state: string;
-  // Step 3
+  // Step 2 — VENUE & DATES
+  venueName: string;
+  venueAddress: string;
   startDate: string;
   endDate: string;
   registrationDeadline: string;
-  // Step 4
+  contactPhone: string;
+  contactEmail: string;
+  // Step 3 — CATEGORIES
   categories: CategoryDraft[];
-  // Step 5
-  courts: CourtDraft[];
 }
 
 const INITIAL_FORM: FormData = {
   name: '',
   description: '',
-  venueName: '',
-  venueAddress: '',
   city: '',
   state: '',
+  venueName: '',
+  venueAddress: '',
   startDate: '',
   endDate: '',
   registrationDeadline: '',
+  contactPhone: '',
+  contactEmail: '',
   categories: [],
-  courts: [],
 };
 
 const INITIAL_CATEGORY: Omit<CategoryDraft, '_id'> = {
@@ -85,16 +80,119 @@ const INITIAL_CATEGORY: Omit<CategoryDraft, '_id'> = {
   paymentMode: 'both',
 };
 
-// ─── Picker helpers ───────────────────────────────────────────────────────────
+const TOTAL_STEPS = 3;
+const STEP_LABELS = ['BASICS', 'VENUE & DATES', 'CATEGORIES'];
 
-interface PickerRowProps<T extends string> {
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function FormField({
+  label,
+  placeholder,
+  value,
+  onChangeText,
+  error,
+  keyboardType,
+  multiline,
+  maxLength,
+  hint,
+}: {
+  label: string;
+  placeholder?: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  error?: string;
+  keyboardType?: any;
+  multiline?: boolean;
+  maxLength?: number;
+  hint?: string;
+}) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <View style={fieldStyles.container}>
+      <Text style={fieldStyles.label}>{label}</Text>
+      <TextInput
+        style={[
+          fieldStyles.input,
+          focused && fieldStyles.inputFocused,
+          error ? fieldStyles.inputError : null,
+          multiline && fieldStyles.inputMultiline,
+        ]}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textTertiary}
+        value={value}
+        onChangeText={onChangeText}
+        keyboardType={keyboardType}
+        multiline={multiline}
+        maxLength={maxLength}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        textAlignVertical={multiline ? 'top' : 'center'}
+      />
+      {error ? (
+        <Text style={fieldStyles.errorText}>{error}</Text>
+      ) : hint ? (
+        <Text style={fieldStyles.hintText}>{hint}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+const fieldStyles = StyleSheet.create({
+  container: { marginBottom: spacing.md },
+  label: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.textTertiary,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: spacing.xs,
+  },
+  input: {
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: borderRadius.md,
+    borderWidth: 1.5,
+    borderColor: colors.borderLight,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    fontSize: typography.fontSize.base,
+    fontWeight: '500',
+    color: colors.text,
+    minHeight: 48,
+  },
+  inputFocused: {
+    borderColor: BLUE_ACCENT,
+  },
+  inputError: {
+    borderColor: colors.error,
+  },
+  inputMultiline: {
+    height: 80,
+    paddingTop: spacing.sm,
+  },
+  errorText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.error,
+    fontWeight: '600',
+    marginTop: spacing.xs,
+  },
+  hintText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.textTertiary,
+    marginTop: spacing.xs,
+  },
+});
+
+function PickerRow<T extends string>({
+  label,
+  options,
+  selected,
+  onSelect,
+}: {
   label: string;
   options: { label: string; value: T }[];
   selected: T;
   onSelect: (v: T) => void;
-}
-
-function PickerRow<T extends string>({ label, options, selected, onSelect }: PickerRowProps<T>) {
+}) {
   return (
     <View style={pickerStyles.container}>
       <Text style={pickerStyles.label}>{label}</Text>
@@ -120,12 +218,14 @@ function PickerRow<T extends string>({ label, options, selected, onSelect }: Pic
 }
 
 const pickerStyles = StyleSheet.create({
-  container: { marginBottom: spacing.base },
+  container: { marginBottom: spacing.md },
   label: {
-    fontSize: typography.fontSize.md,
-    fontWeight: '500',
-    color: colors.text,
-    marginBottom: spacing.sm,
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.textTertiary,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: spacing.xs,
   },
   options: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   option: {
@@ -134,69 +234,82 @@ const pickerStyles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     backgroundColor: colors.surfaceContainerHigh,
   },
-  optionActive: { backgroundColor: colors.primary },
+  optionActive: { backgroundColor: NAVY },
   optionText: {
     fontSize: typography.fontSize.sm,
     fontWeight: '600',
     color: colors.textSecondary,
   },
-  optionTextActive: { color: colors.onPrimary },
+  optionTextActive: { color: '#FFFFFF' },
 });
-
-// ─── Step Indicator ───────────────────────────────────────────────────────────
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
   return (
-    <View style={stepStyles.row}>
-      {Array.from({ length: total }, (_, i) => {
-        const n = i + 1;
-        const done = n < current;
-        const active = n === current;
-        return (
-          <View
-            key={n}
-            style={[
-              stepStyles.dot,
-              active && stepStyles.dotActive,
-              done && stepStyles.dotDone,
-            ]}
-          >
-            <Text
-              style={[
-                stepStyles.dotText,
-                (active || done) && stepStyles.dotTextActive,
-              ]}
-            >
-              {n}
-            </Text>
-          </View>
-        );
-      })}
+    <View style={stepStyles.container}>
+      <View style={stepStyles.row}>
+        {Array.from({ length: total }, (_, i) => {
+          const n = i + 1;
+          const done = n < current;
+          const active = n === current;
+          return (
+            <React.Fragment key={n}>
+              <View style={[stepStyles.dot, active && stepStyles.dotActive, done && stepStyles.dotDone]}>
+                {done ? (
+                  <Text style={[stepStyles.dotText, stepStyles.dotTextActive]}>✓</Text>
+                ) : (
+                  <Text style={[stepStyles.dotText, (active || done) && stepStyles.dotTextActive]}>
+                    {n}
+                  </Text>
+                )}
+              </View>
+              {n < total && (
+                <View style={[stepStyles.line, n < current && stepStyles.lineDone]} />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </View>
+      <Text style={stepStyles.stepLabel}>
+        Step {current} of {total} — {STEP_LABELS[current - 1]}
+      </Text>
     </View>
   );
 }
 
 const stepStyles = StyleSheet.create({
+  container: {
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    backgroundColor: colors.surfaceContainerLowest,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
+    marginBottom: spacing.xs,
   },
   dot: {
-    width: 28,
-    height: 28,
-    borderRadius: borderRadius.full,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: colors.surfaceContainerHigh,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dotActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: NAVY,
   },
   dotDone: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: BLUE_ACCENT,
+  },
+  line: {
+    width: 32,
+    height: 2,
+    backgroundColor: colors.borderLight,
+  },
+  lineDone: {
+    backgroundColor: BLUE_ACCENT,
   },
   dotText: {
     fontSize: typography.fontSize.xs,
@@ -204,23 +317,13 @@ const stepStyles = StyleSheet.create({
     color: colors.textTertiary,
   },
   dotTextActive: {
-    color: colors.onPrimary,
+    color: '#FFFFFF',
   },
-});
-
-// ─── Section title ────────────────────────────────────────────────────────────
-
-function SectionTitle({ title }: { title: string }) {
-  return <Text style={sectionStyle.title}>{title}</Text>;
-}
-const sectionStyle = StyleSheet.create({
-  title: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: '800',
-    color: colors.primary,
-    letterSpacing: typography.letterSpacing.wide,
-    textTransform: 'uppercase',
-    marginBottom: spacing.lg,
+  stepLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: '700',
+    color: colors.textTertiary,
+    letterSpacing: 1,
   },
 });
 
@@ -232,69 +335,45 @@ export default function CreateTournamentScreen() {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [saving, setSaving] = useState(false);
-
-  // Category form state
+  const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [categoryDraft, setCategoryDraft] = useState<Omit<CategoryDraft, '_id'>>(INITIAL_CATEGORY);
 
-  // Court form state
-  const [showCourtInput, setShowCourtInput] = useState(false);
-  const [courtName, setCourtName] = useState('');
-
-  // Field errors
-  const [errors, setErrors] = useState<Partial<Record<keyof FormData | string, string>>>({});
-
   const update = (fields: Partial<FormData>) => {
     setForm((prev) => ({ ...prev, ...fields }));
-    const cleared: typeof errors = { ...errors };
+    const cleared = { ...errors };
     Object.keys(fields).forEach((k) => delete cleared[k]);
     setErrors(cleared);
   };
 
-  // ── Validation ───────────────────────────────────────────────────────────
+  // ── Validation ──────────────────────────────────────────────────────────────
 
   function validateStep1(): boolean {
     const e: typeof errors = {};
     if (!form.name.trim()) e.name = 'Tournament name is required';
+    if (!form.city.trim()) e.city = 'City is required';
     setErrors(e);
     return Object.keys(e).length === 0;
   }
 
   function validateStep2(): boolean {
     const e: typeof errors = {};
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!form.venueName.trim()) e.venueName = 'Venue name is required';
     if (!form.venueAddress.trim()) e.venueAddress = 'Venue address is required';
-    if (!form.city.trim()) e.city = 'City is required';
+    if (!form.startDate || !dateRegex.test(form.startDate)) e.startDate = 'Enter a valid date (YYYY-MM-DD)';
+    if (!form.endDate || !dateRegex.test(form.endDate)) e.endDate = 'Enter a valid date (YYYY-MM-DD)';
+    if (!form.registrationDeadline || !dateRegex.test(form.registrationDeadline))
+      e.registrationDeadline = 'Enter a valid date (YYYY-MM-DD)';
+    if (!e.startDate && !e.registrationDeadline && form.registrationDeadline >= form.startDate)
+      e.registrationDeadline = 'Deadline must be before start date';
     setErrors(e);
     return Object.keys(e).length === 0;
   }
 
   function validateStep3(): boolean {
-    const e: typeof errors = {};
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!form.startDate || !dateRegex.test(form.startDate)) e.startDate = 'Enter a valid date (YYYY-MM-DD)';
-    if (!form.endDate || !dateRegex.test(form.endDate)) e.endDate = 'Enter a valid date (YYYY-MM-DD)';
-    if (!form.registrationDeadline || !dateRegex.test(form.registrationDeadline))
-      e.registrationDeadline = 'Enter a valid date (YYYY-MM-DD)';
-    if (!e.startDate && !e.registrationDeadline) {
-      if (form.registrationDeadline >= form.startDate)
-        e.registrationDeadline = 'Deadline must be before start date';
-    }
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  }
-
-  function validateStep4(): boolean {
     if (form.categories.length === 0) {
-      Alert.alert('Required', 'Add at least one category to continue.');
-      return false;
-    }
-    return true;
-  }
-
-  function validateStep5(): boolean {
-    if (form.courts.length === 0) {
-      Alert.alert('Required', 'Add at least one court to continue.');
+      Alert.alert('Required', 'Add at least one category before creating the tournament.');
       return false;
     }
     return true;
@@ -305,9 +384,8 @@ export default function CreateTournamentScreen() {
     if (step === 1) valid = validateStep1();
     else if (step === 2) valid = validateStep2();
     else if (step === 3) valid = validateStep3();
-    else if (step === 4) valid = validateStep4();
-    else if (step === 5) valid = validateStep5();
-    if (valid) setStep((s) => s + 1);
+    if (valid && step < TOTAL_STEPS) setStep((s) => s + 1);
+    else if (valid && step === TOTAL_STEPS) handleSave();
   };
 
   const goBack = () => {
@@ -315,17 +393,14 @@ export default function CreateTournamentScreen() {
     else navigation.goBack();
   };
 
-  // ── Category actions ─────────────────────────────────────────────────────
+  // ── Category actions ─────────────────────────────────────────────────────────
 
   const addCategory = () => {
     if (!categoryDraft.name.trim()) {
       Alert.alert('Required', 'Category name is required.');
       return;
     }
-    const newCat: CategoryDraft = {
-      ...categoryDraft,
-      _id: Date.now().toString(),
-    };
+    const newCat: CategoryDraft = { ...categoryDraft, _id: Date.now().toString() };
     update({ categories: [...form.categories, newCat] });
     setCategoryDraft(INITIAL_CATEGORY);
     setShowCategoryForm(false);
@@ -335,24 +410,7 @@ export default function CreateTournamentScreen() {
     update({ categories: form.categories.filter((c) => c._id !== id) });
   };
 
-  // ── Court actions ────────────────────────────────────────────────────────
-
-  const addCourt = () => {
-    if (!courtName.trim()) {
-      Alert.alert('Required', 'Court name is required.');
-      return;
-    }
-    const newCourt: CourtDraft = { _id: Date.now().toString(), name: courtName.trim() };
-    update({ courts: [...form.courts, newCourt] });
-    setCourtName('');
-    setShowCourtInput(false);
-  };
-
-  const removeCourt = (id: string) => {
-    update({ courts: form.courts.filter((c) => c._id !== id) });
-  };
-
-  // ── Save ─────────────────────────────────────────────────────────────────
+  // ── Save ─────────────────────────────────────────────────────────────────────
 
   const handleSave = async () => {
     setSaving(true);
@@ -371,7 +429,6 @@ export default function CreateTournamentScreen() {
 
       const tournament = createRes.data?.data;
       if (!tournament?.id) throw new Error('Failed to create tournament');
-
       const tId = tournament.id;
 
       for (const cat of form.categories) {
@@ -379,21 +436,14 @@ export default function CreateTournamentScreen() {
         await tournamentsApi.addCategory(tId, catInput);
       }
 
-      for (const court of form.courts) {
-        await tournamentsApi.addCourt(tId, { name: court.name });
-      }
-
       addTournament(tournament);
 
-      Alert.alert('Success', 'Tournament created!', [
+      Alert.alert('Tournament Created!', `"${form.name}" has been created as a draft.`, [
         {
           text: 'Go to Dashboard',
           onPress: () => (navigation as any).navigate('TournamentManage', { tournamentId: tId }),
         },
-        {
-          text: 'OK',
-          onPress: () => navigation.goBack(),
-        },
+        { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (err: any) {
       Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to save tournament');
@@ -402,72 +452,58 @@ export default function CreateTournamentScreen() {
     }
   };
 
-  // ─── Step renderers ──────────────────────────────────────────────────────
+  // ── Step renderers ────────────────────────────────────────────────────────────
 
   const renderStep1 = () => (
     <View>
-      <SectionTitle title="Basic Info" />
-      <Input
+      <FormField
         label="Tournament Name *"
         placeholder="e.g. City Open 2026"
         value={form.name}
         onChangeText={(v) => update({ name: v })}
         error={errors.name}
-        autoCapitalize="words"
       />
-      <Input
+      <FormField
         label="Description"
         placeholder="Optional — describe the tournament"
         value={form.description}
         onChangeText={(v) => update({ description: v })}
         multiline
-        numberOfLines={3}
-        style={{ height: 80, textAlignVertical: 'top' }}
+      />
+      <FormField
+        label="City *"
+        placeholder="e.g. Bangalore"
+        value={form.city}
+        onChangeText={(v) => update({ city: v })}
+        error={errors.city}
+      />
+      <FormField
+        label="State"
+        placeholder="e.g. Karnataka"
+        value={form.state}
+        onChangeText={(v) => update({ state: v })}
       />
     </View>
   );
 
   const renderStep2 = () => (
     <View>
-      <SectionTitle title="Venue" />
-      <Input
+      <FormField
         label="Venue Name *"
         placeholder="e.g. DLF Sports Complex"
         value={form.venueName}
         onChangeText={(v) => update({ venueName: v })}
         error={errors.venueName}
-        autoCapitalize="words"
       />
-      <Input
+      <FormField
         label="Venue Address *"
         placeholder="Full street address"
         value={form.venueAddress}
         onChangeText={(v) => update({ venueAddress: v })}
         error={errors.venueAddress}
-        autoCapitalize="sentences"
+        multiline
       />
-      <Input
-        label="City *"
-        placeholder="e.g. Bangalore"
-        value={form.city}
-        onChangeText={(v) => update({ city: v })}
-        error={errors.city}
-        autoCapitalize="words"
-      />
-      <Input
-        label="State"
-        placeholder="e.g. Karnataka"
-        value={form.state}
-        onChangeText={(v) => update({ state: v })}
-        autoCapitalize="words"
-      />
-    </View>
-  );
-
-  const renderStep3 = () => (
-    <View>
-      <SectionTitle title="Dates" />
-      <Input
+      <FormField
         label="Start Date *"
         placeholder="YYYY-MM-DD"
         value={form.startDate}
@@ -476,7 +512,7 @@ export default function CreateTournamentScreen() {
         keyboardType="numbers-and-punctuation"
         maxLength={10}
       />
-      <Input
+      <FormField
         label="End Date *"
         placeholder="YYYY-MM-DD"
         value={form.endDate}
@@ -485,7 +521,7 @@ export default function CreateTournamentScreen() {
         keyboardType="numbers-and-punctuation"
         maxLength={10}
       />
-      <Input
+      <FormField
         label="Registration Deadline *"
         placeholder="YYYY-MM-DD"
         value={form.registrationDeadline}
@@ -495,41 +531,49 @@ export default function CreateTournamentScreen() {
         maxLength={10}
         hint="Must be before start date"
       />
+      <FormField
+        label="Contact Phone"
+        placeholder="+91 98765 43210"
+        value={form.contactPhone}
+        onChangeText={(v) => update({ contactPhone: v })}
+        keyboardType="phone-pad"
+      />
+      <FormField
+        label="Contact Email"
+        placeholder="organizer@example.com"
+        value={form.contactEmail}
+        onChangeText={(v) => update({ contactEmail: v })}
+        keyboardType="email-address"
+      />
     </View>
   );
 
-  const renderStep4 = () => (
+  const renderStep3 = () => (
     <View>
-      <SectionTitle title="Categories" />
-
       {form.categories.map((cat) => (
-        <Card key={cat._id} variant="outlined" style={styles.categoryCard}>
-          <View style={styles.categoryCardRow}>
-            <View style={styles.categoryCardInfo}>
-              <Text style={styles.categoryName}>{cat.name}</Text>
-              <Text style={styles.categoryMeta}>
-                {cat.format.toUpperCase()} · {cat.gender.toUpperCase()} · ₹{cat.entryFee}
+        <View key={cat._id} style={styles.catCard}>
+          <View style={styles.catCardRow}>
+            <View style={styles.catCardInfo}>
+              <Text style={styles.catCardName}>{cat.name}</Text>
+              <Text style={styles.catCardMeta}>
+                {cat.format.toUpperCase()} · {cat.gender.toUpperCase()} · ₹{cat.entryFee} · {cat.maxTeams} teams
               </Text>
             </View>
-            <TouchableOpacity
-              onPress={() => removeCategory(cat._id)}
-              style={styles.removeBtn}
-            >
+            <TouchableOpacity onPress={() => removeCategory(cat._id)} style={styles.removeBtn}>
               <Text style={styles.removeBtnText}>Remove</Text>
             </TouchableOpacity>
           </View>
-        </Card>
+        </View>
       ))}
 
       {showCategoryForm ? (
-        <Card variant="filled" style={styles.inlineForm}>
-          <Text style={styles.inlineFormTitle}>ADD CATEGORY</Text>
-          <Input
+        <View style={styles.catForm}>
+          <Text style={styles.catFormTitle}>ADD CATEGORY</Text>
+          <FormField
             label="Category Name *"
             placeholder="e.g. Open Doubles"
             value={categoryDraft.name}
             onChangeText={(v) => setCategoryDraft((p) => ({ ...p, name: v }))}
-            autoCapitalize="words"
           />
           <PickerRow<CategoryFormat>
             label="Format"
@@ -543,62 +587,54 @@ export default function CreateTournamentScreen() {
           <PickerRow<CategoryGender>
             label="Gender"
             options={[
+              { label: 'Open', value: 'open' },
               { label: 'Male', value: 'male' },
               { label: 'Female', value: 'female' },
               { label: 'Mixed', value: 'mixed' },
-              { label: 'Open', value: 'open' },
             ]}
             selected={categoryDraft.gender}
             onSelect={(v) => setCategoryDraft((p) => ({ ...p, gender: v }))}
           />
-          <View style={styles.row2}>
-            <Input
-              label="Entry Fee (₹)"
-              placeholder="0"
-              value={categoryDraft.entryFee === 0 ? '' : String(categoryDraft.entryFee)}
-              onChangeText={(v) => setCategoryDraft((p) => ({ ...p, entryFee: Number(v) || 0 }))}
-              keyboardType="numeric"
-              containerStyle={{ flex: 1, marginRight: spacing.sm }}
-            />
-            <Input
-              label="Max Teams"
-              placeholder="16"
-              value={categoryDraft.maxTeams === 0 ? '' : String(categoryDraft.maxTeams)}
-              onChangeText={(v) => setCategoryDraft((p) => ({ ...p, maxTeams: Number(v) || 0 }))}
-              keyboardType="numeric"
-              containerStyle={{ flex: 1 }}
-            />
+          <View style={styles.twoCol}>
+            <View style={styles.twoColItem}>
+              <FormField
+                label="Max Teams"
+                placeholder="16"
+                value={categoryDraft.maxTeams === 0 ? '' : String(categoryDraft.maxTeams)}
+                onChangeText={(v) => setCategoryDraft((p) => ({ ...p, maxTeams: Number(v) || 0 }))}
+                keyboardType="numeric"
+              />
+            </View>
+            <View style={styles.twoColItem}>
+              <FormField
+                label="Entry Fee (₹)"
+                placeholder="0"
+                value={categoryDraft.entryFee === 0 ? '' : String(categoryDraft.entryFee)}
+                onChangeText={(v) => setCategoryDraft((p) => ({ ...p, entryFee: Number(v) || 0 }))}
+                keyboardType="numeric"
+              />
+            </View>
           </View>
-          <View style={styles.row2}>
-            <Input
-              label="Group Size"
-              placeholder="4"
-              value={String(categoryDraft.groupSize)}
-              onChangeText={(v) => setCategoryDraft((p) => ({ ...p, groupSize: Number(v) || 4 }))}
-              keyboardType="numeric"
-              containerStyle={{ flex: 1, marginRight: spacing.sm }}
-            />
-            <Input
-              label="Advancing / Group"
-              placeholder="2"
-              value={String(categoryDraft.advancingPerGroup)}
-              onChangeText={(v) =>
-                setCategoryDraft((p) => ({ ...p, advancingPerGroup: Number(v) || 2 }))
-              }
-              keyboardType="numeric"
-              containerStyle={{ flex: 1 }}
-            />
+          <View style={styles.twoCol}>
+            <View style={styles.twoColItem}>
+              <FormField
+                label="Group Size"
+                placeholder="4"
+                value={String(categoryDraft.groupSize)}
+                onChangeText={(v) => setCategoryDraft((p) => ({ ...p, groupSize: Number(v) || 4 }))}
+                keyboardType="numeric"
+              />
+            </View>
+            <View style={styles.twoColItem}>
+              <FormField
+                label="Advancing / Group"
+                placeholder="2"
+                value={String(categoryDraft.advancingPerGroup)}
+                onChangeText={(v) => setCategoryDraft((p) => ({ ...p, advancingPerGroup: Number(v) || 2 }))}
+                keyboardType="numeric"
+              />
+            </View>
           </View>
-          <PickerRow<KnockoutFormat>
-            label="Knockout Format"
-            options={[
-              { label: 'Single Elim', value: 'single_elimination' },
-              { label: 'Double Elim', value: 'double_elimination' },
-              { label: 'Round Robin', value: 'round_robin' },
-            ]}
-            selected={categoryDraft.knockoutFormat ?? 'single_elimination'}
-            onSelect={(v) => setCategoryDraft((p) => ({ ...p, knockoutFormat: v }))}
-          />
           <PickerRow<PaymentMode>
             label="Payment Mode"
             options={[
@@ -609,194 +645,45 @@ export default function CreateTournamentScreen() {
             selected={categoryDraft.paymentMode}
             onSelect={(v) => setCategoryDraft((p) => ({ ...p, paymentMode: v }))}
           />
-          <View style={styles.inlineFormActions}>
-            <Button
-              title="Cancel"
-              variant="outline"
-              size="sm"
-              onPress={() => {
-                setShowCategoryForm(false);
-                setCategoryDraft(INITIAL_CATEGORY);
-              }}
-              style={{ flex: 1, marginRight: spacing.sm }}
-            />
-            <Button
-              title="Add"
-              variant="primary"
-              size="sm"
-              onPress={addCategory}
-              style={{ flex: 1 }}
-            />
-          </View>
-        </Card>
-      ) : (
-        <Button
-          title="+ Add Category"
-          variant="tonal"
-          onPress={() => setShowCategoryForm(true)}
-          fullWidth
-        />
-      )}
-    </View>
-  );
-
-  const renderStep5 = () => (
-    <View>
-      <SectionTitle title="Courts" />
-
-      <View style={styles.courtChips}>
-        {form.courts.map((court) => (
-          <View key={court._id} style={styles.courtChip}>
-            <Text style={styles.courtChipText}>{court.name}</Text>
-            <TouchableOpacity onPress={() => removeCourt(court._id)} style={styles.courtChipRemove}>
-              <Text style={styles.courtChipRemoveText}>×</Text>
+          <View style={styles.catFormActions}>
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => { setShowCategoryForm(false); setCategoryDraft(INITIAL_CATEGORY); }}
+            >
+              <Text style={styles.cancelBtnText}>CANCEL</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.addBtn} onPress={addCategory}>
+              <Text style={styles.addBtnText}>ADD</Text>
             </TouchableOpacity>
           </View>
-        ))}
-      </View>
-
-      {showCourtInput ? (
-        <Card variant="filled" style={styles.inlineForm}>
-          <Input
-            label="Court Name *"
-            placeholder="e.g. Court 1"
-            value={courtName}
-            onChangeText={setCourtName}
-            autoCapitalize="words"
-            autoFocus
-          />
-          <View style={styles.inlineFormActions}>
-            <Button
-              title="Cancel"
-              variant="outline"
-              size="sm"
-              onPress={() => {
-                setShowCourtInput(false);
-                setCourtName('');
-              }}
-              style={{ flex: 1, marginRight: spacing.sm }}
-            />
-            <Button
-              title="Add"
-              variant="primary"
-              size="sm"
-              onPress={addCourt}
-              style={{ flex: 1 }}
-            />
-          </View>
-        </Card>
-      ) : (
-        <Button
-          title="+ Add Court"
-          variant="tonal"
-          onPress={() => setShowCourtInput(true)}
-          fullWidth
-        />
-      )}
-    </View>
-  );
-
-  const renderStep6 = () => (
-    <View>
-      <SectionTitle title="Review" />
-
-      <Card variant="outlined" style={styles.reviewSection}>
-        <Text style={styles.reviewSectionTitle}>BASIC INFO</Text>
-        <ReviewRow label="Name" value={form.name} />
-        {form.description ? <ReviewRow label="Description" value={form.description} /> : null}
-      </Card>
-
-      <Card variant="outlined" style={styles.reviewSection}>
-        <Text style={styles.reviewSectionTitle}>VENUE</Text>
-        <ReviewRow label="Venue" value={form.venueName} />
-        <ReviewRow label="Address" value={form.venueAddress} />
-        <ReviewRow label="City" value={form.city + (form.state ? `, ${form.state}` : '')} />
-      </Card>
-
-      <Card variant="outlined" style={styles.reviewSection}>
-        <Text style={styles.reviewSectionTitle}>DATES</Text>
-        <ReviewRow label="Start" value={form.startDate} />
-        <ReviewRow label="End" value={form.endDate} />
-        <ReviewRow label="Reg. Deadline" value={form.registrationDeadline} />
-      </Card>
-
-      <Card variant="outlined" style={styles.reviewSection}>
-        <Text style={styles.reviewSectionTitle}>CATEGORIES ({form.categories.length})</Text>
-        {form.categories.map((cat) => (
-          <ReviewRow
-            key={cat._id}
-            label={cat.name}
-            value={`${cat.format} · ${cat.gender} · ₹${cat.entryFee}`}
-          />
-        ))}
-      </Card>
-
-      <Card variant="outlined" style={styles.reviewSection}>
-        <Text style={styles.reviewSectionTitle}>COURTS ({form.courts.length})</Text>
-        {form.courts.map((c) => (
-          <ReviewRow key={c._id} label={c.name} value="" />
-        ))}
-      </Card>
-
-      {saving ? (
-        <View style={styles.savingContainer}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.savingText}>Saving tournament…</Text>
         </View>
       ) : (
-        <Button
-          title="Create Tournament"
-          variant="primary"
-          size="lg"
-          fullWidth
-          onPress={handleSave}
-          style={{ marginTop: spacing.lg }}
-        />
+        <TouchableOpacity
+          style={styles.addCategoryBtn}
+          onPress={() => setShowCategoryForm(true)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.addCategoryBtnText}>+ ADD CATEGORY</Text>
+        </TouchableOpacity>
       )}
     </View>
   );
-
-  // ─── Nav buttons ─────────────────────────────────────────────────────────
-
-  const renderNavButtons = () => {
-    if (step === 6) return null;
-    return (
-      <View style={styles.navRow}>
-        <Button
-          title={step === 1 ? 'Cancel' : 'Back'}
-          variant="outline"
-          size="md"
-          onPress={goBack}
-          style={{ flex: 1, marginRight: spacing.sm }}
-        />
-        <Button
-          title="Next"
-          variant="primary"
-          size="md"
-          onPress={goNext}
-          style={{ flex: 1 }}
-        />
-      </View>
-    );
-  };
-
-  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.surfaceContainerLowest} />
+      <StatusBar barStyle="light-content" backgroundColor={NAVY} />
 
-      {/* Top bar */}
-      <View style={styles.topBar}>
+      {/* Header */}
+      <View style={styles.header}>
         <TouchableOpacity onPress={goBack} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.backBtnText}>‹</Text>
+          <Text style={styles.backBtnText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.topBarTitle}>CREATE TOURNAMENT</Text>
-        <View style={{ width: 36 }} />
+        <Text style={styles.headerTitle}>CREATE TOURNAMENT</Text>
+        <View style={{ width: 40 }} />
       </View>
 
       {/* Step indicator */}
-      <StepIndicator current={step} total={6} />
+      <StepIndicator current={step} total={TOTAL_STEPS} />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -812,85 +699,60 @@ export default function CreateTournamentScreen() {
             {step === 1 && renderStep1()}
             {step === 2 && renderStep2()}
             {step === 3 && renderStep3()}
-            {step === 4 && renderStep4()}
-            {step === 5 && renderStep5()}
-            {step === 6 && renderStep6()}
           </View>
 
-          {renderNavButtons()}
+          {/* Nav buttons */}
+          <View style={styles.navRow}>
+            <TouchableOpacity style={styles.backNavBtn} onPress={goBack}>
+              <Text style={styles.backNavBtnText}>{step === 1 ? 'CANCEL' : 'BACK'}</Text>
+            </TouchableOpacity>
+            {saving ? (
+              <View style={styles.savingBtn}>
+                <ActivityIndicator color="#FFFFFF" size="small" />
+                <Text style={styles.savingBtnText}>SAVING…</Text>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.nextBtn} onPress={goNext}>
+                <Text style={styles.nextBtnText}>
+                  {step < TOTAL_STEPS ? 'NEXT' : 'CREATE TOURNAMENT'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-// ─── Review row helper ────────────────────────────────────────────────────────
-
-function ReviewRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={reviewRowStyles.row}>
-      <Text style={reviewRowStyles.label}>{label}</Text>
-      {value ? <Text style={reviewRowStyles.value}>{value}</Text> : null}
-    </View>
-  );
-}
-
-const reviewRowStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingVertical: spacing.xs,
-    gap: spacing.sm,
-  },
-  label: {
-    fontSize: typography.fontSize.md,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    flex: 1,
-  },
-  value: {
-    fontSize: typography.fontSize.md,
-    color: colors.text,
-    flex: 2,
-    textAlign: 'right',
-  },
-});
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.surfaceContainerLowest,
+    backgroundColor: colors.surfaceContainerLow,
   },
-  topBar: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.base,
     paddingVertical: spacing.md,
-    backgroundColor: colors.surfaceContainerLowest,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+    backgroundColor: NAVY,
   },
   backBtn: {
-    width: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 40,
+    alignItems: 'flex-start',
   },
   backBtnText: {
-    fontSize: 28,
-    color: colors.primary,
+    fontSize: 22,
+    color: '#FFFFFF',
     fontWeight: '300',
-    lineHeight: 32,
   },
-  topBarTitle: {
+  headerTitle: {
     flex: 1,
-    fontSize: typography.fontSize.md,
+    fontSize: typography.fontSize.sm,
     fontWeight: '800',
-    color: colors.primary,
+    color: '#FFFFFF',
     textAlign: 'center',
-    letterSpacing: typography.letterSpacing.wider,
+    letterSpacing: 2,
     textTransform: 'uppercase',
   },
   scrollContent: {
@@ -907,27 +769,72 @@ const styles = StyleSheet.create({
   navRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginTop: spacing.sm,
   },
-  categoryCard: {
+  backNavBtn: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1.5,
+    borderColor: NAVY,
+    alignItems: 'center',
+  },
+  backNavBtnText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: '700',
+    color: NAVY,
+    letterSpacing: 1.5,
+  },
+  nextBtn: {
+    flex: 2,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: NAVY,
+    alignItems: 'center',
+  },
+  nextBtnText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 1.5,
+  },
+  savingBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: NAVY,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  savingBtnText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 1.5,
+  },
+  catCard: {
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
     marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
-  categoryCardRow: {
+  catCardRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
-  categoryCardInfo: {
+  catCardInfo: {
     flex: 1,
-    marginRight: spacing.sm,
   },
-  categoryName: {
+  catCardName: {
     fontSize: typography.fontSize.base,
     fontWeight: '700',
     color: colors.text,
   },
-  categoryMeta: {
-    fontSize: typography.fontSize.sm,
+  catCardMeta: {
+    fontSize: typography.fontSize.xs,
     fontWeight: '500',
     color: colors.textTertiary,
     marginTop: 2,
@@ -941,80 +848,72 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.error,
   },
-  inlineForm: {
+  catForm: {
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: borderRadius.md,
     padding: spacing.base,
     marginBottom: spacing.base,
+    borderWidth: 1,
+    borderColor: BLUE_ACCENT,
   },
-  inlineFormTitle: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: '800',
-    color: colors.primary,
-    letterSpacing: typography.letterSpacing.wider,
-    marginBottom: spacing.base,
-  },
-  inlineFormActions: {
-    flexDirection: 'row',
-    marginTop: spacing.sm,
-  },
-  row2: {
-    flexDirection: 'row',
-  },
-  courtChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.base,
-  },
-  courtChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primaryFixed,
-    borderRadius: borderRadius.full,
-    paddingVertical: spacing.xs,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.sm,
-    gap: spacing.xs,
-  },
-  courtChipText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: '600',
-    color: colors.primaryLight,
-  },
-  courtChipRemove: {
-    width: 20,
-    height: 20,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  courtChipRemoveText: {
-    fontSize: 14,
-    color: colors.onPrimary,
-    lineHeight: 18,
-    fontWeight: '600',
-  },
-  reviewSection: {
-    marginBottom: spacing.md,
-    padding: spacing.base,
-  },
-  reviewSectionTitle: {
+  catFormTitle: {
     fontSize: typography.fontSize.xs,
     fontWeight: '800',
-    color: colors.textTertiary,
-    letterSpacing: typography.letterSpacing.wider,
-    marginBottom: spacing.sm,
+    color: NAVY,
+    letterSpacing: 1.5,
+    marginBottom: spacing.md,
   },
-  savingContainer: {
+  twoCol: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.lg,
   },
-  savingText: {
-    fontSize: typography.fontSize.md,
+  twoColItem: {
+    flex: 1,
+  },
+  catFormActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  cancelBtnText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: '700',
     color: colors.textSecondary,
-    fontWeight: '500',
+    letterSpacing: 1,
+  },
+  addBtn: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: NAVY,
+    alignItems: 'center',
+  },
+  addBtnText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 1,
+  },
+  addCategoryBtn: {
+    borderWidth: 1.5,
+    borderColor: NAVY,
+    borderStyle: 'dashed',
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  addCategoryBtnText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: '700',
+    color: NAVY,
+    letterSpacing: 1.5,
   },
 });
