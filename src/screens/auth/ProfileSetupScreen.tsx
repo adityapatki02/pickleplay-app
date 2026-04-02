@@ -70,9 +70,9 @@ export const ProfileSetupScreen: React.FC<Props> = () => {
       {/* Dark navy header with logo — full-width edge-to-edge */}
       <View style={styles.logoSection}>
         <Image
-          source={require('../../../assets/yoiden_collective.png')}
-          style={styles.logo}
-          resizeMode="cover"
+          source={require('../../../assets/Logo.png')}
+          style={styles.headerIcon}
+          resizeMode="contain"
         />
         <View style={styles.stepBadge}>
           <Text style={styles.stepText}>STEP 1 OF 1</Text>
@@ -215,9 +215,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logo: {
-    width: SCREEN_WIDTH,
-    height: LOGO_HEIGHT,
+  headerIcon: {
+    width: 40,
+    height: 40,
   },
   stepBadge: {
     position: 'absolute',

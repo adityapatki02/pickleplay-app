@@ -18,7 +18,7 @@ import { useAuthStore } from '../../store/authStore';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'PhoneInput'>;
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const NAVY = '#001E40';
 const BLUE_ACCENT = '#2196F3';
 const LOGO_HEIGHT = 200;
@@ -67,11 +67,10 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
     <View style={styles.outerContainer}>
       {/* Top half — dark navy, logo full-width edge-to-edge */}
       <View style={styles.logoSection}>
-        <Image
-          source={require('../../../assets/yoiden_collective.png')}
-          style={styles.logo}
-          resizeMode="cover"
-        />
+        <View style={styles.logoRow}>
+          <Image source={require('../../../assets/Logo.png')} style={styles.iconMark} resizeMode="contain" />
+          <Image source={require('../../../assets/name_logo.png')} style={styles.wordMark} resizeMode="contain" />
+        </View>
       </View>
 
       {/* Bottom half — white card slides up over navy */}
@@ -235,28 +234,42 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: NAVY,
+    minHeight: SCREEN_HEIGHT,
+    backgroundColor: '#FFFFFF',
   },
-  // Logo section — full-bleed, no horizontal padding
+  // Logo section — white background so logo renders correctly
   logoSection: {
-    backgroundColor: NAVY,
+    backgroundColor: '#FFFFFF',
     width: '100%',
     height: LOGO_HEIGHT,
-    paddingTop: Platform.OS === 'ios' ? 44 : 24, // status bar clearance
+    paddingTop: Platform.OS === 'ios' ? 44 : 24,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logo: {
-    width: SCREEN_WIDTH,
-    height: LOGO_HEIGHT - (Platform.OS === 'ios' ? 44 : 24),
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
   },
-  // White card with rounded top corners
+  iconMark: {
+    width: 80,
+    height: 80,
+  },
+  wordMark: {
+    width: 200,
+    height: 80,
+    marginLeft: 8,
+  },
+  // Navy card with rounded top corners
   cardWrapper: {
     flex: 1,
+    minHeight: SCREEN_HEIGHT - LOGO_HEIGHT,
   },
   card: {
     flex: 1,
-    backgroundColor: colors.background,
+    minHeight: SCREEN_HEIGHT - LOGO_HEIGHT,
+    backgroundColor: NAVY,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: spacing.xl,
@@ -273,14 +286,14 @@ const styles = StyleSheet.create({
     fontSize: 38,
     fontWeight: '900',
     fontStyle: 'italic',
-    color: NAVY,
+    color: '#FFFFFF',
     letterSpacing: -1.5,
     lineHeight: 40,
     textTransform: 'uppercase',
   },
   subtitle: {
     fontSize: typography.fontSize.md,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.6)',
     marginTop: spacing.sm,
     lineHeight: 20,
   },
@@ -290,20 +303,19 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.5)',
     marginBottom: spacing.sm,
     letterSpacing: 2,
   },
   phoneContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceContainerLowest,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: borderRadius.lg,
     borderWidth: 1.5,
-    borderColor: colors.surfaceVariant,
+    borderColor: 'rgba(255,255,255,0.15)',
     paddingHorizontal: spacing.base,
     height: 58,
-    ...shadows.sm,
   },
   phoneContainerFocused: {
     borderColor: BLUE_ACCENT,
@@ -325,19 +337,19 @@ const styles = StyleSheet.create({
   countryCodeText: {
     fontSize: typography.fontSize.lg,
     fontWeight: '700',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   codeDivider: {
     width: 1,
     height: 28,
-    backgroundColor: colors.surfaceVariant,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     marginHorizontal: spacing.md,
   },
   phoneInput: {
     flex: 1,
     fontSize: typography.fontSize.lg,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
     letterSpacing: 1,
   },
   checkMark: {
@@ -361,21 +373,20 @@ const styles = StyleSheet.create({
   },
   hintText: {
     fontSize: typography.fontSize.sm,
-    color: colors.textTertiary,
+    color: 'rgba(255,255,255,0.4)',
     marginTop: spacing.sm,
   },
   ctaButton: {
-    backgroundColor: NAVY,
+    backgroundColor: BLUE_ACCENT,
     borderRadius: borderRadius.lg,
     height: 56,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
-    ...shadows.lg,
   },
   ctaButtonDisabled: {
-    backgroundColor: colors.surfaceContainerHigh,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     shadowOpacity: 0,
   },
   ctaText: {
@@ -397,34 +408,34 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   featureChip: {
-    backgroundColor: colors.surfaceContainerLow,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 4,
     paddingVertical: spacing.xs + 2,
     paddingHorizontal: spacing.md,
     borderWidth: 1,
-    borderColor: colors.surfaceVariant,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   featureLabel: {
     fontSize: 9,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.5)',
     fontWeight: '700',
     letterSpacing: 1.5,
   },
   terms: {
     fontSize: typography.fontSize.sm,
-    color: colors.textTertiary,
+    color: 'rgba(255,255,255,0.35)',
     textAlign: 'center',
     marginTop: spacing.xl,
     lineHeight: 18,
   },
   termsLink: {
-    color: colors.secondary,
+    color: BLUE_ACCENT,
     fontWeight: '600',
   },
   devBypass: {
     marginTop: spacing.md,
     borderWidth: 1,
-    borderColor: colors.outline,
+    borderColor: 'rgba(255,255,255,0.2)',
     borderRadius: borderRadius.md,
     paddingVertical: spacing.md,
     alignItems: 'center',
@@ -433,7 +444,7 @@ const styles = StyleSheet.create({
   devBypassText: {
     fontSize: 10,
     fontWeight: '800',
-    color: colors.outline,
+    color: 'rgba(255,255,255,0.4)',
     letterSpacing: 1.5,
   },
 });

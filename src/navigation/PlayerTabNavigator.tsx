@@ -1,7 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, Image } from 'react-native';
 import {
   PlayerTabParamList,
   HomeStackParamList,
@@ -23,7 +23,7 @@ const PlaceholderScreen = ({ title, subtitle }: { title: string; subtitle?: stri
   <SafeAreaView style={ph.container}>
     <View style={ph.header}>
       <View style={ph.headerGlow} />
-      <Text style={ph.brand}>PRO PICKLEBALL</Text>
+      <Image source={require('../assets/Logo.png')} style={ph.brandIcon} resizeMode="contain" />
     </View>
     <View style={ph.body}>
       <Text style={ph.title}>{title.toUpperCase()}</Text>
@@ -50,11 +50,7 @@ const ph = StyleSheet.create({
     width: 200, height: 200, borderRadius: 100,
     backgroundColor: colors.secondaryContainer, opacity: 0.06,
   },
-  brand: {
-    fontSize: typography.fontSize.base,
-    fontWeight: '900', fontStyle: 'italic',
-    color: '#FFFFFF', letterSpacing: -0.3,
-  },
+  brandIcon: { width: 36, height: 36 },
   body: { flex: 1, paddingHorizontal: spacing.xl, paddingTop: spacing['2xl'] },
   title: {
     fontSize: 28, fontWeight: '900', fontStyle: 'italic',
@@ -87,7 +83,7 @@ const HomeStackNavigator = () => {
           <SafeAreaView style={ph.container}>
             <View style={ph.header}>
               <View style={ph.headerGlow} />
-              <Text style={ph.brand}>PRO PICKLEBALL</Text>
+              <Image source={require('../assets/Logo.png')} style={ph.brandIcon} resizeMode="contain" />
             </View>
             <View style={ph.body}>
               <Text style={ph.title}>{'WELCOME BACK,\n' + displayName.toUpperCase() + '.'}</Text>

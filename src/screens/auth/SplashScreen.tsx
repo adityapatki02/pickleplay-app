@@ -66,12 +66,13 @@ export const SplashScreen: React.FC<Props> = ({ navigation }) => {
           { opacity: fadeIn, transform: [{ translateY: slideUp }] },
         ]}
       >
-        {/* Logo — hero, 80% width */}
-        <Image
-          source={require('../../../assets/yoiden_collective.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        {/* Logo — icon mark + wordmark side by side */}
+        <View style={styles.logoBg}>
+          <View style={styles.logoRow}>
+            <Image source={require('../../../assets/Logo.png')} style={styles.iconMark} resizeMode="contain" />
+            <Image source={require('../../../assets/name_logo.png')} style={styles.wordMark} resizeMode="contain" />
+          </View>
+        </View>
 
         {/* Blue accent divider */}
         <View style={styles.divider} />
@@ -110,15 +111,26 @@ const styles = StyleSheet.create({
   content: {
     alignItems: 'center',
   },
-  logo: {
-    width: width * 0.8,
-    aspectRatio: undefined,
-    height: undefined,
-    // aspectRatio handled by resizeMode="contain" + explicit width; height auto
-    // We set a fixed height proportional to width since RN requires it
-    // Typical logo aspect: ~3:1
-    minHeight: 100,
-    maxHeight: 160,
+  logoBg: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+  },
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  iconMark: {
+    width: 80,
+    height: 80,
+  },
+  wordMark: {
+    width: 200,
+    height: 80,
+    marginLeft: 8,
   },
   divider: {
     width: 60,
