@@ -1,67 +1,43 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Text } from 'react-native';
+import { Text, View, SafeAreaView, StyleSheet } from 'react-native';
 import {
-  OrgTabParamList,
-  OrgDashboardStackParamList,
+  OrganizerTabParamList,
   OrgTournamentsStackParamList,
-  OrgCreateStackParamList,
-  OrgAnalyticsStackParamList,
 } from './types';
-import { colors, typography } from '../config/theme';
-import OrgMyTournamentsScreen from '../screens/organizer/MyTournamentsScreen';
+import { colors, typography, spacing } from '../config/theme';
+import OrganizerTournamentsScreen from '../screens/organizer/OrganizerTournamentsScreen';
 import TournamentDashboardScreen from '../screens/organizer/TournamentDashboardScreen';
 import RegistrationManagementScreen from '../screens/organizer/RegistrationManagementScreen';
-import BracketManageScreen from '../screens/organizer/BracketManageScreen';
+import OrganizerBracketScreen from '../screens/organizer/OrganizerBracketScreen';
 import ScoreEntryScreen from '../screens/organizer/ScoreEntryScreen';
 import CreateTournamentScreen from '../screens/organizer/CreateTournamentScreen';
 
-const PlaceholderScreen = ({ title }: { title: string }) => (
-  <Text style={{ padding: 20, fontSize: 18 }}>{title}</Text>
+// Profile placeholder
+const OrgProfileScreen = () => (
+  <SafeAreaView style={styles.placeholder}>
+    <View style={styles.placeholderBody}>
+      <Text style={styles.placeholderTitle}>PROFILE</Text>
+      <Text style={styles.placeholderSubtitle}>Organizer profile — coming soon</Text>
+    </View>
+  </SafeAreaView>
 );
 
-// Dashboard Stack
-const DashStack = createNativeStackNavigator<OrgDashboardStackParamList>();
-const DashStackNavigator = () => (
-  <DashStack.Navigator screenOptions={{ headerShown: false }}>
-    <DashStack.Screen name="OrgDashboard">
-      {() => <PlaceholderScreen title="Organizer Dashboard" />}
-    </DashStack.Screen>
-  </DashStack.Navigator>
-);
-
-// Tournaments Stack
+// Tournaments Stack — all organizer screens reachable from one stack
 const TourStack = createNativeStackNavigator<OrgTournamentsStackParamList>();
-const TourStackNavigator = () => (
+const TournamentsStackNavigator = () => (
   <TourStack.Navigator screenOptions={{ headerShown: false }}>
-    <TourStack.Screen name="OrgTournaments" component={OrgMyTournamentsScreen} />
+    <TourStack.Screen name="OrgTournaments" component={OrganizerTournamentsScreen} />
+    <TourStack.Screen name="CreateTournament" component={CreateTournamentScreen} />
     <TourStack.Screen name="TournamentManage" component={TournamentDashboardScreen} />
     <TourStack.Screen name="RegistrationManage" component={RegistrationManagementScreen} />
-    <TourStack.Screen name="BracketManage" component={BracketManageScreen} />
+    <TourStack.Screen name="BracketManage" component={OrganizerBracketScreen} />
     <TourStack.Screen name="ScoreEntry" component={ScoreEntryScreen} />
   </TourStack.Navigator>
 );
 
-// Create Stack
-const CreateStack = createNativeStackNavigator<OrgCreateStackParamList>();
-const CreateStackNavigator = () => (
-  <CreateStack.Navigator screenOptions={{ headerShown: false }}>
-    <CreateStack.Screen name="CreateTournament" component={CreateTournamentScreen} />
-  </CreateStack.Navigator>
-);
-
-// Analytics Stack
-const AnalyticsStack = createNativeStackNavigator<OrgAnalyticsStackParamList>();
-const AnalyticsStackNavigator = () => (
-  <AnalyticsStack.Navigator screenOptions={{ headerShown: false }}>
-    <AnalyticsStack.Screen name="Analytics">
-      {() => <PlaceholderScreen title="Analytics" />}
-    </AnalyticsStack.Screen>
-  </AnalyticsStack.Navigator>
-);
-
-const Tab = createBottomTabNavigator<OrgTabParamList>();
+const Tab = createBottomTabNavigator<OrganizerTabParamList>();
 
 export const OrganizerTabNavigator: React.FC = () => {
   return (
@@ -71,55 +47,75 @@ export const OrganizerTabNavigator: React.FC = () => {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textTertiary,
         tabBarLabelStyle: {
-          fontSize: typography.fontSize.xs,
-          fontWeight: '600',
+          fontSize: 10,
+          fontWeight: '700',
+          letterSpacing: 1,
+          textTransform: 'uppercase',
+          marginTop: 2,
         },
         tabBarStyle: {
-          borderTopColor: colors.borderLight,
-          paddingTop: 4,
+          backgroundColor: colors.surfaceContainerLowest,
+          borderTopColor: colors.surfaceVariant,
+          paddingTop: 6,
+          height: 60,
         },
       }}
     >
       <Tab.Screen
-        name="DashboardTab"
-        component={DashStackNavigator}
-        options={{
-          tabBarLabel: 'Dashboard',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>{'📊'}</Text>
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="MyTournamentsTab"
-        component={TourStackNavigator}
+        name="TournamentsTab"
+        component={TournamentsStackNavigator}
         options={{
           tabBarLabel: 'Tournaments',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>{'🏆'}</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <View style={focused ? tabStyles.activeIcon : undefined}>
+              <Text style={{ fontSize: 18, color }}>{'🏆'}</Text>
+            </View>
           ),
         }}
       />
       <Tab.Screen
-        name="CreateTab"
-        component={CreateStackNavigator}
+        name="ProfileTab"
+        component={OrgProfileScreen}
         options={{
-          tabBarLabel: 'Create',
+          tabBarLabel: 'Profile',
           tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>{'➕'}</Text>
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="AnalyticsTab"
-        component={AnalyticsStackNavigator}
-        options={{
-          tabBarLabel: 'Analytics',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>{'📈'}</Text>
+            <Text style={{ fontSize: 18, color }}>{'👤'}</Text>
           ),
         }}
       />
     </Tab.Navigator>
   );
 };
+
+const styles = StyleSheet.create({
+  placeholder: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  placeholderBody: {
+    flex: 1,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing['2xl'],
+  },
+  placeholderTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    fontStyle: 'italic',
+    color: colors.primary,
+    letterSpacing: -1,
+    marginBottom: spacing.sm,
+  },
+  placeholderSubtitle: {
+    fontSize: typography.fontSize.md,
+    color: colors.textSecondary,
+  },
+});
+
+const tabStyles = StyleSheet.create({
+  activeIcon: {
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+});

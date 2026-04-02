@@ -63,6 +63,7 @@ export type OrgDashboardStackParamList = {
 
 export type OrgTournamentsStackParamList = {
   OrgTournaments: undefined;
+  CreateTournament: undefined;
   TournamentManage: { tournamentId: string };
   EditTournament: { tournamentId: string };
   ManageCategories: { tournamentId: string };
@@ -97,11 +98,26 @@ export type OrgTabParamList = {
   AnalyticsTab: NavigatorScreenParams<OrgAnalyticsStackParamList>;
 };
 
+// Simplified Organizer stack/tab types (used by OrganizerTabNavigator)
+export type OrganizerStackParamList = {
+  OrganizerTournaments: undefined;
+  CreateTournament: undefined;
+  TournamentDashboard: { tournamentId: string };
+  RegistrationManagement: { tournamentId: string };
+  OrganizerBracket: { tournamentId: string };
+  ScoreEntry: { tournamentId: string; matchId?: string; categoryId?: string };
+};
+
+export type OrganizerTabParamList = {
+  TournamentsTab: undefined;
+  ProfileTab: undefined;
+};
+
 // Root Navigator
 export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>;
   PlayerTabs: NavigatorScreenParams<PlayerTabParamList>;
-  OrgTabs: NavigatorScreenParams<OrgTabParamList>;
+  OrgTabs: NavigatorScreenParams<OrganizerTabParamList>;
 };
 
 // Helper types for screen props
