@@ -10,15 +10,22 @@ import {
   StatusBar,
   ActivityIndicator,
   RefreshControl,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import {
+  getSeasons,
   getSeason,
   getTies,
   getStandings,
   getGroups,
   getFranchises,
   startLeaguePhase,
+  importMasterCSV,
+  generateCaptainTokens,
 } from '../../api/leagues.api';
 import { useLeagueStore } from '../../store/leagueStore';
 import { xAlert, xConfirm } from '../../utils/alert';
@@ -77,13 +84,18 @@ const STATUS_CHIP: Record<TieStatus, { label: string; color: string; bg: string 
 const LeagueDashboardScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { leagueId, seasonId } = route.params as { leagueId: string; seasonId: string };
+  const { leagueId, seasonId: routeSeasonId } = route.params as { leagueId: string; seasonId?: string };
 
   const store = useLeagueStore();
   const [activeTab, setActiveTab] = useState<Tab>('OVERVIEW');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [showCSVModal, setShowCSVModal] = useState(false);
+  const [csvText, setCsvText] = useState('');
+  const [showLinksModal, setShowLinksModal] = useState(false);
+  const [captainLinks, setCaptainLinks] = useState<{ name: string; token: string; url: string }[]>([]);
+  const [resolvedSeasonId, setResolvedSeasonId] = useState(routeSeasonId || '');
 
   // Local state
   const [ties, setTies] = useState<Tie[]>([]);
@@ -95,25 +107,43 @@ const LeagueDashboardScreen: React.FC = () => {
   // ── Data fetching ──
   const fetchAll = useCallback(async () => {
     try {
+      // If no seasonId, fetch the latest season for this league
+      let seasonId = resolvedSeasonId;
+      if (!seasonId) {
+        const seasons = await getSeasons(leagueId);
+        const seasonList = Array.isArray(seasons) ? seasons : [];
+        if (seasonList.length > 0) {
+          seasonId = seasonList[0].id;
+          setResolvedSeasonId(seasonId);
+        } else {
+          // No seasons yet — just show franchises
+          const franchisesData = await getFranchises(leagueId).catch(() => [] as Franchise[]);
+          setFranchises(franchisesData);
+          return;
+        }
+      }
+
       const [seasonData, tiesData, standingsData, groupsData, franchisesData] = await Promise.all([
         getSeason(leagueId, seasonId),
         getTies(leagueId, seasonId).catch(() => [] as Tie[]),
-        getStandings(leagueId, seasonId).catch(() => [] as LeagueStanding[]),
+        getStandings(leagueId, seasonId).catch(() => ({ groups: [] })),
         getGroups(leagueId, seasonId).catch(() => [] as LeagueGroup[]),
         getFranchises(leagueId).catch(() => [] as Franchise[]),
       ]);
       store.setCurrentSeason(seasonData);
-      setTies(tiesData);
-      setStandings(standingsData);
-      setGroups(groupsData);
-      setFranchises(franchisesData);
-      store.setStandings(standingsData);
-      store.setTies(tiesData);
-      store.setGroups(groupsData);
+      const tieList = Array.isArray(tiesData) ? tiesData : [];
+      const groupList = Array.isArray(groupsData) ? groupsData : [];
+      const standingList = Array.isArray(standingsData) ? standingsData : (standingsData as any)?.groups ? [] : [];
+      setTies(tieList);
+      setStandings(standingList);
+      setGroups(groupList);
+      setFranchises(Array.isArray(franchisesData) ? franchisesData : []);
+      store.setTies(tieList);
+      store.setGroups(groupList);
     } catch (err: any) {
-      xAlert('Error', err?.message || 'Failed to load league data');
+      console.warn('League dashboard fetch error:', err?.message);
     }
-  }, [leagueId, seasonId]);
+  }, [leagueId, resolvedSeasonId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -135,7 +165,54 @@ const LeagueDashboardScreen: React.FC = () => {
     return m;
   }, [franchises]);
 
-  const teamName = (id: string) => franchiseMap[id]?.shortName || franchiseMap[id]?.name || '—';
+  // Build pool tag map: franchiseId → "A1", "B2", "C3", "D4" etc.
+  const poolTagMap = React.useMemo(() => {
+    const m: Record<string, string> = {};
+    const poolLetters: Record<string, string> = {
+      'Pool A': 'A', 'Pool B': 'B', 'Pool C': 'C', 'Pool D': 'D',
+    };
+    // Try building from groups data (each group has franchises array)
+    const rawGroups = Array.isArray(groups) ? groups : [];
+    rawGroups.forEach((g: any) => {
+      const letter = poolLetters[g.name] || g.name?.replace('Pool ', '') || '?';
+      const members = g.franchises || [];
+      members.forEach((gf: any, idx: number) => {
+        const fId = gf.franchiseId || gf.franchise?.id || gf.id;
+        if (fId) m[fId] = `${letter}${idx + 1}`;
+      });
+    });
+
+    // Fallback: if groups didn't populate, build from tie patterns
+    // Pool A teams play Pool B teams (in group 1), Pool C play Pool D (group 2)
+    if (Object.keys(m).length === 0 && ties.length > 0) {
+      // Group ties by groupId, collect unique home/away teams per group
+      const groupTeams = new Map<string, { home: Set<string>; away: Set<string> }>();
+      ties.forEach((t: any) => {
+        const gId = t.groupId || 'default';
+        if (!groupTeams.has(gId)) groupTeams.set(gId, { home: new Set(), away: new Set() });
+        const gt = groupTeams.get(gId)!;
+        // In cross-pool ties, all homeTeams are from one pool, awayTeams from the other
+        gt.home.add(t.homeTeamId);
+        gt.away.add(t.awayTeamId);
+      });
+
+      const groupEntries = Array.from(groupTeams.entries());
+      const letters = ['A', 'B', 'C', 'D'];
+      groupEntries.forEach(([, gt], gi) => {
+        const homeArr = Array.from(gt.home);
+        const awayArr = Array.from(gt.away);
+        const l1 = letters[gi * 2] || '?';
+        const l2 = letters[gi * 2 + 1] || '?';
+        homeArr.forEach((fId, idx) => { m[fId] = `${l1}${idx + 1}`; });
+        awayArr.forEach((fId, idx) => { m[fId] = `${l2}${idx + 1}`; });
+      });
+    }
+    return m;
+  }, [groups, ties]);
+
+  const teamNamePlain = (id: string) => franchiseMap[id]?.shortName || franchiseMap[id]?.name || '—';
+  const teamName = (id: string) => teamNamePlain(id); // plain for non-JSX usage
+  const teamPoolTag = (id: string) => poolTagMap[id] || '';
 
   const completedTies = ties.filter((t) => t.status === 'completed');
   const upcomingTies = ties.filter((t) => t.status !== 'completed' && t.status !== 'postponed');
@@ -178,7 +255,7 @@ const LeagueDashboardScreen: React.FC = () => {
       async () => {
         setActionLoading(true);
         try {
-          await startLeaguePhase(leagueId, seasonId);
+          await startLeaguePhase(leagueId, resolvedSeasonId);
           xAlert('Success', 'League phase started! Fixtures have been generated.');
           await fetchAll();
         } catch (err: any) {
@@ -251,7 +328,12 @@ const LeagueDashboardScreen: React.FC = () => {
         </View>
 
         <View style={styles.tieMatchup}>
-          <Text style={styles.tieTeamName}>{tie.homeTeam?.name || teamName(tie.homeTeamId)}</Text>
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            {teamPoolTag(tie.homeTeamId) ? (
+              <Text style={{ fontSize: 11, fontWeight: '800', color: BLUE, marginBottom: 2 }}>({teamPoolTag(tie.homeTeamId)})</Text>
+            ) : null}
+            <Text style={styles.tieTeamName}>{teamNamePlain(tie.homeTeamId)}</Text>
+          </View>
           {tie.status === 'completed' ? (
             <View style={styles.tieScoreBox}>
               <Text style={styles.tieScoreText}>
@@ -261,7 +343,12 @@ const LeagueDashboardScreen: React.FC = () => {
           ) : (
             <Text style={styles.tieVsText}>vs</Text>
           )}
-          <Text style={styles.tieTeamName}>{tie.awayTeam?.name || teamName(tie.awayTeamId)}</Text>
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            {teamPoolTag(tie.awayTeamId) ? (
+              <Text style={{ fontSize: 11, fontWeight: '800', color: BLUE, marginBottom: 2 }}>({teamPoolTag(tie.awayTeamId)})</Text>
+            ) : null}
+            <Text style={styles.tieTeamName}>{teamNamePlain(tie.awayTeamId)}</Text>
+          </View>
         </View>
 
         {tie.status === 'completed' && (tie.homeBonusPoints > 0 || tie.awayBonusPoints > 0) && (
@@ -285,12 +372,106 @@ const LeagueDashboardScreen: React.FC = () => {
   };
 
   // ── OVERVIEW TAB ──
+  // ── Setup action cards ──
+  const renderSetupActions = () => {
+    const actions = [
+      {
+        icon: '🏢',
+        title: 'Manage Franchises',
+        sub: `${franchises.length} franchise${franchises.length !== 1 ? 's' : ''} added`,
+        onPress: () => navigation.navigate('FranchiseManagement', { leagueId }),
+        color: '#3B82F6',
+        bg: '#DBEAFE',
+      },
+      {
+        icon: '📋',
+        title: 'Import CSV (All Franchises)',
+        sub: 'Bulk import franchises + players from CSV',
+        onPress: () => setShowCSVModal(true),
+        color: '#059669',
+        bg: '#D1FAE5',
+      },
+      {
+        icon: '👥',
+        title: 'Manage Groups',
+        sub: `${groups.length} group${groups.length !== 1 ? 's' : ''} set up`,
+        onPress: () => navigation.navigate('GroupManagement', { leagueId, seasonId: resolvedSeasonId }),
+        color: '#8B5CF6',
+        bg: '#EDE9FE',
+      },
+      {
+        icon: '🔗',
+        title: 'Captain Portal Links',
+        sub: 'Generate & share links for team captains',
+        onPress: async () => {
+          setActionLoading(true);
+          try {
+            const links = await generateCaptainTokens(leagueId);
+            setCaptainLinks(Array.isArray(links) ? links : []);
+            setShowLinksModal(true);
+          } catch (err: any) {
+            xAlert('Error', err?.message || 'Failed to generate links');
+          } finally {
+            setActionLoading(false);
+          }
+        },
+        color: '#0891B2',
+        bg: '#CFFAFE',
+      },
+    ];
+
+    return (
+      <View style={{ marginBottom: 16 }}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Setup</Text>
+        </View>
+        {actions.map((a, i) => (
+          <TouchableOpacity
+            key={i}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: WHITE,
+              borderRadius: 12,
+              padding: 14,
+              marginBottom: 8,
+              borderWidth: 1,
+              borderColor: BORDER,
+            }}
+            onPress={a.onPress}
+            activeOpacity={0.7}
+          >
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 10,
+                backgroundColor: a.bg,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 12,
+              }}
+            >
+              <Text style={{ fontSize: 18 }}>{a.icon}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: TEXT_COLOR }}>{a.title}</Text>
+              <Text style={{ fontSize: 12, color: TEXT_SUB, marginTop: 2 }}>{a.sub}</Text>
+            </View>
+            <Text style={{ fontSize: 18, color: TEXT_MUTED }}>›</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
+
   const renderOverview = () => (
     <ScrollView
       contentContainerStyle={styles.tabContent}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       {renderPhaseBar()}
+      {renderSetupActions()}
       {renderQuickStats()}
 
       {/* Upcoming Ties */}
@@ -314,7 +495,7 @@ const LeagueDashboardScreen: React.FC = () => {
       )}
 
       {/* Action: Start League */}
-      {season?.status === 'registration' && (
+      {(season?.status === 'setup' || season?.status === 'registration') && (
         <TouchableOpacity
           style={styles.primaryBtn}
           onPress={handleStartLeague}
@@ -338,7 +519,7 @@ const LeagueDashboardScreen: React.FC = () => {
       contentContainerStyle={styles.tabContent}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      {season?.status === 'registration' && (
+      {(season?.status === 'setup' || season?.status === 'registration') && (
         <TouchableOpacity
           style={styles.primaryBtn}
           onPress={handleStartLeague}
@@ -367,7 +548,56 @@ const LeagueDashboardScreen: React.FC = () => {
               <Text style={styles.roundHeaderText}>{round}</Text>
               <View style={styles.roundLine} />
             </View>
-            {roundTies.map((t) => renderTieCard(t))}
+            {roundTies.map((t, idx) => (
+              <View key={t.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {/* Reorder arrows */}
+                <View style={{ width: 28, alignItems: 'center', marginRight: 4 }}>
+                  {idx > 0 && (
+                    <TouchableOpacity
+                      style={{ paddingVertical: 4 }}
+                      onPress={() => {
+                        // Swap this tie with the one above in the round
+                        const newTies = [...ties];
+                        const globalIdx = newTies.findIndex((x) => x.id === t.id);
+                        const prevInRound = newTies.findIndex((x) => x.id === roundTies[idx - 1].id);
+                        if (globalIdx !== -1 && prevInRound !== -1) {
+                          // Swap matchDay/round to reorder
+                          const tmpDay = newTies[globalIdx].matchDay;
+                          newTies[globalIdx].matchDay = newTies[prevInRound].matchDay;
+                          newTies[prevInRound].matchDay = tmpDay;
+                          [newTies[globalIdx], newTies[prevInRound]] = [newTies[prevInRound], newTies[globalIdx]];
+                          setTies(newTies);
+                        }
+                      }}
+                    >
+                      <Text style={{ fontSize: 16, color: BLUE, fontWeight: '800' }}>▲</Text>
+                    </TouchableOpacity>
+                  )}
+                  {idx < roundTies.length - 1 && (
+                    <TouchableOpacity
+                      style={{ paddingVertical: 4 }}
+                      onPress={() => {
+                        const newTies = [...ties];
+                        const globalIdx = newTies.findIndex((x) => x.id === t.id);
+                        const nextInRound = newTies.findIndex((x) => x.id === roundTies[idx + 1].id);
+                        if (globalIdx !== -1 && nextInRound !== -1) {
+                          const tmpDay = newTies[globalIdx].matchDay;
+                          newTies[globalIdx].matchDay = newTies[nextInRound].matchDay;
+                          newTies[nextInRound].matchDay = tmpDay;
+                          [newTies[globalIdx], newTies[nextInRound]] = [newTies[nextInRound], newTies[globalIdx]];
+                          setTies(newTies);
+                        }
+                      }}
+                    >
+                      <Text style={{ fontSize: 16, color: BLUE, fontWeight: '800' }}>▼</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  {renderTieCard(t)}
+                </View>
+              </View>
+            ))}
           </View>
         ))
       )}
@@ -442,7 +672,7 @@ const LeagueDashboardScreen: React.FC = () => {
 
         <TouchableOpacity
           style={styles.secondaryBtn}
-          onPress={() => navigation.navigate('Standings', { leagueId, seasonId })}
+          onPress={() => navigation.navigate('Standings', { leagueId, seasonId: resolvedSeasonId })}
         >
           <Text style={styles.secondaryBtnText}>VIEW FULL STANDINGS</Text>
         </TouchableOpacity>
@@ -505,6 +735,133 @@ const LeagueDashboardScreen: React.FC = () => {
       {activeTab === 'OVERVIEW' && renderOverview()}
       {activeTab === 'FIXTURES' && renderFixtures()}
       {activeTab === 'STANDINGS' && renderStandingsTab()}
+
+      {/* Captain Links Modal */}
+      <Modal visible={showLinksModal} transparent animationType="slide">
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+          activeOpacity={1}
+          onPress={() => setShowLinksModal(false)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={{ backgroundColor: WHITE, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '80%' }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: NAVY, marginBottom: 4 }}>Captain Portal Links</Text>
+              <Text style={{ fontSize: 12, color: TEXT_SUB, marginBottom: 12 }}>Share each link with the respective team captain</Text>
+              <ScrollView style={{ maxHeight: 400 }}>
+                {captainLinks.map((link, i) => {
+                  const fullUrl = `https://yoiden-api-460478077750.asia-south1.run.app${link.url}`;
+                  return (
+                    <View key={i} style={{ backgroundColor: SURFACE, borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: NAVY }}>{link.name}</Text>
+                      <Text
+                        style={{ fontSize: 11, color: BLUE, marginTop: 4 }}
+                        selectable
+                        numberOfLines={2}
+                      >
+                        {fullUrl}
+                      </Text>
+                      <TouchableOpacity
+                        style={{ marginTop: 6, backgroundColor: BLUE, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, alignSelf: 'flex-start' }}
+                        onPress={() => {
+                          if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                            navigator.clipboard.writeText(fullUrl);
+                            xAlert('Copied', `Link for ${link.name} copied to clipboard`);
+                          }
+                        }}
+                      >
+                        <Text style={{ color: WHITE, fontSize: 12, fontWeight: '700' }}>COPY LINK</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+              <TouchableOpacity
+                style={{ marginTop: 12, paddingVertical: 14, borderRadius: 10, backgroundColor: SURFACE, alignItems: 'center' }}
+                onPress={() => setShowLinksModal(false)}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '700', color: TEXT_SUB }}>CLOSE</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* CSV Import Modal */}
+      <Modal visible={showCSVModal} transparent animationType="slide">
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+            activeOpacity={1}
+            onPress={() => setShowCSVModal(false)}
+          >
+            <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+              <View style={{ backgroundColor: WHITE, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '80%' }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: NAVY, marginBottom: 4 }}>
+                  Import Master CSV
+                </Text>
+                <Text style={{ fontSize: 12, color: TEXT_SUB, marginBottom: 12 }}>
+                  Format: franchise_name,slot_number,category,player1_name,player1_phone,player2_name,player2_phone
+                </Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: BORDER,
+                    borderRadius: 10,
+                    padding: 12,
+                    minHeight: 200,
+                    fontSize: 13,
+                    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+                    backgroundColor: SURFACE,
+                    textAlignVertical: 'top',
+                  }}
+                  multiline
+                  value={csvText}
+                  onChangeText={setCsvText}
+                  placeholder={`franchise_name,slot_number,category,player1_name,player1_phone,player2_name,player2_phone\nAces,1,Kids & Kids,Rahul Kumar,9876543210,Amit Singh,9876543211\nAces,2,Kid & Teen (M),Rohan P,9876543212,Vijay S,9876543213`}
+                  placeholderTextColor={TEXT_MUTED}
+                />
+                <View style={{ flexDirection: 'row', marginTop: 16, gap: 10 }}>
+                  <TouchableOpacity
+                    style={{ flex: 1, paddingVertical: 14, borderRadius: 10, backgroundColor: SURFACE, alignItems: 'center' }}
+                    onPress={() => { setShowCSVModal(false); setCsvText(''); }}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: TEXT_SUB }}>CANCEL</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex: 1, paddingVertical: 14, borderRadius: 10, backgroundColor: GREEN, alignItems: 'center' }}
+                    onPress={async () => {
+                      if (!csvText.trim() || !resolvedSeasonId) return;
+                      setActionLoading(true);
+                      try {
+                        const result = await importMasterCSV(leagueId, resolvedSeasonId, csvText);
+                        setShowCSVModal(false);
+                        setCsvText('');
+                        const msg = `Created ${result.franchisesCreated ?? 0} franchises, imported ${result.playersImported ?? 0} players.${result.errors?.length ? `\n${result.errors.length} errors.` : ''}`;
+                        xAlert('Import Complete', msg);
+                        await fetchAll();
+                      } catch (err: any) {
+                        xAlert('Import Error', err?.response?.data?.message || err?.message || 'Failed');
+                      } finally {
+                        setActionLoading(false);
+                      }
+                    }}
+                    disabled={actionLoading || !csvText.trim()}
+                  >
+                    {actionLoading ? (
+                      <ActivityIndicator color={WHITE} />
+                    ) : (
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: WHITE }}>IMPORT</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 };

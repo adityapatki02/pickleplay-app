@@ -15,8 +15,10 @@ import {
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { tournamentsApi } from '../api/tournaments.api';
 import { registrationsApi } from '../api/registrations.api';
+import { getLeagues, deleteLeague } from '../api/leagues.api';
 import { useAuthStore } from '../store/authStore';
 import { Tournament } from '../types/tournament.types';
+import type { League } from '../types/league.types';
 import TournamentTile from '../components/ui/TournamentTile';
 import TournamentCarousel from '../components/ui/TournamentCarousel';
 // Light theme
@@ -273,14 +275,16 @@ export default function MyEventsScreen() {
   const [allTournaments, setAllTournaments] = useState<Tournament[]>([]);
   const [loadingRegs, setLoadingRegs] = useState(true);
   const [loadingOrg, setLoadingOrg] = useState(true);
+  const [myLeagues, setMyLeagues] = useState<League[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchAll = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
 
-    const [regsResult, toursResult] = await Promise.allSettled([
+    const [regsResult, toursResult, leaguesResult] = await Promise.allSettled([
       registrationsApi.getMyRegistrations(),
       tournamentsApi.getMyTournaments(),
+      getLeagues({ organizerId: user?.id }),
     ]);
 
     if (regsResult.status === 'fulfilled') {
@@ -293,9 +297,14 @@ export default function MyEventsScreen() {
       const raw = toursResult.value.data?.data ?? toursResult.value.data ?? [];
       setAllTournaments(Array.isArray(raw) ? raw : []);
     }
+
+    if (leaguesResult.status === 'fulfilled') {
+      const raw = leaguesResult.value;
+      setMyLeagues(Array.isArray(raw) ? raw : []);
+    }
     setLoadingOrg(false);
     setRefreshing(false);
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -571,6 +580,88 @@ export default function MyEventsScreen() {
             </View>
           </>
         )}
+
+        {/* ── LEAGUES section ── */}
+        {myLeagues.length > 0 && (
+          <View style={styles.compactListSection}>
+            <View style={styles.compactListHeader}>
+              <Text style={styles.compactListHeaderText}>MY LEAGUES</Text>
+              <Text style={styles.compactListHeaderCount}>
+                {myLeagues.length} total
+              </Text>
+            </View>
+            {myLeagues.map((league) => (
+              <View key={league.id} style={styles.leagueRow}>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+                  activeOpacity={0.7}
+                  onPress={() =>
+                    navigation.navigate('LeagueDashboard', {
+                      leagueId: league.id,
+                    })
+                  }
+                >
+                  <View style={styles.leagueRowDot} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.leagueRowName}>{league.name}</Text>
+                    <Text style={styles.leagueRowSub}>
+                      {league.city || 'League'} · {league.status?.toUpperCase()}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.leagueStatusBadge,
+                      league.status === 'active' && { backgroundColor: '#DCFCE7' },
+                      league.status === 'draft' && { backgroundColor: '#FEF3C7' },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.leagueStatusText,
+                        league.status === 'active' && { color: '#16A34A' },
+                        league.status === 'draft' && { color: '#D97706' },
+                      ]}
+                    >
+                      {league.status?.toUpperCase() || 'DRAFT'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.leagueDeleteBtn}
+                  onPress={() => {
+                    if (Platform.OS === 'web') {
+                      if (window.confirm(`Delete league "${league.name}"?`)) {
+                        deleteLeague(league.id).then(() => fetchAll()).catch(() => {});
+                      }
+                    } else {
+                      Alert.alert('Delete League', `Delete "${league.name}"?`, [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Delete',
+                          style: 'destructive',
+                          onPress: () => deleteLeague(league.id).then(() => fetchAll()).catch(() => {}),
+                        },
+                      ]);
+                    }
+                  }}
+                >
+                  <Text style={styles.leagueDeleteText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Create League button */}
+        <TouchableOpacity
+          style={[styles.createNewBtn, { backgroundColor: '#EDE9FE', marginTop: 8 }]}
+          onPress={() => navigation.navigate('CreateLeague')}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.createNewBtnText, { color: '#7C3AED' }]}>
+            🏅 CREATE NEW LEAGUE
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -1210,5 +1301,57 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: TEXT2,
     letterSpacing: 0.5,
+  },
+  // League rows
+  leagueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
+  leagueRowDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#7C3AED',
+    marginRight: 12,
+  },
+  leagueRowName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: TEXT,
+  },
+  leagueRowSub: {
+    fontSize: 12,
+    color: TEXT2,
+    marginTop: 2,
+  },
+  leagueStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: SURFACE,
+  },
+  leagueStatusText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: TEXT3,
+    letterSpacing: 0.5,
+  },
+  leagueDeleteBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  leagueDeleteText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#EF4444',
   },
 });

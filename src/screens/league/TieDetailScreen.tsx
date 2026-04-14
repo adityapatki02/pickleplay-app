@@ -123,6 +123,13 @@ const TieDetailScreen: React.FC = () => {
     useCallback(() => {
       setLoading(true);
       fetchData().finally(() => setLoading(false));
+
+      // Poll every 30 seconds while screen is focused
+      const interval = setInterval(() => {
+        fetchData();
+      }, 30000);
+
+      return () => clearInterval(interval);
     }, [fetchData]),
   );
 
@@ -351,17 +358,19 @@ const TieDetailScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Lock button */}
-      {tie.status === 'lineup_submitted' && homeSheet && awaySheet && (
+      {/* Lock / Re-lock button */}
+      {(tie.status === 'lineup_submitted' || tie.status === 'lineup_locked') && homeSheet && awaySheet && (
         <TouchableOpacity
-          style={styles.lockBtn}
+          style={[styles.lockBtn, tie.status === 'lineup_locked' && { backgroundColor: '#F97316' }]}
           onPress={handleLockLineups}
           disabled={actionLoading}
         >
           {actionLoading ? (
             <ActivityIndicator color={WHITE} size="small" />
           ) : (
-            <Text style={styles.lockBtnText}>LOCK LINEUPS</Text>
+            <Text style={styles.lockBtnText}>
+              {tie.status === 'lineup_locked' ? 'RE-LOCK LINEUPS' : 'LOCK LINEUPS'}
+            </Text>
           )}
         </TouchableOpacity>
       )}

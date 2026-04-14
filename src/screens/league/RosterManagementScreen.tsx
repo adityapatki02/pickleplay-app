@@ -90,7 +90,7 @@ export default function RosterManagementScreen() {
         getRoster(franchiseId, seasonId),
         !currentFranchise ? getFranchise(franchiseId) : Promise.resolve(null),
       ]);
-      setRoster(rosterData);
+      setRoster(Array.isArray(rosterData) ? rosterData : []);
       if (franchiseData) setCurrentFranchise(franchiseData);
     } catch (err) {
       console.error('Failed to load roster', err);
@@ -111,10 +111,11 @@ export default function RosterManagementScreen() {
 
   // ── Build sections ──
 
+  const safeRoster = Array.isArray(roster) ? roster : [];
   const sections: RosterSection[] = CATEGORY_ORDER.map((slug) => ({
     title: CATEGORY_LABELS[slug],
     slug,
-    data: roster.filter((r) => r.categorySlug === slug),
+    data: safeRoster.filter((r) => r.categorySlug === slug),
   })).filter((s) => s.data.length > 0);
 
   // If no players at all, show all categories empty for context

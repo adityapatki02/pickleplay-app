@@ -32,8 +32,18 @@ const BORDER = '#E2E8F0';
 const TEXT_COLOR = '#1A1D21';
 const TEXT_SUB = '#64748B';
 
-const GROUP_NAMES = ['Group AB', 'Group CD'];
-const GROUP_COLORS = [BLUE, ORANGE];
+const POOL_NAMES = ['Pool A', 'Pool B', 'Pool C', 'Pool D'];
+const POOL_COLORS = [BLUE, '#8B5CF6', '#F97316', '#06D6A0'];
+const GROUP_LABELS: Record<string, string> = {
+  'Pool A': 'GROUP 1',
+  'Pool B': 'GROUP 1',
+  'Pool C': 'GROUP 2',
+  'Pool D': 'GROUP 2',
+};
+const MAX_PER_POOL = 4;
+// Keep backward compat
+const GROUP_NAMES = POOL_NAMES;
+const GROUP_COLORS = POOL_COLORS;
 
 type RouteType = RouteProp<LeagueStackParamList, 'GroupManagement'>;
 
@@ -58,27 +68,33 @@ export default function GroupManagementScreen() {
 
   // Local assignment state
   const [groupAssignments, setGroupAssignments] = useState<GroupState>({
-    'Group AB': [],
-    'Group CD': [],
+    'Pool A': [],
+    'Pool B': [],
+    'Pool C': [],
+    'Pool D': [],
   });
 
   const fetchData = useCallback(async () => {
     try {
-      const [franchiseData, groupData] = await Promise.all([
+      const [franchiseRaw, groupRaw] = await Promise.all([
         getFranchises(leagueId),
-        getGroups(leagueId, seasonId).catch(() => [] as LeagueGroup[]),
+        getGroups(leagueId, seasonId).catch(() => []),
       ]);
+      const franchiseData = Array.isArray(franchiseRaw) ? franchiseRaw : [];
+      const groupData = Array.isArray(groupRaw) ? groupRaw : [];
       setFranchises(franchiseData);
       setGroups(groupData);
 
       // Populate local state from existing groups
       const assignments: GroupState = {
-        'Group AB': [],
-        'Group CD': [],
+        'Pool A': [],
+        'Pool B': [],
+        'Pool C': [],
+        'Pool D': [],
       };
-      groupData.forEach((g) => {
+      groupData.forEach((g: any) => {
         if (g.franchises && assignments[g.name] !== undefined) {
-          assignments[g.name] = g.franchises.map((f) => f.id);
+          assignments[g.name] = g.franchises.map((f: any) => f.franchiseId || f.franchise?.id || f.id);
         }
       });
       setGroupAssignments(assignments);
@@ -101,10 +117,9 @@ export default function GroupManagementScreen() {
 
   // ── Derived data ──
 
-  const assignedIds = new Set([
-    ...groupAssignments['Group AB'],
-    ...groupAssignments['Group CD'],
-  ]);
+  const assignedIds = new Set(
+    POOL_NAMES.flatMap((pn) => groupAssignments[pn] || []),
+  );
 
   const unassigned = storeFranchises.filter((f) => !assignedIds.has(f.id));
 
@@ -218,18 +233,24 @@ export default function GroupManagementScreen() {
                     {f.shortName || f.name}
                   </Text>
                   <View style={styles.assignBtns}>
-                    {GROUP_NAMES.map((gn, gi) => (
+                    {POOL_NAMES.map((gn, gi) => (
                       <TouchableOpacity
                         key={gn}
                         style={[
                           styles.assignBtn,
-                          { backgroundColor: GROUP_COLORS[gi] },
+                          { backgroundColor: POOL_COLORS[gi] },
+                          groupAssignments[gn].length >= MAX_PER_POOL && { opacity: 0.3 },
                         ]}
-                        onPress={() => assignToGroup(f.id, gn)}
+                        onPress={() => {
+                          if (groupAssignments[gn].length < MAX_PER_POOL) {
+                            assignToGroup(f.id, gn);
+                          }
+                        }}
                         activeOpacity={0.8}
+                        disabled={groupAssignments[gn].length >= MAX_PER_POOL}
                       >
                         <Text style={styles.assignBtnText}>
-                          {gn.replace('Group ', '')}
+                          {gn.replace('Pool ', '')}
                         </Text>
                       </TouchableOpacity>
                     ))}
@@ -240,42 +261,74 @@ export default function GroupManagementScreen() {
           </View>
         )}
 
-        {/* Groups side by side */}
+        {/* Group 1: Pool A + Pool B */}
+        <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY, letterSpacing: 1, marginBottom: 8, marginTop: 16 }}>
+          GROUP 1 (Pool A vs Pool B)
+        </Text>
         <View style={styles.groupsRow}>
-          {GROUP_NAMES.map((gn, gi) => (
+          {POOL_NAMES.slice(0, 2).map((gn, gi) => (
             <View key={gn} style={styles.groupColumn}>
               <View
                 style={[
                   styles.groupHeader,
-                  { backgroundColor: GROUP_COLORS[gi] },
+                  { backgroundColor: POOL_COLORS[gi] },
                 ]}
               >
                 <Text style={styles.groupHeaderText}>{gn.toUpperCase()}</Text>
                 <Text style={styles.groupCount}>
-                  {groupAssignments[gn].length}
+                  {groupAssignments[gn].length}/{MAX_PER_POOL}
                 </Text>
               </View>
               {groupAssignments[gn].length === 0 ? (
-                <Text style={styles.groupEmpty}>No teams assigned</Text>
+                <Text style={styles.groupEmpty}>No teams</Text>
               ) : (
                 groupAssignments[gn].map((fId) => {
                   const f = getFranchiseById(fId);
                   if (!f) return null;
                   return (
                     <View key={fId} style={styles.groupItem}>
-                      <View
-                        style={[
-                          styles.groupItemDot,
-                          { backgroundColor: f.primaryColor || GROUP_COLORS[gi] },
-                        ]}
-                      />
-                      <Text style={styles.groupItemName} numberOfLines={1}>
-                        {f.shortName || f.name}
-                      </Text>
-                      <TouchableOpacity
-                        onPress={() => removeFromGroup(fId, gn)}
-                        style={styles.removeBtn}
-                      >
+                      <View style={[styles.groupItemDot, { backgroundColor: f.primaryColor || POOL_COLORS[gi] }]} />
+                      <Text style={styles.groupItemName} numberOfLines={1}>{f.shortName || f.name}</Text>
+                      <TouchableOpacity onPress={() => removeFromGroup(fId, gn)} style={styles.removeBtn}>
+                        <Text style={styles.removeBtnText}>X</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          ))}
+        </View>
+
+        {/* Group 2: Pool C + Pool D */}
+        <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY, letterSpacing: 1, marginBottom: 8, marginTop: 20 }}>
+          GROUP 2 (Pool C vs Pool D)
+        </Text>
+        <View style={styles.groupsRow}>
+          {POOL_NAMES.slice(2, 4).map((gn, gi) => (
+            <View key={gn} style={styles.groupColumn}>
+              <View
+                style={[
+                  styles.groupHeader,
+                  { backgroundColor: POOL_COLORS[gi + 2] },
+                ]}
+              >
+                <Text style={styles.groupHeaderText}>{gn.toUpperCase()}</Text>
+                <Text style={styles.groupCount}>
+                  {groupAssignments[gn].length}/{MAX_PER_POOL}
+                </Text>
+              </View>
+              {groupAssignments[gn].length === 0 ? (
+                <Text style={styles.groupEmpty}>No teams</Text>
+              ) : (
+                groupAssignments[gn].map((fId) => {
+                  const f = getFranchiseById(fId);
+                  if (!f) return null;
+                  return (
+                    <View key={fId} style={styles.groupItem}>
+                      <View style={[styles.groupItemDot, { backgroundColor: f.primaryColor || POOL_COLORS[gi + 2] }]} />
+                      <Text style={styles.groupItemName} numberOfLines={1}>{f.shortName || f.name}</Text>
+                      <TouchableOpacity onPress={() => removeFromGroup(fId, gn)} style={styles.removeBtn}>
                         <Text style={styles.removeBtnText}>X</Text>
                       </TouchableOpacity>
                     </View>

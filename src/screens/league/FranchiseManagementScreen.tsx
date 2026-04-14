@@ -15,7 +15,7 @@ import {
   Platform,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { getFranchises, createFranchise } from '../../api/leagues.api';
+import { getFranchises, createFranchise, getSeasons, deleteFranchise } from '../../api/leagues.api';
 import { useLeagueStore } from '../../store/leagueStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../config/theme';
 import type { Franchise, CreateFranchiseInput } from '../../types/league.types';
@@ -42,6 +42,7 @@ export default function FranchiseManagementScreen() {
   const addFranchiseToStore = useLeagueStore((s) => s.addFranchise);
   const currentLeague = useLeagueStore((s) => s.currentLeague);
   const currentSeason = useLeagueStore((s) => s.currentSeason);
+  const setCurrentSeason = useLeagueStore((s) => s.setCurrentSeason);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -109,11 +110,22 @@ export default function FranchiseManagementScreen() {
     }
   };
 
-  const handleFranchiseTap = (franchise: Franchise) => {
-    if (currentSeason) {
+  const handleFranchiseTap = async (franchise: Franchise) => {
+    let seasonId = currentSeason?.id;
+    if (!seasonId) {
+      try {
+        const seasons = await getSeasons(leagueId);
+        const list = Array.isArray(seasons) ? seasons : [];
+        if (list.length > 0) {
+          seasonId = list[0].id;
+          setCurrentSeason(list[0]);
+        }
+      } catch {}
+    }
+    if (seasonId) {
       navigation.navigate('RosterManagement', {
         franchiseId: franchise.id,
-        seasonId: currentSeason.id,
+        seasonId,
       });
     }
   };
@@ -226,20 +238,40 @@ export default function FranchiseManagementScreen() {
                 ) : null}
               </View>
 
-              {/* Color bar */}
-              <View style={styles.colorBar}>
-                <View
-                  style={[
-                    styles.colorSwatch,
-                    { backgroundColor: f.primaryColor || BLUE },
-                  ]}
-                />
-                <View
-                  style={[
-                    styles.colorSwatch,
-                    { backgroundColor: f.secondaryColor || NAVY },
-                  ]}
-                />
+              {/* Color bar + delete */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                <View style={styles.colorBar}>
+                  <View
+                    style={[
+                      styles.colorSwatch,
+                      { backgroundColor: f.primaryColor || BLUE },
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.colorSwatch,
+                      { backgroundColor: f.secondaryColor || NAVY },
+                    ]}
+                  />
+                </View>
+                <TouchableOpacity
+                  style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center' }}
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    const doDelete = () => {
+                      deleteFranchise(f.id).then(() => {
+                        setFranchises(storeFranchises.filter((x) => x.id !== f.id));
+                      }).catch(() => {});
+                    };
+                    if (typeof window !== 'undefined' && window.confirm) {
+                      if (window.confirm(`Delete "${f.name}"?`)) doDelete();
+                    } else {
+                      doDelete();
+                    }
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444' }}>✕</Text>
+                </TouchableOpacity>
               </View>
             </TouchableOpacity>
           ))
