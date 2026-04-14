@@ -104,6 +104,10 @@ const TieDetailScreen: React.FC = () => {
   const [scoreB, setScoreB] = useState('');
   const [scoreSubmitting, setScoreSubmitting] = useState(false);
 
+  // Player name map (playerId → name)
+  const [playerMap, setPlayerMap] = useState<Record<string, string>>({});
+  const [showLineups, setShowLineups] = useState(false);
+
   // ── Data fetching ──
   const fetchData = useCallback(async () => {
     try {
@@ -112,8 +116,28 @@ const TieDetailScreen: React.FC = () => {
         getTieSheets(tieId).catch(() => [] as TieSheet[]),
       ]);
       setTie(tieData);
-      setTieSheets(sheetsData);
+      setTieSheets(Array.isArray(sheetsData) ? sheetsData : []);
       store.setCurrentTie(tieData);
+
+      // Build player name map from rosters of both franchises
+      if (tieData?.homeTeamId && tieData?.awayTeamId) {
+        try {
+          const { getRoster } = await import('../../api/leagues.api');
+          // We need a seasonId — get it from the tie
+          const seasonId = tieData.seasonId;
+          const [homeRoster, awayRoster] = await Promise.all([
+            getRoster(tieData.homeTeamId, seasonId).catch(() => []),
+            getRoster(tieData.awayTeamId, seasonId).catch(() => []),
+          ]);
+          const pMap: Record<string, string> = {};
+          const allRoster = [...(Array.isArray(homeRoster) ? homeRoster : []), ...(Array.isArray(awayRoster) ? awayRoster : [])];
+          allRoster.forEach((r: any) => {
+            const name = r.player?.fullName || r.player?.displayName || r.name;
+            if (r.playerId && name) pMap[r.playerId] = name;
+          });
+          setPlayerMap(pMap);
+        } catch {}
+      }
     } catch (err: any) {
       xAlert('Error', err?.message || 'Failed to load tie details');
     }
@@ -230,6 +254,47 @@ const TieDetailScreen: React.FC = () => {
   const allMatchesCompleted =
     tie?.tieMatches?.every((tm) => tm.match?.status === 'completed') || false;
 
+  // ── Live score computation from individual matches (must be before early return) ──
+  const liveScores = React.useMemo(() => {
+    if (!tie) return { homeMP: 0, awayMP: 0, homeBonus: 0, awayBonus: 0, homeSP: 0, awaySP: 0, completed: 0, total: 0 };
+    let homeMP = 0, awayMP = 0, homeBonus = 0, awayBonus = 0;
+    const tieMatches = tie.tieMatches || [];
+    for (const tm of tieMatches) {
+      const m = tm.match;
+      if (!m || m.status !== 'completed' || !m.scores?.length) continue;
+      const s = m.scores[0];
+      const winnerScore = Math.max(s.teamAScore, s.teamBScore);
+      const loserScore = Math.min(s.teamAScore, s.teamBScore);
+      const homeWon = m.winnerId === m.teamAId; // teamA = home
+
+      // Match points go to winner
+      if (homeWon) {
+        homeMP += tm.pointValue;
+      } else {
+        awayMP += tm.pointValue;
+      }
+
+      // Bonus points based on margin
+      if (loserScore <= 4) {
+        // Blowout: winner gets +2
+        if (homeWon) homeBonus += 2; else awayBonus += 2;
+      } else if (loserScore >= 11 && loserScore <= 13) {
+        // Close loss: loser gets +1
+        if (homeWon) awayBonus += 1; else homeBonus += 1;
+      } else if (loserScore === 14) {
+        // Golden point: loser gets +2
+        if (homeWon) awayBonus += 2; else homeBonus += 2;
+      }
+    }
+    return {
+      homeMP, awayMP, homeBonus, awayBonus,
+      homeSP: homeMP + homeBonus,
+      awaySP: awayMP + awayBonus,
+      completed: tieMatches.filter((tm: any) => tm.match?.status === 'completed').length,
+      total: tieMatches.length,
+    };
+  }, [tie]);
+
   // ─── RENDERS ──────────────────────────────────────────────────────────────
 
   if (loading || !tie) {
@@ -257,43 +322,56 @@ const TieDetailScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Team names */}
-      <View style={styles.matchupRow}>
-        <View style={styles.teamBlock}>
-          <Text style={styles.teamName} numberOfLines={2}>
-            {homeName}
-          </Text>
-          <Text style={styles.teamLabel}>HOME</Text>
-        </View>
-        <View style={styles.scoreBlock}>
-          <Text style={styles.scoreText}>
-            {tie.homeScore} - {tie.awayScore}
-          </Text>
-          <Text style={styles.scoreSub}>Match Points</Text>
-        </View>
-        <View style={styles.teamBlock}>
-          <Text style={styles.teamName} numberOfLines={2}>
-            {awayName}
-          </Text>
-          <Text style={styles.teamLabel}>AWAY</Text>
-        </View>
+      {/* Standing Points — hero */}
+      <View style={{ alignItems: 'center', marginTop: 2, marginBottom: 10 }}>
+        <Text style={{ fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.5)', letterSpacing: 1.5 }}>
+          STANDING POINTS
+        </Text>
+        <Text style={{ fontSize: 38, fontWeight: '900', color: '#FFFFFF', letterSpacing: 3, marginTop: 2 }}>
+          {liveScores.homeSP}  –  {liveScores.awaySP}
+        </Text>
+        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>
+          {liveScores.completed} of {liveScores.total} matches played
+        </Text>
       </View>
 
-      {/* Bonus + standing points */}
-      <View style={styles.bonusRow}>
-        <View style={styles.bonusSide}>
-          <Text style={styles.bonusValue}>+{tie.homeBonusPoints}</Text>
-          <Text style={styles.bonusLabel}>bonus</Text>
+      {/* Teams + breakdown */}
+      <View style={{ flexDirection: 'row', paddingHorizontal: 16, marginBottom: 12 }}>
+        {/* Home */}
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800', textAlign: 'center' }} numberOfLines={2}>{homeName}</Text>
+          <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '700', letterSpacing: 1, marginTop: 2 }}>HOME</Text>
+          <View style={{ flexDirection: 'row', marginTop: 6, gap: 6 }}>
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>{liveScores.homeMP}</Text>
+              <Text style={{ fontSize: 8, color: 'rgba(255,255,255,0.4)' }}>match</Text>
+            </View>
+            <View style={{ backgroundColor: 'rgba(6,214,160,0.15)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#06D6A0' }}>+{liveScores.homeBonus}</Text>
+              <Text style={{ fontSize: 8, color: 'rgba(6,214,160,0.5)' }}>bonus</Text>
+            </View>
+          </View>
         </View>
-        <View style={styles.standingPointsBox}>
-          <Text style={styles.spLabel}>Standing Pts</Text>
-          <Text style={styles.spText}>
-            {tie.homeStandingPoints} vs {tie.awayStandingPoints}
-          </Text>
+
+        {/* VS divider */}
+        <View style={{ width: 24, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', fontWeight: '700' }}>VS</Text>
         </View>
-        <View style={styles.bonusSide}>
-          <Text style={styles.bonusValue}>+{tie.awayBonusPoints}</Text>
-          <Text style={styles.bonusLabel}>bonus</Text>
+
+        {/* Away */}
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800', textAlign: 'center' }} numberOfLines={2}>{awayName}</Text>
+          <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '700', letterSpacing: 1, marginTop: 2 }}>AWAY</Text>
+          <View style={{ flexDirection: 'row', marginTop: 6, gap: 6 }}>
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>{liveScores.awayMP}</Text>
+              <Text style={{ fontSize: 8, color: 'rgba(255,255,255,0.4)' }}>match</Text>
+            </View>
+            <View style={{ backgroundColor: 'rgba(6,214,160,0.15)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#06D6A0' }}>+{liveScores.awayBonus}</Text>
+              <Text style={{ fontSize: 8, color: 'rgba(6,214,160,0.5)' }}>bonus</Text>
+            </View>
+          </View>
         </View>
       </View>
 
@@ -374,6 +452,87 @@ const TieDetailScreen: React.FC = () => {
           )}
         </TouchableOpacity>
       )}
+
+      {/* View Lineups toggle */}
+      {(homeSheet || awaySheet) && (
+        <TouchableOpacity
+          style={{ paddingVertical: 8, alignItems: 'center' }}
+          onPress={() => setShowLineups(!showLineups)}
+        >
+          <Text style={{ fontSize: 13, fontWeight: '700', color: BLUE }}>
+            {showLineups ? 'HIDE LINEUPS ▲' : 'VIEW LINEUPS ▼'}
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Lineup details — side by side per slot */}
+      {showLineups && (
+        <View style={{ marginTop: 8 }}>
+          {/* Column headers */}
+          <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: NAVY, textAlign: 'center' }}>{homeName}</Text>
+            </View>
+            <View style={{ width: 40 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: NAVY, textAlign: 'center' }}>{awayName}</Text>
+            </View>
+          </View>
+
+          {/* Slot rows */}
+          {Array.from({ length: 13 }, (_, i) => i + 1).map((slotNum) => {
+            const homeSlot = homeSheet?.lineupData?.find((s: any) => s.slotNumber === slotNum);
+            const awaySlot = awaySheet?.lineupData?.find((s: any) => s.slotNumber === slotNum);
+            const catSlug = homeSlot?.categorySlug || awaySlot?.categorySlug || '';
+            const catLabel = catSlug ? catSlug.replace(/(\d)/, ' $1').toUpperCase() : '';
+            return (
+              <View key={slotNum} style={{ backgroundColor: SURFACE, borderRadius: 8, padding: 8, marginBottom: 4 }}>
+                {/* Slot header */}
+                <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 4 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: TEXT_MUTED, letterSpacing: 0.5 }}>
+                    #{slotNum} {catLabel}
+                  </Text>
+                </View>
+                {/* Side by side players */}
+                <View style={{ flexDirection: 'row' }}>
+                  {/* Home */}
+                  <View style={{ flex: 1, paddingRight: 4 }}>
+                    {homeSlot ? (
+                      <>
+                        <Text style={{ fontSize: 12, color: NAVY, fontWeight: '600' }} numberOfLines={1}>
+                          {playerMap[homeSlot.player1Id] || '—'}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: TEXT_SUB }} numberOfLines={1}>
+                          {playerMap[homeSlot.player2Id] || '—'}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={{ fontSize: 11, color: TEXT_MUTED }}>—</Text>
+                    )}
+                  </View>
+                  {/* Divider */}
+                  <View style={{ width: 1, backgroundColor: BORDER, marginHorizontal: 6 }} />
+                  {/* Away */}
+                  <View style={{ flex: 1, paddingLeft: 4 }}>
+                    {awaySlot ? (
+                      <>
+                        <Text style={{ fontSize: 12, color: NAVY, fontWeight: '600', textAlign: 'right' }} numberOfLines={1}>
+                          {playerMap[awaySlot.player1Id] || '—'}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: TEXT_SUB, textAlign: 'right' }} numberOfLines={1}>
+                          {playerMap[awaySlot.player2Id] || '—'}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={{ fontSize: 11, color: TEXT_MUTED, textAlign: 'right' }}>—</Text>
+                    )}
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 
@@ -413,8 +572,10 @@ const TieDetailScreen: React.FC = () => {
         {/* Players + score */}
         <View style={styles.matchPlayers}>
           <View style={styles.matchPlayerSide}>
-            <Text style={styles.matchPlayerText} numberOfLines={1}>
-              {tm.homePlayer1Id ? 'P1 & P2' : 'TBD'}
+            <Text style={styles.matchPlayerText} numberOfLines={2}>
+              {tm.homePlayer1Id
+                ? `${playerMap[tm.homePlayer1Id] || 'Player'} & ${playerMap[tm.homePlayer2Id || ''] || 'Player'}`
+                : 'TBD'}
             </Text>
           </View>
           <View style={styles.matchScoreCenter}>
@@ -427,23 +588,72 @@ const TieDetailScreen: React.FC = () => {
             )}
           </View>
           <View style={styles.matchPlayerSide}>
-            <Text style={[styles.matchPlayerText, { textAlign: 'right' }]} numberOfLines={1}>
-              {tm.awayPlayer1Id ? 'P3 & P4' : 'TBD'}
+            <Text style={[styles.matchPlayerText, { textAlign: 'right' }]} numberOfLines={2}>
+              {tm.awayPlayer1Id
+                ? `${playerMap[tm.awayPlayer1Id] || 'Player'} & ${playerMap[tm.awayPlayer2Id || ''] || 'Player'}`
+                : 'TBD'}
             </Text>
           </View>
         </View>
 
-        {/* Bonus */}
-        {isCompleted && (tm.bonusPointsHome > 0 || tm.bonusPointsAway > 0) && (
-          <View style={styles.matchBonusRow}>
-            {tm.bonusPointsHome > 0 && (
-              <Text style={styles.matchBonusText}>+{tm.bonusPointsHome} winner bonus</Text>
-            )}
-            {tm.bonusPointsAway > 0 && (
-              <Text style={styles.matchBonusText}>+{tm.bonusPointsAway} loser bonus</Text>
-            )}
-          </View>
-        )}
+        {/* Per-match points breakdown */}
+        {isCompleted && scores && (() => {
+          const winnerScore = Math.max(scores.teamAScore, scores.teamBScore);
+          const loserScore = Math.min(scores.teamAScore, scores.teamBScore);
+          const homeWon = tm.match?.winnerId === tm.match?.teamAId;
+          // Winner gets match points
+          const homeMatchPts = homeWon ? tm.pointValue : 0;
+          const awayMatchPts = homeWon ? 0 : tm.pointValue;
+          // Bonus
+          let homeBonusPts = 0, awayBonusPts = 0;
+          if (loserScore <= 4) {
+            if (homeWon) homeBonusPts = 2; else awayBonusPts = 2;
+          } else if (loserScore >= 11 && loserScore <= 13) {
+            if (homeWon) awayBonusPts = 1; else homeBonusPts = 1;
+          } else if (loserScore === 14) {
+            if (homeWon) awayBonusPts = 2; else homeBonusPts = 2;
+          }
+          return (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
+              {/* Home points */}
+              <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
+                {homeMatchPts > 0 && (
+                  <View style={{ backgroundColor: '#DBEAFE', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#2196F3' }}>+{homeMatchPts}</Text>
+                  </View>
+                )}
+                {homeBonusPts > 0 && (
+                  <View style={{ backgroundColor: '#D1FAE5', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#06D6A0' }}>+{homeBonusPts}</Text>
+                  </View>
+                )}
+                {homeMatchPts === 0 && homeBonusPts === 0 && (
+                  <Text style={{ fontSize: 10, color: '#94A3B8' }}>0</Text>
+                )}
+              </View>
+              {/* Winner indicator */}
+              <Text style={{ fontSize: 10, fontWeight: '700', color: homeWon ? '#2196F3' : '#F97316' }}>
+                {homeWon ? '← WIN' : 'WIN →'}
+              </Text>
+              {/* Away points */}
+              <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
+                {awayMatchPts > 0 && (
+                  <View style={{ backgroundColor: '#DBEAFE', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#2196F3' }}>+{awayMatchPts}</Text>
+                  </View>
+                )}
+                {awayBonusPts > 0 && (
+                  <View style={{ backgroundColor: '#D1FAE5', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#06D6A0' }}>+{awayBonusPts}</Text>
+                  </View>
+                )}
+                {awayMatchPts === 0 && awayBonusPts === 0 && (
+                  <Text style={{ fontSize: 10, color: '#94A3B8' }}>0</Text>
+                )}
+              </View>
+            </View>
+          );
+        })()}
       </TouchableOpacity>
     );
   };
@@ -591,15 +801,15 @@ const styles = StyleSheet.create({
   // Header banner
   headerBanner: {
     backgroundColor: NAVY,
-    paddingBottom: 20,
+    paddingBottom: 14,
   },
   headerNav: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingTop: 4,
+    paddingBottom: 6,
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   backBtnText: { color: WHITE, fontSize: 22, fontWeight: '700' },
@@ -609,8 +819,8 @@ const styles = StyleSheet.create({
   matchupRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 16,
+    paddingHorizontal: 16,
+    marginBottom: 8,
   },
   teamBlock: { flex: 1, alignItems: 'center' },
   teamName: { color: WHITE, fontSize: 16, fontWeight: '800', textAlign: 'center', lineHeight: 20 },

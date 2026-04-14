@@ -79,10 +79,19 @@ const StandingsScreen: React.FC = () => {
         getGroups(leagueId, seasonId).catch(() => [] as LeagueGroup[]),
         getFranchises(leagueId).catch(() => [] as Franchise[]),
       ]);
-      setStandings(standingsData);
-      setGroups(groupsData);
-      setFranchises(franchisesData);
-      store.setStandings(standingsData);
+      // Standings API returns { groups: [{ group, standings }] } — flatten to array
+      let flatStandings: LeagueStanding[] = [];
+      if (Array.isArray(standingsData)) {
+        flatStandings = standingsData;
+      } else if (standingsData?.groups) {
+        for (const g of (standingsData as any).groups) {
+          if (g.standings) flatStandings.push(...g.standings);
+        }
+      }
+      setStandings(flatStandings);
+      setGroups(Array.isArray(groupsData) ? groupsData : []);
+      setFranchises(Array.isArray(franchisesData) ? franchisesData : []);
+      store.setStandings(flatStandings);
     } catch (err: any) {
       xAlert('Error', err?.message || 'Failed to load standings');
     }
