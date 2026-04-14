@@ -10,6 +10,7 @@ import {
   SafeAreaView,
   Alert,
   StyleSheet,
+  Platform,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { DiscoverStackParamList } from '../../navigation/types';
@@ -163,14 +164,22 @@ export default function RegisterScreen({ navigation, route }: Props) {
 
     const paymentLabel =
       paymentMethod === 'online' ? `Pay Online (₹${category.entryFee})` : 'Pay at Venue';
-    Alert.alert(
-      'Confirm Registration',
-      `Register for "${category.name}"?\nPayment: ${paymentLabel}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Confirm', onPress: () => handleSubmit(paymentMethod) },
-      ]
-    );
+
+    // Alert.alert buttons don't work on web — use platform-appropriate confirm
+    if (Platform.OS === 'web') {
+      // eslint-disable-next-line no-restricted-globals
+      const confirmed = confirm(`Register for "${category.name}"?\nPayment: ${paymentLabel}`);
+      if (confirmed) handleSubmit(paymentMethod);
+    } else {
+      Alert.alert(
+        'Confirm Registration',
+        `Register for "${category.name}"?\nPayment: ${paymentLabel}`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Confirm', onPress: () => handleSubmit(paymentMethod) },
+        ]
+      );
+    }
   };
 
   // — Loading state —

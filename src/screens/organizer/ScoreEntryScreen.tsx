@@ -21,9 +21,17 @@ import { tournamentsApi } from '../../api/tournaments.api';
 import { TournamentCategory } from '../../types/tournament.types';
 import { colors, spacing, typography, borderRadius, shadows } from '../../config/theme';
 import { OrgTournamentsStackParamList } from '../../navigation/types';
+import { xAlert, xConfirm } from '../../utils/alert';
 
 const NAVY = '#001E40';
 const BLUE_ACCENT = '#2196F3';
+const TEXT_PRIMARY = '#1A1D21';
+const TEXT_SECONDARY = '#001E40';
+const BORDER_COLOR = '#E2E8F0';
+const INPUT_BG = '#F5F7FA';
+const CARD_BG = '#FFFFFF';
+const BG_WHITE = '#FFFFFF';
+const TEXT_MUTED = '#64748B';
 
 // Note: ScoreEntry route takes matchId in the existing nav types.
 // This screen is enhanced to also support a tournamentId flow (show list).
@@ -127,13 +135,13 @@ function InlineScoreForm({
       const a = parseInt(gameScores[i].teamAScore, 10);
       const b = parseInt(gameScores[i].teamBScore, 10);
       if (isNaN(a) || isNaN(b)) {
-        Alert.alert('Incomplete', `Please enter scores for Game ${i + 1}.`);
+        xAlert('Incomplete', `Please enter scores for Game ${i + 1}.`);
         return;
       }
       scores.push({ gameNumber: i + 1, teamAScore: a, teamBScore: b });
     }
     if (scores.length === 0) {
-      Alert.alert('Required', 'Enter at least one game score.');
+      xAlert('Required', 'Enter at least one game score.');
       return;
     }
     setSubmitting(true);
@@ -141,44 +149,50 @@ function InlineScoreForm({
       await matchesApi.enterScore(match.id, scores);
       onDone();
     } catch (err: any) {
-      Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to save scores');
+      xAlert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to save scores');
     } finally {
       setSubmitting(false);
     }
   };
 
+  const applyWalkover = async (teamId: string) => {
+    try {
+      await matchesApi.setWalkover(match.id, teamId);
+      onDone();
+    } catch (err: any) {
+      xAlert('Error', err?.response?.data?.message ?? 'Failed');
+    }
+  };
+
   const handleWalkover = () => {
-    Alert.alert(
-      'Walkover',
-      'Select the winner for this walkover:',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: teamAName,
-          onPress: async () => {
-            if (!match.teamAId) return;
-            try {
-              await matchesApi.setWalkover(match.id, match.teamAId);
-              onDone();
-            } catch (err: any) {
-              Alert.alert('Error', err?.response?.data?.message ?? 'Failed');
-            }
+    if (Platform.OS === 'web') {
+      // eslint-disable-next-line no-restricted-globals
+      const pick = confirm(`Walkover\n\nAward walkover to ${teamAName}?\n\nOK = ${teamAName}, Cancel = ${teamBName}`);
+      if (pick) {
+        if (match.teamAId) applyWalkover(match.teamAId);
+      } else {
+        // eslint-disable-next-line no-restricted-globals
+        if (confirm(`Walkover\n\nAward walkover to ${teamBName}?`)) {
+          if (match.teamBId) applyWalkover(match.teamBId);
+        }
+      }
+    } else {
+      Alert.alert(
+        'Walkover',
+        'Select the winner for this walkover:',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: teamAName,
+            onPress: () => { if (match.teamAId) applyWalkover(match.teamAId); },
           },
-        },
-        {
-          text: teamBName,
-          onPress: async () => {
-            if (!match.teamBId) return;
-            try {
-              await matchesApi.setWalkover(match.id, match.teamBId);
-              onDone();
-            } catch (err: any) {
-              Alert.alert('Error', err?.response?.data?.message ?? 'Failed');
-            }
+          {
+            text: teamBName,
+            onPress: () => { if (match.teamBId) applyWalkover(match.teamBId); },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   return (
@@ -202,10 +216,10 @@ function InlineScoreForm({
               keyboardType="numeric"
               maxLength={3}
               placeholder="0"
-              placeholderTextColor={colors.textTertiary}
+              placeholderTextColor={TEXT_MUTED}
               textAlign="center"
             />
-            <Text style={inlineStyles.dash}>—</Text>
+            <Text style={inlineStyles.dash}>{'\u2014'}</Text>
             <TextInput
               style={inlineStyles.scoreInput}
               value={gameScores[i].teamBScore}
@@ -213,7 +227,7 @@ function InlineScoreForm({
               keyboardType="numeric"
               maxLength={3}
               placeholder="0"
-              placeholderTextColor={colors.textTertiary}
+              placeholderTextColor={TEXT_MUTED}
               textAlign="center"
             />
           </View>
@@ -242,10 +256,10 @@ function InlineScoreForm({
 
 const inlineStyles = StyleSheet.create({
   container: {
-    backgroundColor: colors.surfaceContainerLow,
+    backgroundColor: '#F5F7FA',
     padding: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    borderTopColor: BORDER_COLOR,
   },
   headerRow: {
     flexDirection: 'row',
@@ -255,7 +269,7 @@ const inlineStyles = StyleSheet.create({
   colLabel: {
     fontSize: 9,
     fontWeight: '700',
-    color: colors.textTertiary,
+    color: TEXT_MUTED,
     letterSpacing: 1,
     width: 28,
     textTransform: 'uppercase',
@@ -278,24 +292,24 @@ const inlineStyles = StyleSheet.create({
     width: 28,
     fontSize: typography.fontSize.sm,
     fontWeight: '700',
-    color: colors.textSecondary,
+    color: TEXT_MUTED,
   },
   scoreInput: {
     flex: 1,
-    backgroundColor: colors.surfaceContainerLowest,
+    backgroundColor: BG_WHITE,
     borderRadius: borderRadius.sm,
     paddingVertical: spacing.sm,
     fontSize: typography.fontSize.lg,
     fontWeight: '800',
-    color: NAVY,
+    color: TEXT_PRIMARY,
     textAlign: 'center',
     minWidth: 48,
     borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderColor: BORDER_COLOR,
   },
   dash: {
     fontSize: typography.fontSize.lg,
-    color: colors.textTertiary,
+    color: TEXT_MUTED,
     fontWeight: '300',
     width: 20,
     textAlign: 'center',
@@ -390,7 +404,7 @@ export default function ScoreEntryScreen() {
       setMatches(all.filter((m) => m.status === 'scheduled' || m.status === 'in_progress'));
     } catch (err: any) {
       if (err?.response?.status !== 404) {
-        Alert.alert('Error', 'Failed to load matches');
+        xAlert('Error', 'Failed to load matches');
       }
       setMatches([]);
     } finally {
@@ -406,7 +420,7 @@ export default function ScoreEntryScreen() {
       const data: MatchItem = res.data?.data ?? res.data;
       setSingleMatch(data);
     } catch (err: any) {
-      Alert.alert('Error', err?.response?.data?.message ?? 'Failed to load match');
+      xAlert('Error', err?.response?.data?.message ?? 'Failed to load match');
     } finally {
       setLoading(false);
     }
@@ -444,9 +458,10 @@ export default function ScoreEntryScreen() {
     if (loading) {
       return (
         <SafeAreaView style={styles.safeArea}>
+          <StatusBar barStyle="dark-content" backgroundColor={BG_WHITE} />
           <View style={styles.header}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-              <Text style={styles.backIcon}>←</Text>
+              <Text style={styles.backIcon}>{'\u2190'}</Text>
             </TouchableOpacity>
             <Text style={styles.headerTitle}>SCORE ENTRY</Text>
             <View style={{ width: 60 }} />
@@ -461,9 +476,10 @@ export default function ScoreEntryScreen() {
     if (!singleMatch) {
       return (
         <SafeAreaView style={styles.safeArea}>
+          <StatusBar barStyle="dark-content" backgroundColor={BG_WHITE} />
           <View style={styles.header}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-              <Text style={styles.backIcon}>←</Text>
+              <Text style={styles.backIcon}>{'\u2190'}</Text>
             </TouchableOpacity>
             <Text style={styles.headerTitle}>SCORE ENTRY</Text>
             <View style={{ width: 60 }} />
@@ -480,14 +496,14 @@ export default function ScoreEntryScreen() {
 
     return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="light-content" backgroundColor={NAVY} />
+        <StatusBar barStyle="dark-content" backgroundColor={BG_WHITE} />
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backBtn}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text style={styles.backIcon}>←</Text>
+            <Text style={styles.backIcon}>{'\u2190'}</Text>
             <Text style={styles.backLabel}>BACK</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>SCORE ENTRY</Text>
@@ -503,7 +519,7 @@ export default function ScoreEntryScreen() {
             {/* Match header */}
             <View style={styles.matchHero}>
               <Text style={styles.heroRound}>
-                {getRoundLabel(singleMatch.round)}  ·  MATCH #{singleMatch.matchNumber}
+                {getRoundLabel(singleMatch.round)}  {'\u00B7'}  MATCH #{singleMatch.matchNumber}
               </Text>
               {singleMatch.court && <Text style={styles.heroCourt}>{singleMatch.court.name}</Text>}
               <View style={styles.heroTeams}>
@@ -531,7 +547,7 @@ export default function ScoreEntryScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor={NAVY} />
+      <StatusBar barStyle="dark-content" backgroundColor={BG_WHITE} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -540,7 +556,7 @@ export default function ScoreEntryScreen() {
           style={styles.backBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.backIcon}>←</Text>
+          <Text style={styles.backIcon}>{'\u2190'}</Text>
           <Text style={styles.backLabel}>BACK</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>SCORE ENTRY</Text>
@@ -612,7 +628,7 @@ export default function ScoreEntryScreen() {
                             <Text style={styles.matchCardMeta}>{match.court.name}</Text>
                           )}
                         </View>
-                        <Text style={styles.matchCardChevron}>{expanded ? '▲' : '▼'}</Text>
+                        <Text style={styles.matchCardChevron}>{expanded ? '\u25B2' : '\u25BC'}</Text>
                       </TouchableOpacity>
 
                       {expanded && (
@@ -641,7 +657,7 @@ export default function ScoreEntryScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: BG_WHITE,
   },
   centered: {
     flex: 1,
@@ -652,13 +668,13 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: typography.fontSize.md,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: TEXT_MUTED,
     textAlign: 'center',
   },
   emptyHint: {
     fontSize: typography.fontSize.sm,
     fontWeight: '400',
-    color: colors.textTertiary,
+    color: TEXT_MUTED,
     textAlign: 'center',
     marginTop: spacing.sm,
     lineHeight: 20,
@@ -668,7 +684,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.base,
     paddingVertical: spacing.md,
-    backgroundColor: NAVY,
+    backgroundColor: BG_WHITE,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_COLOR,
   },
   backBtn: {
     flexDirection: 'row',
@@ -678,25 +696,26 @@ const styles = StyleSheet.create({
   },
   backIcon: {
     fontSize: typography.fontSize.lg,
-    color: '#FFFFFF',
+    color: NAVY,
     fontWeight: '700',
   },
   backLabel: {
     fontSize: typography.fontSize['2xs'],
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: NAVY,
     letterSpacing: 1.5,
   },
   headerTitle: {
     fontSize: typography.fontSize.sm,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: TEXT_PRIMARY,
     letterSpacing: 2,
     textAlign: 'center',
   },
   catBar: {
-    backgroundColor: colors.surfaceContainerLowest,
-    ...shadows.sm,
+    backgroundColor: BG_WHITE,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_COLOR,
   },
   catContent: {
     paddingHorizontal: spacing.base,
@@ -707,15 +726,18 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.surfaceContainerHigh,
+    backgroundColor: INPUT_BG,
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
   },
   catTabActive: {
     backgroundColor: NAVY,
+    borderColor: NAVY,
   },
   catTabText: {
     fontSize: typography.fontSize.xs,
     fontWeight: '700',
-    color: colors.textTertiary,
+    color: TEXT_MUTED,
     letterSpacing: 0.5,
   },
   catTabTextActive: {
@@ -729,18 +751,19 @@ const styles = StyleSheet.create({
   roundHeader: {
     fontSize: typography.fontSize.xs,
     fontWeight: '800',
-    color: colors.textTertiary,
+    color: TEXT_MUTED,
     letterSpacing: 2,
     textTransform: 'uppercase',
     marginBottom: spacing.sm,
     marginTop: spacing.md,
   },
   matchCard: {
-    backgroundColor: colors.surfaceContainerLowest,
+    backgroundColor: CARD_BG,
     borderRadius: borderRadius.md,
     marginBottom: spacing.sm,
     overflow: 'hidden',
-    ...shadows.sm,
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
   },
   matchCardHeader: {
     flexDirection: 'row',
@@ -755,17 +778,17 @@ const styles = StyleSheet.create({
   matchCardTeams: {
     fontSize: typography.fontSize.base,
     fontWeight: '700',
-    color: colors.text,
+    color: TEXT_PRIMARY,
   },
   matchCardMeta: {
     fontSize: typography.fontSize.xs,
     fontWeight: '500',
-    color: colors.textTertiary,
+    color: TEXT_MUTED,
     marginTop: 2,
   },
   matchCardChevron: {
     fontSize: 10,
-    color: colors.textTertiary,
+    color: TEXT_MUTED,
     fontWeight: '600',
   },
   // Single match mode styles
@@ -773,14 +796,15 @@ const styles = StyleSheet.create({
     paddingBottom: spacing['3xl'],
   },
   matchHero: {
-    backgroundColor: NAVY,
+    backgroundColor: BG_WHITE,
     paddingHorizontal: spacing.base,
     paddingBottom: spacing.xl,
+    paddingTop: spacing.md,
   },
   heroRound: {
     fontSize: typography.fontSize.xs,
     fontWeight: '700',
-    color: colors.primaryFixedDim,
+    color: NAVY,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
     marginBottom: spacing.sm,
@@ -788,7 +812,7 @@ const styles = StyleSheet.create({
   heroCourt: {
     fontSize: typography.fontSize.sm,
     fontWeight: '500',
-    color: colors.primaryFixedDim,
+    color: TEXT_MUTED,
     marginBottom: spacing.sm,
   },
   heroTeams: {
@@ -800,27 +824,28 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: typography.fontSize.xl,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: TEXT_PRIMARY,
     textAlign: 'left',
   },
   heroVs: {
     fontSize: typography.fontSize.sm,
     fontWeight: '900',
-    color: colors.primaryFixedDim,
+    color: TEXT_MUTED,
     letterSpacing: 2,
   },
   heroTeamB: {
     flex: 1,
     fontSize: typography.fontSize.xl,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: TEXT_PRIMARY,
     textAlign: 'right',
   },
   singleFormWrapper: {
     margin: spacing.base,
-    backgroundColor: colors.surfaceContainerLowest,
+    backgroundColor: CARD_BG,
     borderRadius: borderRadius.md,
     overflow: 'hidden',
-    ...shadows.sm,
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
   },
 });

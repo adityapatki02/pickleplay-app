@@ -3,448 +3,347 @@ import {
   View,
   Text,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
+  ScrollView,
   TextInput,
   TouchableOpacity,
   Animated,
   Image,
   Dimensions,
+  SafeAreaView,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/types';
-import { colors, typography, spacing, borderRadius, shadows } from '../../config/theme';
 import { useAuthStore } from '../../store/authStore';
+import { authApi } from '../../api/auth.api';
+import { xAlert } from '../../utils/alert';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'PhoneInput'>;
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const NAVY = '#001E40';
 const BLUE_ACCENT = '#2196F3';
-const LOGO_HEIGHT = 200;
+const WHITE = '#FFFFFF';
+const GRAY = '#737780';
+const BORDER = '#E1E3E4';
+const RED = '#BA1A1A';
 
-export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
+type Mode = 'login' | 'register';
+
+export const PhoneInputScreen: React.FC<Props> = () => {
   const { login } = useAuthStore();
+  const [mode, setMode] = useState<Mode>('login');
   const [phone, setPhone] = useState('');
-  const [countryCode] = useState('+91');
+  const [pin, setPin] = useState('');
+  const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [isFocused, setIsFocused] = useState(false);
 
   const fadeIn = useRef(new Animated.Value(0)).current;
-  const slideUp = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.timing(slideUp, { toValue: 0, duration: 500, useNativeDriver: true }),
-    ]).start();
-  }, []);
+    Animated.timing(fadeIn, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+  }, [fadeIn]);
 
-  const isValid = phone.length === 10;
+  const phoneOk = phone.length === 10 && /^[0-9]+$/.test(phone);
+  const pinOk = pin.length === 6 && /^[0-9]+$/.test(pin);
+  const nameOk = mode === 'login' || name.trim().length >= 2;
+  const canSubmit = phoneOk && pinOk && nameOk && !loading;
 
-  const handleSendOtp = async () => {
-    if (!isValid) {
-      setError('Please enter a valid 10-digit phone number');
-      return;
-    }
-    setLoading(true);
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
     setError('');
+    setLoading(true);
+
+    const fullPhone = `+91${phone}`;
+
     try {
-      const verificationId = 'mock-verification-id';
-      navigation.navigate('OTPVerify', {
-        phone: `${countryCode}${phone}`,
-        verificationId,
-      });
-    } catch {
-      setError('Failed to send OTP. Please try again.');
+      if (mode === 'register') {
+        const res = await authApi.phoneRegister({
+          phone: fullPhone,
+          pin,
+          name: name.trim(),
+          role: 'player',
+        });
+        login(res.data.data.user, res.data.data.accessToken);
+      } else {
+        const res = await authApi.phoneLogin({ phone: fullPhone, pin });
+        login(res.data.data.user, res.data.data.accessToken);
+      }
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? 'Something went wrong. Please try again.';
+      setError(Array.isArray(msg) ? msg[0] : msg);
     } finally {
       setLoading(false);
     }
   };
 
+  const switchMode = () => {
+    setMode(mode === 'login' ? 'register' : 'login');
+    setError('');
+    setPin('');
+    setName('');
+  };
+
   return (
-    <View style={styles.outerContainer}>
-      {/* Top half — dark navy, logo full-width edge-to-edge */}
-      <View style={styles.logoSection}>
-        <View style={styles.logoRow}>
-          <Image source={require('../../../assets/Logo.png')} style={styles.iconMark} resizeMode="contain" />
-          <Image source={require('../../../assets/name_logo.png')} style={styles.wordMark} resizeMode="contain" />
-        </View>
-      </View>
-
-      {/* Bottom half — white card slides up over navy */}
+    <SafeAreaView style={s.screen}>
       <KeyboardAvoidingView
-        style={styles.cardWrapper}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <Animated.View
-          style={[
-            styles.card,
-            { opacity: fadeIn, transform: [{ translateY: slideUp }] },
-          ]}
+        <ScrollView
+          contentContainerStyle={s.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {/* Title */}
-          <View style={styles.titleSection}>
-            <Text style={styles.title}>GET ON{'\n'}THE COURT.</Text>
-            <Text style={styles.subtitle}>
-              Enter your phone number to sign in or create your player profile
-            </Text>
+          {/* ── LOGO HEADER (white) ── */}
+          <View style={s.logoHeader}>
+            <Image
+              source={require('../../../assets/Logo.png')}
+              style={s.iconMark}
+              resizeMode="contain"
+            />
+            <Image
+              source={require('../../../assets/name_logo.png')}
+              style={s.wordMark}
+              resizeMode="contain"
+            />
           </View>
 
-          {/* Phone Input */}
-          <View style={styles.inputSection}>
-            <Text style={styles.inputLabel}>PHONE NUMBER</Text>
-            <View
-              style={[
-                styles.phoneContainer,
-                isFocused && styles.phoneContainerFocused,
-                error ? styles.phoneContainerError : null,
-              ]}
-            >
-              <View style={styles.countrySection}>
-                <Text style={styles.flag}>🇮🇳</Text>
-                <Text style={styles.countryCodeText}>{countryCode}</Text>
-                <View style={styles.codeDivider} />
+          {/* ── NAVY BODY ── */}
+          <Animated.View style={[s.body, { opacity: fadeIn }]}>
+            <Text style={s.eyebrow}>YOIDEN</Text>
+            <Text style={s.title}>
+              {mode === 'login' ? 'Welcome back.' : 'Let\'s get you started.'}
+            </Text>
+            <Text style={s.subtitle}>
+              {mode === 'login'
+                ? 'Log in with your phone and PIN.'
+                : 'Create your account to find and join tournaments.'}
+            </Text>
+
+            {/* Name (register only) */}
+            {mode === 'register' && (
+              <View style={s.field}>
+                <Text style={s.label}>YOUR NAME</Text>
+                <TextInput
+                  style={s.input}
+                  value={name}
+                  onChangeText={(t) => { setName(t); setError(''); }}
+                  placeholder="e.g. Alex Kumar"
+                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                  editable={!loading}
+                />
               </View>
-              <TextInput
-                style={styles.phoneInput}
-                placeholder="Enter 10-digit number"
-                placeholderTextColor={colors.textTertiary}
-                value={phone}
-                onChangeText={(text) => {
-                  setPhone(text.replace(/[^0-9]/g, ''));
-                  setError('');
-                }}
-                keyboardType="phone-pad"
-                maxLength={10}
-                autoFocus
-                onFocus={() => setIsFocused(true)}
-                onBlur={() => setIsFocused(false)}
-              />
-              {isValid && (
-                <View style={styles.checkMark}>
-                  <Text style={styles.checkText}>✓</Text>
-                </View>
-              )}
-            </View>
-            {error ? (
-              <Text style={styles.errorText}>{error}</Text>
-            ) : (
-              <Text style={styles.hintText}>
-                We'll send a verification code via SMS
-              </Text>
             )}
-          </View>
 
-          {/* CTA */}
-          <TouchableOpacity
-            style={[styles.ctaButton, !isValid && styles.ctaButtonDisabled]}
-            onPress={handleSendOtp}
-            disabled={!isValid || loading}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.ctaText}>
-              {loading ? 'SENDING...' : 'CONTINUE'}
-            </Text>
-            {!loading && <Text style={styles.ctaArrow}>→</Text>}
-          </TouchableOpacity>
-
-          {/* Feature chips — athletic style */}
-          <View style={styles.featuresRow}>
-            {[
-              { label: 'SMART SCHEDULING' },
-              { label: 'ELO RATINGS' },
-              { label: 'LIVE SCORES' },
-            ].map((feature, i) => (
-              <View key={i} style={styles.featureChip}>
-                <Text style={styles.featureLabel}>{feature.label}</Text>
+            {/* Phone */}
+            <View style={s.field}>
+              <Text style={s.label}>PHONE NUMBER</Text>
+              <View style={s.phoneRow}>
+                <View style={s.countryBox}>
+                  <Text style={s.countryText}>🇮🇳 +91</Text>
+                </View>
+                <TextInput
+                  style={[s.input, { flex: 1 }]}
+                  value={phone}
+                  onChangeText={(t) => { setPhone(t.replace(/[^0-9]/g, '').slice(0, 10)); setError(''); }}
+                  placeholder="98765 43210"
+                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  keyboardType="number-pad"
+                  maxLength={10}
+                  returnKeyType="next"
+                  editable={!loading}
+                />
               </View>
-            ))}
-          </View>
+            </View>
 
-          {/* Dev bypass — remove in production */}
-          {__DEV__ && (
-            <TouchableOpacity
-              style={styles.devBypass}
-              onPress={() => {
-                login(
-                  {
-                    id: 'dev-user-1',
-                    firebaseUid: 'dev-uid',
-                    phone: '+919876543210',
-                    fullName: 'Alex Player',
-                    displayName: 'Alex',
-                    role: 'player',
-                    selfReportedSkill: 'advanced',
-                    isVerified: true,
-                    whatsappOptedIn: true,
-                    city: 'Mumbai',
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                  },
-                  'dev-token-123',
-                );
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.devBypassText}>⚡ DEV: SKIP LOGIN (PLAYER)</Text>
-            </TouchableOpacity>
-          )}
-          {__DEV__ && (
-            <TouchableOpacity
-              style={[styles.devBypass, { borderColor: BLUE_ACCENT }]}
-              onPress={() => {
-                login(
-                  {
-                    id: 'dev-org-1',
-                    firebaseUid: 'dev-uid-org',
-                    phone: '+919876543211',
-                    fullName: 'Alex Organizer',
-                    displayName: 'Alex',
-                    role: 'organizer',
-                    selfReportedSkill: 'pro',
-                    isVerified: true,
-                    whatsappOptedIn: true,
-                    city: 'Mumbai',
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                  },
-                  'dev-token-456',
-                );
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.devBypassText, { color: BLUE_ACCENT }]}>⚡ DEV: SKIP LOGIN (ORGANIZER)</Text>
-            </TouchableOpacity>
-          )}
+            {/* PIN */}
+            <View style={s.field}>
+              <Text style={s.label}>6-DIGIT PIN</Text>
+              <TextInput
+                style={s.input}
+                value={pin}
+                onChangeText={(t) => { setPin(t.replace(/[^0-9]/g, '').slice(0, 6)); setError(''); }}
+                placeholder="• • • • • •"
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                keyboardType="number-pad"
+                maxLength={6}
+                secureTextEntry
+                returnKeyType="done"
+                editable={!loading}
+                onSubmitEditing={canSubmit ? handleSubmit : undefined}
+              />
+              <Text style={s.hint}>
+                {mode === 'register'
+                  ? 'Remember this PIN — you\'ll use it to log in'
+                  : 'Enter the PIN you chose when signing up'}
+              </Text>
+            </View>
 
-          <Text style={styles.terms}>
-            By continuing, you agree to our{' '}
-            <Text style={styles.termsLink}>Terms of Service</Text>
-            {' and '}
-            <Text style={styles.termsLink}>Privacy Policy</Text>
-          </Text>
-        </Animated.View>
+            {/* Error */}
+            {!!error && (
+              <View style={s.errorBox}>
+                <Text style={s.errorText}>⚠ {error}</Text>
+              </View>
+            )}
+
+            {/* Submit */}
+            <TouchableOpacity
+              style={[s.submitBtn, !canSubmit && s.submitBtnDisabled]}
+              onPress={handleSubmit}
+              disabled={!canSubmit}
+              activeOpacity={0.85}
+            >
+              {loading ? (
+                <ActivityIndicator color={NAVY} size="small" />
+              ) : (
+                <Text style={s.submitText}>
+                  {mode === 'login' ? 'LOG IN' : 'CREATE ACCOUNT'}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Mode switch */}
+            <TouchableOpacity onPress={switchMode} disabled={loading} style={s.switchLink}>
+              <Text style={s.switchText}>
+                {mode === 'login'
+                  ? "Don't have an account? "
+                  : 'Already have an account? '}
+                <Text style={s.switchLinkText}>
+                  {mode === 'login' ? 'Sign up' : 'Log in'}
+                </Text>
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </ScrollView>
       </KeyboardAvoidingView>
-    </View>
+    </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
-  outerContainer: {
-    flex: 1,
-    minHeight: SCREEN_HEIGHT,
-    backgroundColor: '#FFFFFF',
-  },
-  // Logo section — white background so logo renders correctly
-  logoSection: {
-    backgroundColor: '#FFFFFF',
-    width: '100%',
-    height: LOGO_HEIGHT,
-    paddingTop: Platform.OS === 'ios' ? 44 : 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoRow: {
+export default PhoneInputScreen;
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: NAVY },
+  scroll: { flexGrow: 1 },
+
+  logoHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    backgroundColor: WHITE,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+    gap: 12,
   },
   iconMark: {
-    width: 80,
-    height: 80,
+    width: SCREEN_WIDTH * 0.18,
+    height: SCREEN_WIDTH * 0.18,
   },
   wordMark: {
-    width: 200,
-    height: 80,
-    marginLeft: 8,
-  },
-  // Navy card with rounded top corners
-  cardWrapper: {
     flex: 1,
-    minHeight: SCREEN_HEIGHT - LOGO_HEIGHT,
+    height: SCREEN_WIDTH * 0.36,
   },
-  card: {
+
+  body: {
     flex: 1,
-    minHeight: SCREEN_HEIGHT - LOGO_HEIGHT,
-    backgroundColor: NAVY,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing['2xl'],
-    paddingBottom: spacing['2xl'],
-    maxWidth: 440,
-    alignSelf: 'center',
-    width: '100%',
+    paddingHorizontal: 28,
+    paddingTop: 32,
+    paddingBottom: 32,
   },
-  titleSection: {
-    marginBottom: spacing['2xl'],
+
+  eyebrow: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: BLUE_ACCENT,
+    letterSpacing: 3,
+    marginBottom: 8,
   },
   title: {
-    fontSize: 38,
+    fontSize: 28,
     fontWeight: '900',
-    fontStyle: 'italic',
-    color: '#FFFFFF',
-    letterSpacing: -1.5,
-    lineHeight: 40,
-    textTransform: 'uppercase',
+    color: WHITE,
+    letterSpacing: -0.5,
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: typography.fontSize.md,
+    fontSize: 14,
+    fontWeight: '500',
     color: 'rgba(255,255,255,0.6)',
-    marginTop: spacing.sm,
+    marginBottom: 32,
     lineHeight: 20,
   },
-  inputSection: {
-    marginBottom: spacing.xl,
-  },
-  inputLabel: {
+
+  field: { marginBottom: 18 },
+  label: {
     fontSize: 10,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.5)',
-    marginBottom: spacing.sm,
-    letterSpacing: 2,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.55)',
+    letterSpacing: 1.8,
+    marginBottom: 8,
   },
-  phoneContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  input: {
     backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: borderRadius.lg,
+    borderRadius: 12,
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: spacing.base,
-    height: 58,
-  },
-  phoneContainerFocused: {
-    borderColor: BLUE_ACCENT,
-    shadowColor: BLUE_ACCENT,
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-  },
-  phoneContainerError: {
-    borderColor: colors.error,
-  },
-  countrySection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  flag: {
-    fontSize: 20,
-    marginRight: 6,
-  },
-  countryCodeText: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  codeDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    marginHorizontal: spacing.md,
-  },
-  phoneInput: {
-    flex: 1,
-    fontSize: typography.fontSize.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
-    letterSpacing: 1,
+    color: WHITE,
   },
-  checkMark: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: colors.success,
+  phoneRow: { flexDirection: 'row', gap: 10 },
+  countryBox: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 14,
     justifyContent: 'center',
+  },
+  countryText: { fontSize: 15, fontWeight: '700', color: WHITE },
+  hint: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 6,
+  },
+
+  errorBox: {
+    backgroundColor: 'rgba(186,26,26,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(186,26,26,0.35)',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  errorText: { fontSize: 13, fontWeight: '600', color: '#FFB4B4' },
+
+  submitBtn: {
+    backgroundColor: WHITE,
+    borderRadius: 14,
+    paddingVertical: 16,
     alignItems: 'center',
+    marginTop: 12,
   },
-  checkText: {
-    color: '#FFF',
-    fontWeight: '800',
-    fontSize: 13,
-  },
-  errorText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.error,
-    marginTop: spacing.sm,
-    fontWeight: '600',
-  },
-  hintText: {
-    fontSize: typography.fontSize.sm,
-    color: 'rgba(255,255,255,0.4)',
-    marginTop: spacing.sm,
-  },
-  ctaButton: {
-    backgroundColor: BLUE_ACCENT,
-    borderRadius: borderRadius.lg,
-    height: 56,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-  },
-  ctaButtonDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    shadowOpacity: 0,
-  },
-  ctaText: {
-    color: '#FFFFFF',
-    fontSize: typography.fontSize.sm,
-    fontWeight: '800',
+  submitBtnDisabled: { opacity: 0.35 },
+  submitText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: NAVY,
     letterSpacing: 2,
   },
-  ctaArrow: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  featuresRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginTop: spacing['2xl'],
-    flexWrap: 'wrap',
-  },
-  featureChip: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 4,
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  featureLabel: {
-    fontSize: 9,
-    color: 'rgba(255,255,255,0.5)',
-    fontWeight: '700',
-    letterSpacing: 1.5,
-  },
-  terms: {
-    fontSize: typography.fontSize.sm,
-    color: 'rgba(255,255,255,0.35)',
-    textAlign: 'center',
-    marginTop: spacing.xl,
-    lineHeight: 18,
-  },
-  termsLink: {
-    color: BLUE_ACCENT,
-    fontWeight: '600',
-  },
-  devBypass: {
-    marginTop: spacing.md,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    borderStyle: 'dashed',
-  },
-  devBypassText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: 'rgba(255,255,255,0.4)',
-    letterSpacing: 1.5,
-  },
+
+  switchLink: { marginTop: 20, alignItems: 'center', paddingVertical: 8 },
+  switchText: { fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.55)' },
+  switchLinkText: { color: BLUE_ACCENT, fontWeight: '800' },
 });

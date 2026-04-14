@@ -4,52 +4,79 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   SafeAreaView,
-  StatusBar,
   ScrollView,
+  StatusBar,
+  Platform,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Svg, { Path } from 'react-native-svg';
 import { matchesApi } from '../../api/matches.api';
 import { tournamentsApi } from '../../api/tournaments.api';
-import { BracketTree, MatchData as BracketMatchData } from '../../components/tournament/BracketTree';
-import { PoolTable, PoolTeam } from '../../components/tournament/PoolTable';
+import { xAlert, xConfirm } from '../../utils/alert';
 import { BracketData, TournamentCategory } from '../../types/tournament.types';
-import { colors, spacing, typography, borderRadius, shadows } from '../../config/theme';
+
+
 import { OrgTournamentsStackParamList } from '../../navigation/types';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const NAVY = '#001E40';
-const BLUE_ACCENT = '#2196F3';
+const BLUE = '#2196F3';
+const GREEN = '#06D6A0';
+const ORANGE = '#FFB703';
+const BG = '#F3F4F5';
+const WHITE = '#FFFFFF';
+const GRAY = '#737780';
+const BORDER = '#EDEEEF';
+
+const GROUP_LETTERS = 'ABCDEFGHIJKLMNOP';
 
 type NavProp = NativeStackNavigationProp<OrgTournamentsStackParamList, 'BracketManage'>;
 type RouteType = RouteProp<OrgTournamentsStackParamList, 'BracketManage'>;
-
 type TabKey = 'pools' | 'bracket';
 
-function normaliseBracketMatch(m: any): BracketMatchData {
-  return {
-    id: m.id,
-    round: typeof m.round === 'string' ? parseInt(m.round, 10) || 1 : (m.round ?? 1),
-    matchNumber: m.matchNumber ?? 0,
-    status: m.status ?? 'scheduled',
-    teamAId: m.teamAId ?? null,
-    teamBId: m.teamBId ?? null,
-    winnerId: m.winnerId ?? null,
-    scores: (m.scores ?? []).map((s: any) => ({
-      teamA: s.teamAScore ?? s.teamA ?? 0,
-      teamB: s.teamBScore ?? s.teamB ?? 0,
-    })),
-  };
-}
+// ─── Icons ────────────────────────────────────────────────────────────────────
 
-function allPoolMatchesComplete(bracketData: BracketData): boolean {
-  if (!bracketData.pools || bracketData.pools.length === 0) return false;
-  return bracketData.pools.every((pool) =>
+const BackIcon = () => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Path d="M19 12H5M5 12L12 19M5 12L12 5" stroke={WHITE} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function allPoolMatchesComplete(data: BracketData): boolean {
+  if (!data.pools || data.pools.length === 0) return false;
+  return data.pools.every((pool) =>
     pool.matches.every((m) => m.status === 'completed' || m.status === 'walkover')
   );
 }
+
+function matchStatusColor(status: string): string {
+  if (status === 'completed' || status === 'walkover') return GREEN;
+  if (status === 'in_progress') return BLUE;
+  return GRAY;
+}
+
+function TeamNameDisplay({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' }) {
+  const parts = name.split(' / ');
+  const fontSize = size === 'sm' ? 12 : 13;
+  const subSize = size === 'sm' ? 10 : 11;
+  if (parts.length > 1) {
+    return (
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: '#1A1D21', fontSize, fontWeight: '700' }} numberOfLines={1}>{parts[0]}</Text>
+        <Text style={{ color: '#64748B', fontSize: subSize, fontWeight: '600' }} numberOfLines={1}>{parts[1]}</Text>
+      </View>
+    );
+  }
+  return <Text style={{ color: '#1A1D21', fontSize, fontWeight: '700', flex: 1 }} numberOfLines={1}>{name}</Text>;
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function OrganizerBracketScreen() {
   const navigation = useNavigation<NavProp>();
@@ -63,22 +90,14 @@ export default function OrganizerBracketScreen() {
   const [activeCategoryId, setActiveCategoryId] = useState<string>(categoryId);
   const [loading, setLoading] = useState(true);
   const [generatingDraw, setGeneratingDraw] = useState(false);
-  const [generatingKnockout, setGeneratingKnockout] = useState(false);
 
   const fetchBracket = useCallback(async (catId: string) => {
-    if (!tournamentId) {
-      setLoading(false);
-      return;
-    }
+    if (!tournamentId) { setLoading(false); return; }
     setLoading(true);
     try {
       const res = await matchesApi.getBracket(tournamentId, catId);
-      const data: BracketData = res.data?.data ?? res.data;
-      setBracketData(data);
-    } catch (err: any) {
-      if (err?.response?.status !== 404) {
-        Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to load bracket');
-      }
+      setBracketData(res.data?.data ?? res.data);
+    } catch {
       setBracketData(null);
     } finally {
       setLoading(false);
@@ -91,9 +110,7 @@ export default function OrganizerBracketScreen() {
       const res = await tournamentsApi.listCategories(tournamentId);
       const data = res.data?.data ?? res.data ?? [];
       setCategories(Array.isArray(data) ? data : []);
-    } catch {
-      // Non-critical
-    }
+    } catch {}
   }, [tournamentId]);
 
   useEffect(() => {
@@ -103,53 +120,22 @@ export default function OrganizerBracketScreen() {
 
   const handleGenerateDraw = () => {
     if (!tournamentId) return;
-    Alert.alert(
+    xConfirm(
       'Generate Draw',
-      'This will generate pools and matches for confirmed registrations. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'GENERATE',
-          onPress: async () => {
-            setGeneratingDraw(true);
-            try {
-              await matchesApi.generateDraw(tournamentId, activeCategoryId);
-              await fetchBracket(activeCategoryId);
-              Alert.alert('Success', 'Draw generated!');
-            } catch (err: any) {
-              Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to generate draw');
-            } finally {
-              setGeneratingDraw(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleGenerateKnockout = () => {
-    if (!tournamentId) return;
-    Alert.alert(
-      'Generate Knockout Bracket',
-      'Pool play is complete. Generate the knockout bracket?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'GENERATE',
-          onPress: async () => {
-            setGeneratingKnockout(true);
-            try {
-              await matchesApi.generateDraw(tournamentId, activeCategoryId);
-              await fetchBracket(activeCategoryId);
-              Alert.alert('Success', 'Knockout bracket generated!');
-            } catch (err: any) {
-              Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to generate knockout');
-            } finally {
-              setGeneratingKnockout(false);
-            }
-          },
-        },
-      ]
+      'This will create pools and matches from confirmed registrations.',
+      async () => {
+        setGeneratingDraw(true);
+        try {
+          await matchesApi.generateDraw(tournamentId, activeCategoryId);
+          await fetchBracket(activeCategoryId);
+          xAlert('Draw Generated', 'Pools and matches have been created.');
+        } catch (err: any) {
+          xAlert('Error', err?.response?.data?.message ?? 'Failed to generate draw');
+        } finally {
+          setGeneratingDraw(false);
+        }
+      },
+      'Generate',
     );
   };
 
@@ -160,427 +146,487 @@ export default function OrganizerBracketScreen() {
   // Derived
   const teamNames: Record<string, string> = {};
   if (bracketData?.teams) {
-    for (const t of bracketData.teams) {
-      teamNames[t.id] = t.name;
-    }
+    for (const t of bracketData.teams) teamNames[t.id] = t.name;
   }
 
-  const knockoutMatches: BracketMatchData[] = bracketData?.knockout?.map(normaliseBracketMatch) ?? [];
   const pools = bracketData?.pools ?? [];
+  const knockout = bracketData?.knockout ?? [];
   const hasPools = pools.length > 0;
-  const hasBracket = knockoutMatches.length > 0;
-  const noDraw = !bracketData || (!hasPools && !hasBracket);
+  const hasKnockout = knockout.length > 0;
+  const noDraw = !bracketData || (!hasPools && !hasKnockout);
   const poolsComplete = bracketData ? allPoolMatchesComplete(bracketData) : false;
 
-  const TABS: { key: TabKey; label: string; disabled: boolean }[] = [
-    { key: 'pools', label: 'POOLS', disabled: !hasPools },
-    { key: 'bracket', label: 'BRACKET', disabled: !hasBracket },
-  ];
-
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor={NAVY} />
-
+    <SafeAreaView style={[s.screen, { backgroundColor: '#FFFFFF' }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={styles.backIcon}>←</Text>
-          <Text style={styles.backLabel}>BACK</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          {bracketData?.category?.name?.toUpperCase() ?? 'BRACKET'}
-        </Text>
-        <View style={{ width: 60 }} />
+      <View style={s.header}>
+        <View style={s.headerTop}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
+            <BackIcon />
+          </TouchableOpacity>
+          <View style={s.headerCenter}>
+            <Text style={s.headerTitle}>BRACKETS</Text>
+            <Text style={s.headerSub}>Draw & Match Management</Text>
+          </View>
+          <View style={{ width: 36 }} />
+        </View>
+
+        {/* Category selector inside header */}
+        {categories.length > 1 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.catRow}
+          >
+            {categories.map((cat) => {
+              const active = cat.id === activeCategoryId;
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={[s.catChip, active && s.catChipActive]}
+                  onPress={() => setActiveCategoryId(cat.id)}
+                >
+                  <Text style={[s.catChipText, active && s.catChipTextActive]}>
+                    {cat.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
       </View>
 
-      {/* Category selector tabs (if multiple) */}
-      {categories.length > 1 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.catSelectorContent}
-          style={styles.catSelector}
-        >
-          {categories.map((cat) => {
-            const active = cat.id === activeCategoryId;
+      {/* Tab bar */}
+      {!noDraw && (
+        <View style={s.tabBar}>
+          {(['pools', 'bracket'] as TabKey[]).map((tab) => {
+            const active = activeTab === tab;
+            const disabled = tab === 'bracket' && !hasKnockout;
             return (
               <TouchableOpacity
-                key={cat.id}
-                style={[styles.catTab, active && styles.catTabActive]}
-                onPress={() => setActiveCategoryId(cat.id)}
-                activeOpacity={0.75}
+                key={tab}
+                style={[s.tabBtn, active && s.tabBtnActive, disabled && { opacity: 0.35 }]}
+                onPress={() => !disabled && setActiveTab(tab)}
               >
-                <Text style={[styles.catTabText, active && styles.catTabTextActive]}>
-                  {cat.name}
+                <Text style={[s.tabText, active && s.tabTextActive]}>
+                  {tab === 'pools' ? 'POOLS' : 'BRACKET'}
                 </Text>
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
-      )}
-
-      {/* Generate draw button (no draw yet) */}
-      {!loading && noDraw && (
-        <View style={styles.generateSection}>
-          <TouchableOpacity
-            style={[styles.generateBtn, generatingDraw && styles.generateBtnDisabled]}
-            onPress={handleGenerateDraw}
-            disabled={generatingDraw}
-            activeOpacity={0.85}
-          >
-            {generatingDraw ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <Text style={styles.generateBtnText}>GENERATE DRAW</Text>
-            )}
-          </TouchableOpacity>
-          <Text style={styles.generateHint}>
-            Generates pools and initial bracket from confirmed registrations.
-          </Text>
-        </View>
-      )}
-
-      {/* Pools / Bracket tab bar */}
-      {!noDraw && (
-        <View style={styles.tabBar}>
-          {TABS.map((tab) => (
-            <TouchableOpacity
-              key={tab.key}
-              style={[
-                styles.tabBtn,
-                activeTab === tab.key && styles.tabBtnActive,
-                tab.disabled && styles.tabBtnDisabled,
-              ]}
-              onPress={() => !tab.disabled && setActiveTab(tab.key)}
-              activeOpacity={tab.disabled ? 1 : 0.75}
-            >
-              <Text
-                style={[
-                  styles.tabLabel,
-                  activeTab === tab.key && styles.tabLabelActive,
-                  tab.disabled && styles.tabLabelDisabled,
-                ]}
-              >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
         </View>
       )}
 
       {/* Content */}
       {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={NAVY} />
+        <View style={s.center}>
+          <ActivityIndicator size="large" color={BLUE} />
         </View>
       ) : noDraw ? (
-        <View style={styles.centered}>
-          <Text style={styles.emptyText}>No draw generated yet.</Text>
+        <View style={s.center}>
+          <Text style={{ fontSize: 48, marginBottom: 16 }}>🏆</Text>
+          <Text style={s.emptyTitle}>NO DRAW YET</Text>
+          <Text style={s.emptySub}>Generate the draw to create pools and matches.</Text>
+          <TouchableOpacity
+            style={[s.generateBtn, generatingDraw && { opacity: 0.5 }]}
+            onPress={handleGenerateDraw}
+            disabled={generatingDraw}
+          >
+            {generatingDraw
+              ? <ActivityIndicator color={WHITE} size="small" />
+              : <Text style={s.generateBtnText}>GENERATE DRAW</Text>
+            }
+          </TouchableOpacity>
         </View>
-      ) : activeTab === 'pools' ? (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {pools.length === 0 ? (
-            <View style={styles.emptySection}>
-              <Text style={styles.emptyText}>No pool data available.</Text>
-            </View>
-          ) : (
+      ) : (
+        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+          {activeTab === 'pools' && (
             <>
-              {pools.map((pool) => {
-                const poolTeams: PoolTeam[] = pool.teams.map((t) => ({
-                  teamId: t.id,
-                  teamName: t.name,
-                  groupRank: t.groupRank,
-                  wins: t.wins,
-                  losses: t.losses,
-                  pointsFor: t.pointsFor,
-                  pointsAgainst: t.pointsAgainst,
-                }));
+              {pools.map((pool, idx) => (
+                <View key={`pool-${idx}`} style={s.poolCard}>
+                  {/* Pool header */}
+                  <View style={s.poolHeader}>
+                    <View style={s.poolBadge}>
+                      <Text style={s.poolBadgeText}>{GROUP_LETTERS[idx] ?? idx + 1}</Text>
+                    </View>
+                    <Text style={s.poolTitle}>GROUP {GROUP_LETTERS[idx] ?? idx + 1}</Text>
+                    <Text style={s.poolCount}>{pool.teams.length} teams</Text>
+                  </View>
 
-                return (
-                  <View key={pool.groupNumber}>
-                    <PoolTable
-                      groupNumber={pool.groupNumber}
-                      teams={poolTeams}
-                      advancingCount={bracketData?.category?.advancingPerGroup ?? 1}
-                    />
-                    {pool.matches?.map((match) => (
-                      <TouchableOpacity
-                        key={match.id}
-                        style={styles.matchRow}
-                        onPress={() => handleMatchPress(match.id)}
-                        activeOpacity={0.75}
-                      >
-                        <View style={styles.matchInner}>
-                          <Text style={styles.matchTeamA} numberOfLines={1}>
-                            {teamNames[match.teamAId ?? ''] ?? 'TBD'}
-                          </Text>
-                          <View style={styles.matchCenter}>
-                            <Text style={styles.matchVs}>vs</Text>
-                            {match.scores?.length > 0 && (
-                              <Text style={styles.matchScore}>
-                                {match.scores.map((s: any) => `${s.teamAScore}-${s.teamBScore}`).join(', ')}
-                              </Text>
-                            )}
-                          </View>
-                          <Text style={styles.matchTeamB} numberOfLines={1}>
-                            {teamNames[match.teamBId ?? ''] ?? 'TBD'}
-                          </Text>
+                  {/* Standings table */}
+                  <View style={s.table}>
+                    <View style={s.tableHeader}>
+                      <Text style={[s.th, { flex: 2 }]}>TEAM</Text>
+                      <Text style={s.th}>W</Text>
+                      <Text style={s.th}>L</Text>
+                      <Text style={s.th}>PF</Text>
+                      <Text style={s.th}>PA</Text>
+                    </View>
+                    {pool.teams.map((team, tIdx) => (
+                      <View key={team.id} style={[s.tableRow, tIdx % 2 === 0 && s.tableRowAlt]}>
+                        <View style={[{ flex: 2, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+                          <Text style={s.rankNum}>{tIdx + 1}</Text>
+                          <TeamNameDisplay name={team.name} size="sm" />
                         </View>
-                        <Text style={styles.scoreLink}>SCORE ›</Text>
-                      </TouchableOpacity>
+                        <Text style={s.td}>{team.wins}</Text>
+                        <Text style={s.td}>{team.losses}</Text>
+                        <Text style={s.td}>{team.pointsFor}</Text>
+                        <Text style={s.td}>{team.pointsAgainst}</Text>
+                      </View>
                     ))}
                   </View>
-                );
-              })}
 
-              {/* Generate knockout button when pools are complete */}
-              {poolsComplete && !hasBracket && (
-                <View style={styles.generateKnockoutSection}>
-                  <TouchableOpacity
-                    style={[styles.generateBtn, generatingKnockout && styles.generateBtnDisabled]}
-                    onPress={handleGenerateKnockout}
-                    disabled={generatingKnockout}
-                    activeOpacity={0.85}
-                  >
-                    {generatingKnockout ? (
-                      <ActivityIndicator color="#FFFFFF" size="small" />
-                    ) : (
-                      <Text style={styles.generateBtnText}>GENERATE KNOCKOUT BRACKET</Text>
-                    )}
-                  </TouchableOpacity>
+                  {/* Pool matches */}
+                  <View style={s.matchesSection}>
+                    <Text style={s.matchesLabel}>MATCHES</Text>
+                    {pool.matches.map((match) => {
+                      const teamA = teamNames[match.teamAId ?? ''] ?? 'TBD';
+                      const teamB = teamNames[match.teamBId ?? ''] ?? 'TBD';
+                      const isDone = match.status === 'completed' || match.status === 'walkover';
+                      const scoreText = match.scores?.length > 0
+                        ? match.scores.map((sc: any) => `${sc.teamAScore ?? 0}-${sc.teamBScore ?? 0}`).join(', ')
+                        : null;
+
+                      return (
+                        <TouchableOpacity
+                          key={match.id}
+                          style={s.matchCard}
+                          onPress={() => handleMatchPress(match.id)}
+                          activeOpacity={0.75}
+                        >
+                          <View style={[s.matchStatusDot, { backgroundColor: matchStatusColor(match.status) }]} />
+                          <View style={s.matchContent}>
+                            <View style={s.matchTeams}>
+                              <View style={[{ flex: 1 }, isDone && match.winnerId === match.teamAId && { opacity: 1 }, isDone && match.winnerId !== match.teamAId && { opacity: 0.5 }]}>
+                                <TeamNameDisplay name={teamA} size="sm" />
+                              </View>
+                              <Text style={s.matchVs}>vs</Text>
+                              <View style={[{ flex: 1 }, isDone && match.winnerId === match.teamBId && { opacity: 1 }, isDone && match.winnerId !== match.teamBId && { opacity: 0.5 }]}>
+                                <TeamNameDisplay name={teamB} size="sm" />
+                              </View>
+                            </View>
+                            {scoreText && <Text style={s.matchScoreText}>{scoreText}</Text>}
+                          </View>
+                          <TouchableOpacity
+                            style={[s.scoreBtn, isDone && s.scoreBtnDone]}
+                            onPress={() => handleMatchPress(match.id)}
+                          >
+                            <Text style={[s.scoreBtnText, isDone && s.scoreBtnTextDone]}>
+                              {isDone ? '✓' : 'SCORE'}
+                            </Text>
+                          </TouchableOpacity>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                 </View>
+              ))}
+
+              {/* Generate knockout when pools complete */}
+              {poolsComplete && !hasKnockout && (
+                <TouchableOpacity
+                  style={s.generateBtn}
+                  onPress={() => {
+                    xConfirm('Generate Knockout', 'Pool play is complete. Generate knockout bracket?', async () => {
+                      try {
+                        await matchesApi.generateDraw(tournamentId!, activeCategoryId);
+                        await fetchBracket(activeCategoryId);
+                        xAlert('Success', 'Knockout bracket generated!');
+                      } catch (err: any) {
+                        xAlert('Error', err?.response?.data?.message ?? 'Failed');
+                      }
+                    }, 'Generate');
+                  }}
+                >
+                  <Text style={s.generateBtnText}>GENERATE KNOCKOUT BRACKET</Text>
+                </TouchableOpacity>
+              )}
+
+              {hasKnockout && (
+                <TouchableOpacity
+                  style={{ alignSelf: 'center', paddingVertical: 10, marginTop: 8 }}
+                  onPress={() => {
+                    xConfirm('Reset Knockout', 'This will delete all knockout matches and let you re-select advancing teams. Pool matches will be kept. Continue?', async () => {
+                      try {
+                        await matchesApi.resetKnockout(tournamentId!, activeCategoryId);
+                        await fetchBracket(activeCategoryId);
+                        xAlert('Success', 'Knockout bracket reset. Go to Live Management to re-generate.');
+                      } catch (err: any) {
+                        xAlert('Error', err?.response?.data?.message ?? 'Failed to reset');
+                      }
+                    }, 'Reset');
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#EF4444', letterSpacing: 0.5 }}>Reset Knockout Bracket</Text>
+                </TouchableOpacity>
               )}
             </>
           )}
-        </ScrollView>
-      ) : (
-        <View style={styles.bracketContainer}>
-          {knockoutMatches.length === 0 ? (
-            <View style={styles.emptySection}>
-              <Text style={styles.emptyText}>Knockout bracket not yet available.</Text>
-            </View>
-          ) : (
-            <BracketTree
-              matches={knockoutMatches}
-              teamNames={teamNames}
-              onMatchPress={(match) => handleMatchPress(match.id)}
-            />
+
+          {activeTab === 'bracket' && (
+            <>
+              {knockout.length === 0 ? (
+                <View style={s.center}>
+                  <Text style={s.emptySub}>Knockout bracket not yet available.</Text>
+                </View>
+              ) : (
+                <>
+                  {(() => {
+                    // Group knockout matches by round
+                    const roundOrder: Record<string, number> = {
+                      'round_of_32': 0, 'round_of_16': 1, 'quarterfinal': 2,
+                      'semifinal': 3, 'final': 4, 'third_place': 5,
+                    };
+                    const roundLabels: Record<string, string> = {
+                      'round_of_32': 'ROUND OF 32', 'round_of_16': 'ROUND OF 16',
+                      'quarterfinal': 'QUARTERFINALS', 'semifinal': 'SEMIFINALS',
+                      'final': 'FINAL', 'third_place': '3RD PLACE',
+                    };
+                    const grouped: Record<string, typeof knockout> = {};
+                    for (const m of knockout) {
+                      const r = m.round ?? 'other';
+                      if (!grouped[r]) grouped[r] = [];
+                      grouped[r].push(m);
+                    }
+                    const sortedRounds = Object.keys(grouped).sort(
+                      (a, b) => (roundOrder[a] ?? 99) - (roundOrder[b] ?? 99)
+                    );
+
+                    // Build a map of matchNumber -> match for "Winner of Match X" references
+                    const matchById: Record<string, typeof knockout[0]> = {};
+                    for (const m of knockout) matchById[m.id] = m;
+
+                    return sortedRounds.map((round) => (
+                      <View key={round} style={s.koRoundSection}>
+                        <View style={s.koRoundHeader}>
+                          <Text style={s.koRoundHeaderText}>
+                            {roundLabels[round] ?? round.toUpperCase().replace(/_/g, ' ')}
+                          </Text>
+                          <Text style={s.koRoundCount}>{grouped[round].length} match{grouped[round].length !== 1 ? 'es' : ''}</Text>
+                        </View>
+                        {grouped[round].map((match) => {
+                          const teamA = match.teamAId
+                            ? (teamNames[match.teamAId] ?? 'TBD')
+                            : (match.dependsOnMatchA ? `Winner of M${matchById[match.dependsOnMatchA]?.matchNumber ?? '?'}` : 'TBD');
+                          const teamB = match.teamBId
+                            ? (teamNames[match.teamBId] ?? 'TBD')
+                            : (match.dependsOnMatchB ? `Winner of M${matchById[match.dependsOnMatchB]?.matchNumber ?? '?'}` : 'TBD');
+                          const isDone = match.status === 'completed' || match.status === 'walkover';
+                          const scoreText = match.scores?.length > 0
+                            ? match.scores.map((sc: any) => `${sc.teamAScore ?? 0}-${sc.teamBScore ?? 0}`).join(', ')
+                            : null;
+
+                          return (
+                            <TouchableOpacity
+                              key={match.id}
+                              style={s.koMatchCard}
+                              onPress={() => handleMatchPress(match.id)}
+                              activeOpacity={0.75}
+                            >
+                              <View style={s.koMatchNumber}>
+                                <Text style={s.koMatchNumberText}>M{match.matchNumber}</Text>
+                              </View>
+                              <View style={s.koMatchContent}>
+                                <View style={s.koMatchTeams}>
+                                  <View style={[
+                                    { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
+                                    isDone && match.winnerId === match.teamAId && { backgroundColor: 'rgba(6,214,160,0.15)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 4 },
+                                    isDone && match.winnerId && match.winnerId !== match.teamAId && { opacity: 0.4 },
+                                  ]}>
+                                    {isDone && match.winnerId === match.teamAId && (
+                                      <Text style={{ fontSize: 12 }}>{'\uD83C\uDFC6'}</Text>
+                                    )}
+                                    <View style={{ flex: 1 }}>
+                                      <TeamNameDisplay name={teamA} size="sm" />
+                                    </View>
+                                  </View>
+                                  <Text style={s.koVs}>vs</Text>
+                                  <View style={[
+                                    { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, justifyContent: 'flex-end' },
+                                    isDone && match.winnerId === match.teamBId && { backgroundColor: 'rgba(6,214,160,0.15)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 4 },
+                                    isDone && match.winnerId && match.winnerId !== match.teamBId && { opacity: 0.4 },
+                                  ]}>
+                                    <View style={{ flex: 1 }}>
+                                      <TeamNameDisplay name={teamB} size="sm" />
+                                    </View>
+                                    {isDone && match.winnerId === match.teamBId && (
+                                      <Text style={{ fontSize: 12 }}>{'\uD83C\uDFC6'}</Text>
+                                    )}
+                                  </View>
+                                </View>
+                                {scoreText && <Text style={s.koScoreText}>{scoreText}</Text>}
+                              </View>
+                              <View style={[s.koStatusDot, { backgroundColor: isDone ? GREEN : match.status === 'in_progress' ? BLUE : GRAY }]} />
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    ));
+                  })()}
+                </>
+              )}
+            </>
           )}
-        </View>
+
+          <View style={{ height: 140 }} />
+        </ScrollView>
       )}
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-  },
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: 'transparent' },
+
+  // Header
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
-    backgroundColor: NAVY,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) + 8 : 8,
+    paddingBottom: 14,
+  },
+  headerTop: {
+    flexDirection: 'row', alignItems: 'center',
   },
   backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    flex: 1,
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center', justifyContent: 'center',
   },
-  backIcon: {
-    fontSize: typography.fontSize.lg,
-    color: '#FFFFFF',
-    fontWeight: '700',
+  headerCenter: { flex: 1, marginHorizontal: 12 },
+  headerTitle: { fontSize: 15, fontWeight: '800', color: WHITE, letterSpacing: 0.5 },
+  headerSub: { fontSize: 11, fontWeight: '500', color: '#64748B', marginTop: 1 },
+
+  // Category chips (inside navy header)
+  catRow: { paddingTop: 10, gap: 8, flexDirection: 'row' as const },
+  catChip: {
+    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
+    backgroundColor: '#E2E8F0', borderWidth: 1, borderColor: '#E2E8F0',
   },
-  backLabel: {
-    fontSize: typography.fontSize['2xs'],
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 1.5,
-  },
-  headerTitle: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 1,
-    maxWidth: 160,
-    textAlign: 'center',
-  },
-  catSelector: {
-    backgroundColor: colors.surfaceContainerLowest,
-    ...shadows.sm,
-  },
-  catSelectorContent: {
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-  },
-  catTab: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surfaceContainerHigh,
-  },
-  catTabActive: {
-    backgroundColor: NAVY,
-  },
-  catTabText: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: '700',
-    color: colors.textTertiary,
-    letterSpacing: 0.5,
-  },
-  catTabTextActive: {
-    color: '#FFFFFF',
-  },
-  generateSection: {
-    padding: spacing.base,
-    backgroundColor: colors.surfaceContainerLowest,
-    ...shadows.sm,
-  },
-  generateBtn: {
-    backgroundColor: BLUE_ACCENT,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  generateBtnDisabled: {
-    opacity: 0.6,
-  },
-  generateBtnText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 1.5,
-  },
-  generateHint: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: '500',
-    color: colors.textTertiary,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-  },
+  catChipActive: { backgroundColor: WHITE, borderColor: WHITE },
+  catChipText: { fontSize: 12, fontWeight: '700', color: '#475569', letterSpacing: 0.3 },
+  catChipTextActive: { color: NAVY },
+
+  // Tab bar
   tabBar: {
-    flexDirection: 'row',
-    backgroundColor: colors.surfaceContainerLowest,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-    ...shadows.sm,
+    flexDirection: 'row', backgroundColor: 'transparent', paddingHorizontal: 16,
+    paddingVertical: 8, gap: 8, borderBottomWidth: 1, borderBottomColor: '#F5F7FA',
   },
   tabBtn: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.DEFAULT,
+    flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
+    backgroundColor: '#F5F7FA',
   },
-  tabBtnActive: {
-    backgroundColor: NAVY,
+  tabBtnActive: { backgroundColor: BLUE },
+  tabText: { fontSize: 11, fontWeight: '800', color: '#64748B', letterSpacing: 1.5 },
+  tabTextActive: { color: WHITE },
+
+  // Center / empty
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#1A1D21', letterSpacing: 1.5, marginBottom: 8 },
+  emptySub: { fontSize: 13, fontWeight: '500', color: '#64748B', textAlign: 'center', lineHeight: 20 },
+
+  // Generate button
+  generateBtn: {
+    backgroundColor: '#E2E8F0', borderRadius: 12, paddingVertical: 14,
+    alignItems: 'center', marginTop: 16, marginHorizontal: 4,
+    borderWidth: 1, borderColor: '#CBD5E1',
   },
-  tabBtnDisabled: {
-    opacity: 0.4,
+  generateBtnText: { fontSize: 12, fontWeight: '800', color: WHITE, letterSpacing: 1.5 },
+
+  // Scroll
+  scroll: { padding: 16 },
+
+  // Pool card
+  poolCard: {
+    backgroundColor: '#F5F7FA', borderRadius: 16, marginBottom: 16,
+    borderWidth: 1, borderColor: '#F5F7FA',
+    overflow: 'hidden',
   },
-  tabLabel: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: '700',
-    color: colors.textTertiary,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
+  poolHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: NAVY, paddingHorizontal: 16, paddingVertical: 12,
   },
-  tabLabelActive: {
-    color: '#FFFFFF',
+  poolBadge: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center', justifyContent: 'center',
   },
-  tabLabelDisabled: {
-    color: colors.textTertiary,
+  poolBadgeText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
+  poolTitle: { flex: 1, fontSize: 13, fontWeight: '800', color: '#FFFFFF', letterSpacing: 1.5 },
+  poolCount: { fontSize: 11, fontWeight: '600', color: '#64748B' },
+
+  // Table
+  table: { paddingHorizontal: 12, paddingTop: 8 },
+  tableHeader: {
+    flexDirection: 'row', paddingVertical: 6, paddingHorizontal: 4,
+    borderBottomWidth: 1, borderBottomColor: '#F5F7FA',
   },
-  scrollContent: {
-    paddingHorizontal: spacing.base,
-    paddingTop: spacing.base,
-    paddingBottom: spacing['2xl'],
+  th: {
+    width: 36, textAlign: 'center', fontSize: 9, fontWeight: '800',
+    color: '#64748B', letterSpacing: 1,
   },
-  bracketContainer: {
-    flex: 1,
+  tableRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4 },
+  tableRowAlt: { backgroundColor: '#F9FAFB' },
+  rankNum: { fontSize: 12, fontWeight: '800', color: '#64748B', width: 18, textAlign: 'center' },
+  teamName: { fontSize: 13, fontWeight: '700', color: '#1A1D21', flex: 1 },
+  td: { width: 36, textAlign: 'center', fontSize: 13, fontWeight: '600', color: '#1A1D21' },
+
+  // Matches
+  matchesSection: { padding: 12, borderTopWidth: 1, borderTopColor: '#F5F7FA' },
+  matchesLabel: { fontSize: 10, fontWeight: '800', color: '#64748B', letterSpacing: 2, marginBottom: 8 },
+
+  matchCard: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#F5F7FA', borderRadius: 10, padding: 12, marginBottom: 6,
   },
-  emptySection: {
-    paddingVertical: spacing['3xl'],
-    alignItems: 'center',
+  matchStatusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 10 },
+  matchContent: { flex: 1 },
+  matchTeams: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  matchTeamName: { fontSize: 13, fontWeight: '600', color: '#1A1D21', flex: 1 },
+  matchWinner: { fontWeight: '900', color: GREEN },
+  matchVs: { fontSize: 10, fontWeight: '700', color: '#64748B', marginHorizontal: 4 },
+  matchScoreText: { fontSize: 11, fontWeight: '700', color: BLUE, marginTop: 4 },
+
+  scoreBtn: {
+    backgroundColor: BLUE, borderRadius: 8,
+    paddingHorizontal: 14, paddingVertical: 7, marginLeft: 8,
   },
-  emptyText: {
-    fontSize: typography.fontSize.md,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    textAlign: 'center',
+  scoreBtnDone: { backgroundColor: GREEN + '22' },
+  scoreBtnText: { fontSize: 10, fontWeight: '800', color: WHITE, letterSpacing: 1 },
+  scoreBtnTextDone: { color: GREEN },
+
+  // Knockout bracket styles
+  koRoundSection: { marginBottom: 20 },
+  koRoundHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: NAVY, borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 10, marginBottom: 8,
   },
-  matchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceContainerLowest,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.base,
-    marginBottom: spacing.xs,
-    ...shadows.sm,
-    justifyContent: 'space-between',
+  koRoundHeaderText: {
+    color: WHITE, fontSize: 12, fontWeight: '800', letterSpacing: 1.5,
   },
-  matchInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: spacing.xs,
+  koRoundCount: {
+    color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '600',
   },
-  matchTeamA: {
-    flex: 1,
-    fontSize: typography.fontSize.sm,
-    fontWeight: '700',
-    color: colors.text,
-    textAlign: 'right',
+  koMatchCard: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#F5F7FA', borderRadius: 10,
+    padding: 12, marginBottom: 6,
   },
-  matchCenter: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
+  koMatchNumber: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 10,
   },
-  matchVs: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: '700',
-    color: colors.textTertiary,
+  koMatchNumberText: {
+    color: '#64748B', fontSize: 10, fontWeight: '800',
   },
-  matchScore: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: '600',
-    color: NAVY,
-    marginTop: 2,
-  },
-  matchTeamB: {
-    flex: 1,
-    fontSize: typography.fontSize.sm,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  scoreLink: {
-    fontSize: typography.fontSize['2xs'],
-    fontWeight: '700',
-    color: BLUE_ACCENT,
-    letterSpacing: 0.5,
-    marginLeft: spacing.sm,
-  },
-  generateKnockoutSection: {
-    paddingTop: spacing.base,
-    paddingBottom: spacing.md,
-  },
+  koMatchContent: { flex: 1 },
+  koMatchTeams: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  koVs: { fontSize: 10, fontWeight: '700', color: '#64748B', marginHorizontal: 4 },
+  koScoreText: { fontSize: 11, fontWeight: '700', color: BLUE, marginTop: 4 },
+  koStatusDot: { width: 8, height: 8, borderRadius: 4, marginLeft: 8 },
 });

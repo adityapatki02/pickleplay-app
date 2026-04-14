@@ -117,6 +117,7 @@ export interface CreateTournamentInput {
   contactPhone?: string;
   contactEmail?: string;
   geofenceRadiusM?: number;
+  initialStatus?: 'draft' | 'registration_open';
 }
 
 export interface CreateCategoryInput {
@@ -130,6 +131,7 @@ export interface CreateCategoryInput {
   entryFee: number;
   maxTeams: number;
   groupSize?: number;
+  advancingPerGroup?: number;
   knockoutFormat?: KnockoutFormat;
   matchFormat?: MatchFormat;
   pointsPerGame?: number;

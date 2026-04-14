@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   SafeAreaView,
   StatusBar,
@@ -20,6 +19,7 @@ import { Button } from '../../components/ui/Button';
 import { BracketData, TournamentCategory } from '../../types/tournament.types';
 import { colors, spacing, typography, borderRadius, shadows } from '../../config/theme';
 import { OrgTournamentsStackParamList } from '../../navigation/types';
+import { xAlert, xConfirm } from '../../utils/alert';
 
 type NavProp = NativeStackNavigationProp<OrgTournamentsStackParamList, 'BracketManage'>;
 type RouteType = RouteProp<OrgTournamentsStackParamList, 'BracketManage'>;
@@ -76,7 +76,7 @@ export default function BracketManageScreen() {
     } catch (err: any) {
       // If 404, it means no draw generated yet — that's fine
       if (err?.response?.status !== 404) {
-        Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to load bracket');
+        xAlert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to load bracket');
       }
       setBracketData(null);
     } finally {
@@ -106,54 +106,44 @@ export default function BracketManageScreen() {
 
   const handleGenerateDraw = async () => {
     if (!tournamentId) return;
-    Alert.alert(
+    xConfirm(
       'Generate Draw',
       'This will generate the draw for this category. Confirmed registrations will be seeded. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Generate',
-          onPress: async () => {
-            setGeneratingDraw(true);
-            try {
-              await matchesApi.generateDraw(tournamentId, activeCategoryId);
-              await fetchBracket(activeCategoryId);
-              Alert.alert('Success', 'Draw generated successfully!');
-            } catch (err: any) {
-              Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to generate draw');
-            } finally {
-              setGeneratingDraw(false);
-            }
-          },
-        },
-      ]
+      async () => {
+        setGeneratingDraw(true);
+        try {
+          await matchesApi.generateDraw(tournamentId, activeCategoryId);
+          await fetchBracket(activeCategoryId);
+          xAlert('Success', 'Draw generated successfully!');
+        } catch (err: any) {
+          xAlert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to generate draw');
+        } finally {
+          setGeneratingDraw(false);
+        }
+      },
+      'Generate',
     );
   };
 
   const handleGenerateKnockout = async () => {
     if (!tournamentId) return;
-    Alert.alert(
+    xConfirm(
       'Generate Knockout Bracket',
       'Pool play is complete. Generate the knockout bracket now?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Generate',
-          onPress: async () => {
-            setGeneratingKnockout(true);
-            try {
-              // Re-use generate-draw endpoint; backend handles pool → knockout transition
-              await matchesApi.generateDraw(tournamentId, activeCategoryId);
-              await fetchBracket(activeCategoryId);
-              Alert.alert('Success', 'Knockout bracket generated!');
-            } catch (err: any) {
-              Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to generate knockout');
-            } finally {
-              setGeneratingKnockout(false);
-            }
-          },
-        },
-      ]
+      async () => {
+        setGeneratingKnockout(true);
+        try {
+          // Re-use generate-draw endpoint; backend handles pool → knockout transition
+          await matchesApi.generateDraw(tournamentId, activeCategoryId);
+          await fetchBracket(activeCategoryId);
+          xAlert('Success', 'Knockout bracket generated!');
+        } catch (err: any) {
+          xAlert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to generate knockout');
+        } finally {
+          setGeneratingKnockout(false);
+        }
+      },
+      'Generate',
     );
   };
 

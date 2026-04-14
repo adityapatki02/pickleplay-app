@@ -23,7 +23,7 @@ const PlaceholderScreen = ({ title, subtitle }: { title: string; subtitle?: stri
   <SafeAreaView style={ph.container}>
     <View style={ph.header}>
       <View style={ph.headerGlow} />
-      <Image source={require('../assets/Logo.png')} style={ph.brandIcon} resizeMode="contain" />
+      <Image source={require('../../assets/Logo.png')} style={ph.brandIcon} resizeMode="contain" />
     </View>
     <View style={ph.body}>
       <Text style={ph.title}>{title.toUpperCase()}</Text>
@@ -83,7 +83,7 @@ const HomeStackNavigator = () => {
           <SafeAreaView style={ph.container}>
             <View style={ph.header}>
               <View style={ph.headerGlow} />
-              <Image source={require('../assets/Logo.png')} style={ph.brandIcon} resizeMode="contain" />
+              <Image source={require('../../assets/Logo.png')} style={ph.brandIcon} resizeMode="contain" />
             </View>
             <View style={ph.body}>
               <Text style={ph.title}>{'WELCOME BACK,\n' + displayName.toUpperCase() + '.'}</Text>

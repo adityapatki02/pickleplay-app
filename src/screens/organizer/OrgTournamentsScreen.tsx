@@ -5,7 +5,6 @@ import {
   FlatList,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   RefreshControl,
   SafeAreaView,
   StatusBar,
@@ -20,6 +19,7 @@ import { useTournamentStore } from '../../store/tournamentStore';
 import { Tournament, TournamentStatus } from '../../types/tournament.types';
 import { colors, spacing, typography, borderRadius, shadows } from '../../config/theme';
 import { OrgTournamentsStackParamList } from '../../navigation/types';
+import { xAlert } from '../../utils/alert';
 
 type NavProp = NativeStackNavigationProp<OrgTournamentsStackParamList, 'OrgTournaments'>;
 
@@ -59,7 +59,7 @@ export default function OrgTournamentsScreen() {
         setTournaments(res.data.data);
       }
     } catch (err: any) {
-      Alert.alert('Error', err?.message ?? 'Failed to load tournaments');
+      xAlert('Error', err?.message ?? 'Failed to load tournaments');
     } finally {
       setLoading(false);
     }
@@ -77,14 +77,14 @@ export default function OrgTournamentsScreen() {
         setTournaments(res.data.data);
       }
     } catch (err: any) {
-      Alert.alert('Error', err?.message ?? 'Failed to refresh');
+      xAlert('Error', err?.message ?? 'Failed to refresh');
     } finally {
       setRefreshing(false);
     }
   }, [setTournaments]);
 
   const handleCardPress = (tournament: Tournament) => {
-    Alert.alert('Coming Soon', 'Tournament dashboard is coming in the next task!');
+    xAlert('Coming Soon', 'Tournament dashboard is coming in the next task!');
   };
 
   const handleCreatePress = () => {

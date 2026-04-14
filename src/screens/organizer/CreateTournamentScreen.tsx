@@ -13,7 +13,8 @@ import {
   Platform,
   TextInput,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
+import { xAlert, xConfirm } from '../../utils/alert';
 import { tournamentsApi } from '../../api/tournaments.api';
 import { useTournamentStore } from '../../store/tournamentStore';
 import {
@@ -23,6 +24,8 @@ import {
   CreateCategoryInput,
 } from '../../types/tournament.types';
 import { colors, spacing, typography, borderRadius, shadows } from '../../config/theme';
+import DatePickerModal, { DateField } from '../../components/ui/DatePickerModal';
+import PlacesAutocomplete, { PlaceResult } from '../../components/ui/PlacesAutocomplete';
 
 const NAVY = '#001E40';
 const BLUE_ACCENT = '#2196F3';
@@ -44,6 +47,9 @@ interface FormData {
   // Step 2 — VENUE & DATES
   venueName: string;
   venueAddress: string;
+  venueLat?: number;
+  venueLng?: number;
+  mapsLink?: string;
   startDate: string;
   endDate: string;
   registrationDeadline: string;
@@ -76,6 +82,7 @@ const INITIAL_CATEGORY: Omit<CategoryDraft, '_id'> = {
   maxTeams: 16,
   groupSize: 4,
   advancingPerGroup: 2,
+  matchFormat: 'best_of_1',
   knockoutFormat: 'single_elimination',
   paymentMode: 'both',
 };
@@ -118,7 +125,7 @@ function FormField({
           multiline && fieldStyles.inputMultiline,
         ]}
         placeholder={placeholder}
-        placeholderTextColor={colors.textTertiary}
+        placeholderTextColor="#94A3B8"
         value={value}
         onChangeText={onChangeText}
         keyboardType={keyboardType}
@@ -142,21 +149,21 @@ const fieldStyles = StyleSheet.create({
   label: {
     fontSize: 10,
     fontWeight: '700',
-    color: colors.textTertiary,
+    color: NAVY,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
     marginBottom: spacing.xs,
   },
   input: {
-    backgroundColor: colors.surfaceContainerLow,
+    backgroundColor: '#F5F7FA',
     borderRadius: borderRadius.md,
     borderWidth: 1.5,
-    borderColor: colors.borderLight,
+    borderColor: '#E2E8F0',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
     fontSize: typography.fontSize.base,
     fontWeight: '500',
-    color: colors.text,
+    color: '#1A1D21',
     minHeight: 48,
   },
   inputFocused: {
@@ -177,7 +184,7 @@ const fieldStyles = StyleSheet.create({
   },
   hintText: {
     fontSize: typography.fontSize.xs,
-    color: colors.textTertiary,
+    color: '#64748B',
     marginTop: spacing.xs,
   },
 });
@@ -222,7 +229,7 @@ const pickerStyles = StyleSheet.create({
   label: {
     fontSize: 10,
     fontWeight: '700',
-    color: colors.textTertiary,
+    color: '#64748B',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
     marginBottom: spacing.xs,
@@ -232,13 +239,13 @@ const pickerStyles = StyleSheet.create({
     borderRadius: borderRadius.full,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.surfaceContainerHigh,
+    backgroundColor: '#F5F7FA',
   },
   optionActive: { backgroundColor: NAVY },
   optionText: {
     fontSize: typography.fontSize.sm,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: '#64748B',
   },
   optionTextActive: { color: '#FFFFFF' },
 });
@@ -280,9 +287,9 @@ const stepStyles = StyleSheet.create({
   container: {
     paddingVertical: spacing.md,
     alignItems: 'center',
-    backgroundColor: colors.surfaceContainerLowest,
+    backgroundColor: 'transparent',
     borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
+    borderBottomColor: '#E2E8F0',
   },
   row: {
     flexDirection: 'row',
@@ -293,7 +300,7 @@ const stepStyles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: colors.surfaceContainerHigh,
+    backgroundColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -301,20 +308,20 @@ const stepStyles = StyleSheet.create({
     backgroundColor: NAVY,
   },
   dotDone: {
-    backgroundColor: BLUE_ACCENT,
+    backgroundColor: '#06D6A0',
   },
   line: {
     width: 32,
     height: 2,
-    backgroundColor: colors.borderLight,
+    backgroundColor: '#E2E8F0',
   },
   lineDone: {
-    backgroundColor: BLUE_ACCENT,
+    backgroundColor: NAVY,
   },
   dotText: {
     fontSize: typography.fontSize.xs,
     fontWeight: '700',
-    color: colors.textTertiary,
+    color: '#94A3B8',
   },
   dotTextActive: {
     color: '#FFFFFF',
@@ -322,7 +329,7 @@ const stepStyles = StyleSheet.create({
   stepLabel: {
     fontSize: typography.fontSize.xs,
     fontWeight: '700',
-    color: colors.textTertiary,
+    color: '#64748B',
     letterSpacing: 1,
   },
 });
@@ -338,6 +345,32 @@ export default function CreateTournamentScreen() {
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [categoryDraft, setCategoryDraft] = useState<Omit<CategoryDraft, '_id'>>(INITIAL_CATEGORY);
+  const [tournamentFormatType, setTournamentFormatType] = useState<'pool_knockout' | 'knockout_only'>('pool_knockout');
+
+  const [manualVenue, setManualVenue] = useState(false);
+
+  // Extract lat/lng from a Google Maps URL
+  const parseMapsLink = (url: string): { lat: number; lng: number } | null => {
+    // Format: /@18.5204,73.8567,17z or ?q=18.5204,73.8567
+    const atMatch = url.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (atMatch) return { lat: parseFloat(atMatch[1]), lng: parseFloat(atMatch[2]) };
+    const qMatch = url.match(/[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (qMatch) return { lat: parseFloat(qMatch[1]), lng: parseFloat(qMatch[2]) };
+    const llMatch = url.match(/[?&]ll=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (llMatch) return { lat: parseFloat(llMatch[1]), lng: parseFloat(llMatch[2]) };
+    return null;
+  };
+
+  // Date picker state
+  type DateField = 'startDate' | 'endDate' | 'registrationDeadline';
+  const [activeDateField, setActiveDateField] = useState<DateField | null>(null);
+
+  const openDatePicker = (field: DateField) => setActiveDateField(field);
+  const closeDatePicker = () => setActiveDateField(null);
+  const confirmDate = (iso: string) => {
+    if (activeDateField) update({ [activeDateField]: iso } as any);
+    closeDatePicker();
+  };
 
   const update = (fields: Partial<FormData>) => {
     setForm((prev) => ({ ...prev, ...fields }));
@@ -365,15 +398,15 @@ export default function CreateTournamentScreen() {
     if (!form.endDate || !dateRegex.test(form.endDate)) e.endDate = 'Enter a valid date (YYYY-MM-DD)';
     if (!form.registrationDeadline || !dateRegex.test(form.registrationDeadline))
       e.registrationDeadline = 'Enter a valid date (YYYY-MM-DD)';
-    if (!e.startDate && !e.registrationDeadline && form.registrationDeadline >= form.startDate)
-      e.registrationDeadline = 'Deadline must be before start date';
+    if (!e.startDate && !e.registrationDeadline && form.registrationDeadline > form.startDate)
+      e.registrationDeadline = 'Deadline must be on or before start date';
     setErrors(e);
     return Object.keys(e).length === 0;
   }
 
   function validateStep3(): boolean {
     if (form.categories.length === 0) {
-      Alert.alert('Required', 'Add at least one category before creating the tournament.');
+      xAlert('Required', 'Add at least one category before creating the tournament.');
       return false;
     }
     return true;
@@ -397,12 +430,12 @@ export default function CreateTournamentScreen() {
 
   const addCategory = () => {
     if (!categoryDraft.name.trim()) {
-      Alert.alert('Required', 'Category name is required.');
+      xAlert('Required', 'Category name is required.');
       return;
     }
     const newCat: CategoryDraft = { ...categoryDraft, _id: Date.now().toString() };
     update({ categories: [...form.categories, newCat] });
-    setCategoryDraft(INITIAL_CATEGORY);
+    setCategoryDraft(INITIAL_CATEGORY); setTournamentFormatType('pool_knockout');
     setShowCategoryForm(false);
   };
 
@@ -412,7 +445,7 @@ export default function CreateTournamentScreen() {
 
   // ── Save ─────────────────────────────────────────────────────────────────────
 
-  const handleSave = async () => {
+  const handleSave = async (asDraft = false) => {
     setSaving(true);
     try {
       const createRes = await tournamentsApi.create({
@@ -420,11 +453,14 @@ export default function CreateTournamentScreen() {
         description: form.description.trim() || undefined,
         venueName: form.venueName.trim(),
         venueAddress: form.venueAddress.trim(),
+        venueLat: form.venueLat,
+        venueLng: form.venueLng,
         city: form.city.trim(),
         state: form.state.trim() || undefined,
         startDate: form.startDate,
         endDate: form.endDate,
         registrationDeadline: form.registrationDeadline,
+        initialStatus: asDraft ? 'draft' : 'registration_open',
       });
 
       const tournament = createRes.data?.data;
@@ -432,21 +468,37 @@ export default function CreateTournamentScreen() {
       const tId = tournament.id;
 
       for (const cat of form.categories) {
-        const { _id, paymentMode, advancingPerGroup, ...catInput } = cat;
+        const { _id, paymentMode, ...catInput } = cat;
         await tournamentsApi.addCategory(tId, catInput);
       }
 
       addTournament(tournament);
 
-      Alert.alert('Tournament Created!', `"${form.name}" has been created as a draft.`, [
-        {
-          text: 'Go to Dashboard',
-          onPress: () => (navigation as any).navigate('TournamentManage', { tournamentId: tId }),
+      const statusMsg = asDraft
+        ? `"${form.name}" has been saved as a draft.`
+        : `"${form.name}" is now live and open for registrations!`;
+
+      xConfirm(
+        'Tournament Created!',
+        `${statusMsg} Go to dashboard?`,
+        () => {
+          // Replace the Create screen with Dashboard so Back goes to My Events
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 1,
+              routes: [
+                { name: 'MyEvents' },
+                { name: 'TournamentManage', params: { tournamentId: tId } },
+              ],
+            })
+          );
         },
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+        'Dashboard',
+        'Back to Events',
+        () => navigation.goBack(),
+      );
     } catch (err: any) {
-      Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to save tournament');
+      xAlert('Error', err?.response?.data?.message ?? err?.message ?? 'Failed to save tournament');
     } finally {
       setSaving(false);
     }
@@ -488,48 +540,106 @@ export default function CreateTournamentScreen() {
 
   const renderStep2 = () => (
     <View>
-      <FormField
-        label="Venue Name *"
-        placeholder="e.g. DLF Sports Complex"
-        value={form.venueName}
-        onChangeText={(v) => update({ venueName: v })}
-        error={errors.venueName}
-      />
-      <FormField
-        label="Venue Address *"
-        placeholder="Full street address"
-        value={form.venueAddress}
-        onChangeText={(v) => update({ venueAddress: v })}
-        error={errors.venueAddress}
-        multiline
-      />
-      <FormField
-        label="Start Date *"
-        placeholder="YYYY-MM-DD"
+      <View style={{ marginBottom: spacing.md, zIndex: 9999 }}>
+        <Text style={fieldStyles.label}>VENUE *</Text>
+
+        {!manualVenue ? (
+          <>
+            <PlacesAutocomplete
+              initialValue={form.venueName}
+              placeholder="Search for a venue..."
+              error={errors.venueName || errors.venueAddress}
+              onSelect={(place: PlaceResult) => {
+                update({
+                  venueName: place.name,
+                  venueAddress: place.address,
+                  venueLat: place.lat || undefined,
+                  venueLng: place.lng || undefined,
+                  city: place.city || form.city,
+                  state: place.state || form.state,
+                });
+              }}
+            />
+            {form.venueAddress ? (
+              <View style={{ backgroundColor: '#F5F7FA', borderRadius: 8, padding: 10, marginTop: 4, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#1A1D21', marginBottom: 2 }}>{form.venueName}</Text>
+                <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748B' }}>{form.venueAddress}</Text>
+              </View>
+            ) : null}
+            <TouchableOpacity
+              onPress={() => setManualVenue(true)}
+              style={{ marginTop: 8 }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#2196F3' }}>
+                Can't find your venue? Enter manually →
+              </Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <FormField
+              label="Venue Name *"
+              placeholder="e.g. DLF Sports Complex"
+              value={form.venueName}
+              onChangeText={(v) => update({ venueName: v })}
+              error={errors.venueName}
+            />
+            <FormField
+              label="Venue Address *"
+              placeholder="Full street address"
+              value={form.venueAddress}
+              onChangeText={(v) => update({ venueAddress: v })}
+              error={errors.venueAddress}
+              multiline
+            />
+            <FormField
+              label="Google Maps Link"
+              placeholder="Paste Google Maps URL for exact location"
+              value={form.mapsLink ?? ''}
+              onChangeText={(v) => {
+                update({ mapsLink: v });
+                const coords = parseMapsLink(v);
+                if (coords) {
+                  update({ venueLat: coords.lat, venueLng: coords.lng });
+                }
+              }}
+              hint={form.venueLat && form.venueLng
+                ? `📍 Location: ${form.venueLat.toFixed(4)}, ${form.venueLng.toFixed(4)}`
+                : 'Paste a Google Maps link to set exact pin location'}
+              keyboardType="url"
+            />
+            <TouchableOpacity
+              onPress={() => setManualVenue(false)}
+              style={{ marginTop: -4, marginBottom: 8 }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#2196F3' }}>
+                ← Search with Google instead
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+      <DateField
+        label="START DATE"
         value={form.startDate}
-        onChangeText={(v) => update({ startDate: v })}
+        onPress={() => openDatePicker('startDate')}
         error={errors.startDate}
-        keyboardType="numbers-and-punctuation"
-        maxLength={10}
+        required
       />
-      <FormField
-        label="End Date *"
-        placeholder="YYYY-MM-DD"
+      <DateField
+        label="END DATE"
         value={form.endDate}
-        onChangeText={(v) => update({ endDate: v })}
+        onPress={() => openDatePicker('endDate')}
         error={errors.endDate}
-        keyboardType="numbers-and-punctuation"
-        maxLength={10}
+        required
       />
-      <FormField
-        label="Registration Deadline *"
-        placeholder="YYYY-MM-DD"
+      <DateField
+        label="REGISTRATION DEADLINE"
         value={form.registrationDeadline}
-        onChangeText={(v) => update({ registrationDeadline: v })}
+        onPress={() => openDatePicker('registrationDeadline')}
         error={errors.registrationDeadline}
-        keyboardType="numbers-and-punctuation"
-        maxLength={10}
         hint="Must be before start date"
+        required
       />
       <FormField
         label="Contact Phone"
@@ -615,26 +725,55 @@ export default function CreateTournamentScreen() {
               />
             </View>
           </View>
-          <View style={styles.twoCol}>
-            <View style={styles.twoColItem}>
-              <FormField
-                label="Group Size"
-                placeholder="4"
-                value={String(categoryDraft.groupSize)}
-                onChangeText={(v) => setCategoryDraft((p) => ({ ...p, groupSize: Number(v) || 4 }))}
-                keyboardType="numeric"
-              />
+          <PickerRow<string>
+            label="Tournament Format"
+            options={[
+              { label: 'Pool + Knockout', value: 'pool_knockout' },
+              { label: 'Knockout Only', value: 'knockout_only' },
+            ]}
+            selected={tournamentFormatType}
+            onSelect={(v) => {
+              const fmt = v as 'pool_knockout' | 'knockout_only';
+              setTournamentFormatType(fmt);
+              if (fmt === 'knockout_only') {
+                setCategoryDraft((p) => ({ ...p, groupSize: 0, advancingPerGroup: 0 }));
+              } else {
+                setCategoryDraft((p) => ({ ...p, groupSize: p.groupSize || 4, advancingPerGroup: p.advancingPerGroup || 2 }));
+              }
+            }}
+          />
+          {tournamentFormatType === 'pool_knockout' && (
+            <View style={styles.twoCol}>
+              <View style={styles.twoColItem}>
+                <FormField
+                  label="Group Size"
+                  placeholder="4"
+                  value={categoryDraft.groupSize ? String(categoryDraft.groupSize) : ''}
+                  onChangeText={(v) => setCategoryDraft((p) => ({ ...p, groupSize: v === '' ? 0 : parseInt(v, 10) || 0 }))}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.twoColItem}>
+                <FormField
+                  label="Advancing / Group"
+                  placeholder="2"
+                  value={categoryDraft.advancingPerGroup ? String(categoryDraft.advancingPerGroup) : ''}
+                  onChangeText={(v) => setCategoryDraft((p) => ({ ...p, advancingPerGroup: v === '' ? 0 : parseInt(v, 10) || 0 }))}
+                  keyboardType="numeric"
+                />
+              </View>
             </View>
-            <View style={styles.twoColItem}>
-              <FormField
-                label="Advancing / Group"
-                placeholder="2"
-                value={String(categoryDraft.advancingPerGroup)}
-                onChangeText={(v) => setCategoryDraft((p) => ({ ...p, advancingPerGroup: Number(v) || 2 }))}
-                keyboardType="numeric"
-              />
-            </View>
-          </View>
+          )}
+          <PickerRow<string>
+            label="Match Format"
+            options={[
+              { label: 'Single Game', value: 'best_of_1' },
+              { label: 'Best of 3', value: 'best_of_3' },
+              { label: 'Best of 5', value: 'best_of_5' },
+            ]}
+            selected={categoryDraft.matchFormat ?? 'best_of_1'}
+            onSelect={(v) => setCategoryDraft((p) => ({ ...p, matchFormat: v as any }))}
+          />
           <PickerRow<PaymentMode>
             label="Payment Mode"
             options={[
@@ -648,7 +787,7 @@ export default function CreateTournamentScreen() {
           <View style={styles.catFormActions}>
             <TouchableOpacity
               style={styles.cancelBtn}
-              onPress={() => { setShowCategoryForm(false); setCategoryDraft(INITIAL_CATEGORY); }}
+              onPress={() => { setShowCategoryForm(false); setCategoryDraft(INITIAL_CATEGORY); setTournamentFormatType('pool_knockout'); }}
             >
               <Text style={styles.cancelBtnText}>CANCEL</Text>
             </TouchableOpacity>
@@ -670,8 +809,8 @@ export default function CreateTournamentScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor={NAVY} />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: '#FFFFFF' }]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Header */}
       <View style={styles.header}>
@@ -687,8 +826,8 @@ export default function CreateTournamentScreen() {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -714,13 +853,60 @@ export default function CreateTournamentScreen() {
             ) : (
               <TouchableOpacity style={styles.nextBtn} onPress={goNext}>
                 <Text style={styles.nextBtnText}>
-                  {step < TOTAL_STEPS ? 'NEXT' : 'CREATE TOURNAMENT'}
+                  {step < TOTAL_STEPS ? 'NEXT' : 'CREATE & OPEN REGISTRATION'}
                 </Text>
               </TouchableOpacity>
             )}
           </View>
+
+          {/* Secondary "Save as Draft" link — only on final step */}
+          {step === TOTAL_STEPS && !saving && (
+            <TouchableOpacity
+              style={{ alignSelf: 'center', paddingVertical: 12, marginTop: 4 }}
+              onPress={() => {
+                if (validateStep3()) handleSave(true);
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: '700',
+                  color: '#64748B',
+                  letterSpacing: 0.5,
+                  textDecorationLine: 'underline',
+                }}
+              >
+                Save as Draft instead
+              </Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Date picker modals */}
+      <DatePickerModal
+        visible={activeDateField === 'startDate'}
+        label="SELECT START DATE"
+        value={form.startDate}
+        onConfirm={confirmDate}
+        onCancel={closeDatePicker}
+      />
+      <DatePickerModal
+        visible={activeDateField === 'endDate'}
+        label="SELECT END DATE"
+        value={form.endDate}
+        minDate={form.startDate || undefined}
+        onConfirm={confirmDate}
+        onCancel={closeDatePicker}
+      />
+      <DatePickerModal
+        visible={activeDateField === 'registrationDeadline'}
+        label="SELECT REGISTRATION DEADLINE"
+        value={form.registrationDeadline}
+        maxDate={form.startDate || undefined}
+        onConfirm={confirmDate}
+        onCancel={closeDatePicker}
+      />
     </SafeAreaView>
   );
 }
@@ -728,14 +914,15 @@ export default function CreateTournamentScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.surfaceContainerLow,
+    backgroundColor: '#FFFFFF',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
-    backgroundColor: NAVY,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) + spacing.md : spacing.md,
+    paddingBottom: spacing.md,
+    backgroundColor: 'transparent',
   },
   backBtn: {
     width: 40,
@@ -743,28 +930,31 @@ const styles = StyleSheet.create({
   },
   backBtnText: {
     fontSize: 22,
-    color: '#FFFFFF',
+    color: '#1A1D21',
     fontWeight: '300',
   },
   headerTitle: {
     flex: 1,
     fontSize: typography.fontSize.sm,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: NAVY,
     textAlign: 'center',
     letterSpacing: 2,
     textTransform: 'uppercase',
   },
   scrollContent: {
     padding: spacing.base,
-    paddingBottom: spacing['3xl'],
+    paddingBottom: 140,
   },
   formCard: {
-    backgroundColor: colors.surfaceContainerLowest,
+    backgroundColor: '#FFFFFF',
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.base,
-    ...shadows.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'visible' as any,
+    zIndex: 10,
   },
   navRow: {
     flexDirection: 'row',
@@ -775,13 +965,14 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderRadius: borderRadius.md,
     borderWidth: 1.5,
-    borderColor: NAVY,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F5F7FA',
     alignItems: 'center',
   },
   backNavBtnText: {
     fontSize: typography.fontSize.sm,
     fontWeight: '700',
-    color: NAVY,
+    color: '#1A1D21',
     letterSpacing: 1.5,
   },
   nextBtn: {
@@ -814,12 +1005,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   catCard: {
-    backgroundColor: colors.surfaceContainerLow,
+    backgroundColor: '#FFFFFF',
     borderRadius: borderRadius.md,
     padding: spacing.md,
     marginBottom: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderColor: '#E2E8F0',
   },
   catCardRow: {
     flexDirection: 'row',
@@ -831,12 +1022,12 @@ const styles = StyleSheet.create({
   catCardName: {
     fontSize: typography.fontSize.base,
     fontWeight: '700',
-    color: colors.text,
+    color: '#1A1D21',
   },
   catCardMeta: {
     fontSize: typography.fontSize.xs,
     fontWeight: '500',
-    color: colors.textTertiary,
+    color: '#64748B',
     marginTop: 2,
   },
   removeBtn: {
@@ -849,12 +1040,12 @@ const styles = StyleSheet.create({
     color: colors.error,
   },
   catForm: {
-    backgroundColor: colors.surfaceContainerLow,
+    backgroundColor: '#F5F7FA',
     borderRadius: borderRadius.md,
     padding: spacing.base,
     marginBottom: spacing.base,
     borderWidth: 1,
-    borderColor: BLUE_ACCENT,
+    borderColor: NAVY,
   },
   catFormTitle: {
     fontSize: typography.fontSize.xs,
@@ -880,13 +1071,14 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F5F7FA',
     alignItems: 'center',
   },
   cancelBtnText: {
     fontSize: typography.fontSize.xs,
     fontWeight: '700',
-    color: colors.textSecondary,
+    color: '#1A1D21',
     letterSpacing: 1,
   },
   addBtn: {
@@ -904,7 +1096,7 @@ const styles = StyleSheet.create({
   },
   addCategoryBtn: {
     borderWidth: 1.5,
-    borderColor: NAVY,
+    borderColor: '#E2E8F0',
     borderStyle: 'dashed',
     borderRadius: borderRadius.md,
     paddingVertical: spacing.md,

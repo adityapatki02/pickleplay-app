@@ -13,6 +13,8 @@ export type AuthStackParamList = {
 export type HomeStackParamList = {
   Home: undefined;
   Notifications: undefined;
+  TournamentDetail: { tournamentId: string };
+  Registration: { tournamentId: string; categoryId: string };
 };
 
 export type DiscoverStackParamList = {
@@ -113,11 +115,43 @@ export type OrganizerTabParamList = {
   ProfileTab: undefined;
 };
 
+// My Events unified stack
+export type MyEventsStackParamList = {
+  MyEvents: undefined;
+  CreateTournament: undefined;
+  TournamentManage: { tournamentId: string };
+  TournamentDetail: { tournamentId: string };
+  RegistrationManage: { tournamentId: string };
+  MatchSetup: { tournamentId: string };
+  MatchHub: { tournamentId: string };
+  Seeding: { tournamentId: string; categoryId: string };
+  BracketManage: { categoryId: string };
+  ScoreEntry: { matchId: string };
+  Schedule: { tournamentId: string };
+  Bracket: { categoryId: string };
+  PartnerSearch: { tournamentId: string };
+  Registration: { tournamentId: string; categoryId: string };
+};
+
+// Stats stack
+export type StatsStackParamList = {
+  Stats: undefined;
+};
+
+// Unified App Tab Navigator
+export type AppTabParamList = {
+  HomeTab: NavigatorScreenParams<HomeStackParamList>;
+  MyEventsTab: NavigatorScreenParams<MyEventsStackParamList>;
+  DiscoverTab: NavigatorScreenParams<DiscoverStackParamList>;
+  ProfileTab: NavigatorScreenParams<ProfileStackParamList>;
+};
+
 // Root Navigator
 export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>;
   PlayerTabs: NavigatorScreenParams<PlayerTabParamList>;
   OrgTabs: NavigatorScreenParams<OrganizerTabParamList>;
+  AppTabs: NavigatorScreenParams<AppTabParamList>;
 };
 
 // Helper types for screen props

@@ -27,8 +27,9 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError<ApiError>) => {
-    if (error.response?.status === 401) {
-      // Token expired — logout
+    // Only force logout on 401 if it's NOT a dev environment
+    // and only for non-GET requests (session expiry, not missing data)
+    if (error.response?.status === 401 && __DEV__ === false) {
       useAuthStore.getState().logout();
     }
     return Promise.reject(error);

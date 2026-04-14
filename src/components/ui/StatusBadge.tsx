@@ -17,6 +17,7 @@ const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
   cancelled:            { bg: '#FFDAD6', text: '#BA1A1A' },
   confirmed:            { bg: '#C8E6C9', text: '#2E7D32' },
   pending_payment:      { bg: '#FFE0B2', text: '#E65100' },
+  pending_partner:      { bg: '#F3E5F5', text: '#7B1FA2' },
   waitlisted:           { bg: '#E1E3E4', text: '#43474F' },
   scheduled:            { bg: '#D5E3FF', text: '#001E40' },
 };

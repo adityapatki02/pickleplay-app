@@ -14,6 +14,9 @@ export const tournamentsApi = {
   create: (data: CreateTournamentInput) =>
     apiClient.post<ApiResponse<Tournament>>('/tournaments', data),
 
+  getMyTournaments: () =>
+    apiClient.get<ApiResponse<Tournament[]>>('/my/tournaments'),
+
   list: (params?: {
     city?: string;
     status?: string;
