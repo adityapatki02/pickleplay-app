@@ -29,17 +29,14 @@ const WHITE = '#FFFFFF';
 
 // ─── Column definitions ─────────────────────────────────────────────────────
 const COLUMNS: { key: string; label: string; flex: number; bold?: boolean }[] = [
-  { key: 'rank', label: 'Rank', flex: 0.5, bold: true },
-  { key: 'team', label: 'Team', flex: 2.2, bold: true },
-  { key: 'P', label: 'P', flex: 0.6 },
-  { key: 'W', label: 'W', flex: 0.6 },
-  { key: 'L', label: 'L', flex: 0.6 },
-  { key: 'MW', label: 'MW', flex: 0.7 },
-  { key: 'ML', label: 'ML', flex: 0.7 },
-  { key: 'MP', label: 'MP', flex: 0.7 },
-  { key: 'BP', label: 'BP', flex: 0.7 },
-  { key: 'SP', label: 'SP', flex: 0.7, bold: true },
-  { key: 'PD', label: 'PD', flex: 0.7 },
+  { key: 'rank', label: '#', flex: 0.4, bold: true },
+  { key: 'team', label: 'Team', flex: 2, bold: true },
+  { key: 'P', label: 'P', flex: 0.5 },
+  { key: 'W', label: 'W', flex: 0.5 },
+  { key: 'L', label: 'L', flex: 0.5 },
+  { key: 'SP', label: 'SP', flex: 0.6, bold: true },
+  { key: 'MW', label: 'MW', flex: 0.6 },
+  { key: 'PD', label: 'PD', flex: 0.6 },
 ];
 
 // ─── Legend ──────────────────────────────────────────────────────────────────

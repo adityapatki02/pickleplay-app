@@ -133,7 +133,15 @@ const LeagueDashboardScreen: React.FC = () => {
       store.setCurrentSeason(seasonData);
       const tieList = Array.isArray(tiesData) ? tiesData : [];
       const groupList = Array.isArray(groupsData) ? groupsData : [];
-      const standingList = Array.isArray(standingsData) ? standingsData : (standingsData as any)?.groups ? [] : [];
+      // Standings API returns { groups: [{ group, standings }] } — flatten
+      let standingList: any[] = [];
+      if (Array.isArray(standingsData)) {
+        standingList = standingsData;
+      } else if ((standingsData as any)?.groups) {
+        for (const g of (standingsData as any).groups) {
+          if (g.standings) standingList.push(...g.standings);
+        }
+      }
       setTies(tieList);
       setStandings(standingList);
       setGroups(groupList);
