@@ -8,6 +8,7 @@ import {
   DiscoverStackParamList,
   MyEventsStackParamList,
   ProfileStackParamList,
+  LeagueStackParamList,
 } from './types';
 import { FloatingTabBar } from './FloatingTabBar';
 import { colors, spacing, typography } from '../config/theme';
@@ -33,6 +34,15 @@ import SeedingScreen from '../screens/organizer/SeedingScreen';
 import MatchSetupScreen from '../screens/organizer/MatchSetupScreen';
 import MatchHubScreen from '../screens/organizer/MatchHubScreen';
 import OrganizerScheduleScreen from '../screens/organizer/ScheduleScreen';
+
+// ─── LEAGUE SCREENS ───
+import CreateLeagueScreen from '../screens/league/CreateLeagueScreen';
+import FranchiseManagementScreen from '../screens/league/FranchiseManagementScreen';
+import RosterManagementScreen from '../screens/league/RosterManagementScreen';
+import GroupManagementScreen from '../screens/league/GroupManagementScreen';
+import LeagueDashboardScreen from '../screens/league/LeagueDashboardScreen';
+import TieDetailScreen from '../screens/league/TieDetailScreen';
+import StandingsScreen from '../screens/league/StandingsScreen';
 
 // ─── PROFILE SCREENS ───
 import ProfileScreen from '../screens/ProfileScreen';
@@ -104,6 +114,14 @@ const MyEventsStackNavigator = () => (
     <MyEventsStack.Screen name="PartnerSearch">
       {() => <Placeholder title="Partner Search" subtitle="Find your ideal doubles partner" />}
     </MyEventsStack.Screen>
+    {/* League screens */}
+    <MyEventsStack.Screen name="CreateLeague" component={CreateLeagueScreen} />
+    <MyEventsStack.Screen name="FranchiseManagement" component={FranchiseManagementScreen} />
+    <MyEventsStack.Screen name="RosterManagement" component={RosterManagementScreen} />
+    <MyEventsStack.Screen name="GroupManagement" component={GroupManagementScreen} />
+    <MyEventsStack.Screen name="LeagueDashboard" component={LeagueDashboardScreen} />
+    <MyEventsStack.Screen name="TieDetail" component={TieDetailScreen} />
+    <MyEventsStack.Screen name="Standings" component={StandingsScreen} />
   </MyEventsStack.Navigator>
 );
 

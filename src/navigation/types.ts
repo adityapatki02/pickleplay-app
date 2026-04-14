@@ -115,6 +115,17 @@ export type OrganizerTabParamList = {
   ProfileTab: undefined;
 };
 
+// League Stack
+export type LeagueStackParamList = {
+  CreateLeague: undefined;
+  FranchiseManagement: { leagueId: string };
+  RosterManagement: { franchiseId: string; seasonId: string };
+  GroupManagement: { leagueId: string; seasonId: string };
+  LeagueDashboard: { leagueId: string; seasonId: string };
+  TieDetail: { tieId: string };
+  Standings: { leagueId: string; seasonId: string };
+};
+
 // My Events unified stack
 export type MyEventsStackParamList = {
   MyEvents: undefined;
@@ -131,6 +142,14 @@ export type MyEventsStackParamList = {
   Bracket: { categoryId: string };
   PartnerSearch: { tournamentId: string };
   Registration: { tournamentId: string; categoryId: string };
+  // League screens (nested in MyEvents)
+  CreateLeague: undefined;
+  FranchiseManagement: { leagueId: string };
+  RosterManagement: { franchiseId: string; seasonId: string };
+  GroupManagement: { leagueId: string; seasonId: string };
+  LeagueDashboard: { leagueId: string; seasonId: string };
+  TieDetail: { tieId: string };
+  Standings: { leagueId: string; seasonId: string };
 };
 
 // Stats stack

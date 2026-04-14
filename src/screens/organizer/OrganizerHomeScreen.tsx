@@ -189,6 +189,9 @@ export default function OrganizerHomeScreen() {
   const openCreateTournament = () => {
     navigation.navigate('MyEventsTab', { screen: 'CreateTournament' });
   };
+  const openCreateLeague = () => {
+    navigation.navigate('MyEventsTab', { screen: 'CreateLeague' });
+  };
 
   // ── Render ──
   if (loading) {
@@ -340,6 +343,26 @@ export default function OrganizerHomeScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={s.fabMenuTitle}>New Tournament</Text>
                 <Text style={s.fabMenuSub}>Create and publish a new event</Text>
+              </View>
+              <Text style={s.fabMenuArrow}>›</Text>
+            </TouchableOpacity>
+
+            {/* New League option */}
+            <View style={{ height: 1, backgroundColor: '#E2E8F0', marginHorizontal: 12 }} />
+            <TouchableOpacity
+              style={s.fabMenuItem}
+              onPress={() => {
+                setShowFabMenu(false);
+                openCreateLeague();
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={[s.fabMenuIcon, { backgroundColor: '#EDE9FE' }]}>
+                <Text style={s.fabMenuIconText}>🏅</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.fabMenuTitle}>New League</Text>
+                <Text style={s.fabMenuSub}>Create a franchise league (SPPL format)</Text>
               </View>
               <Text style={s.fabMenuArrow}>›</Text>
             </TouchableOpacity>

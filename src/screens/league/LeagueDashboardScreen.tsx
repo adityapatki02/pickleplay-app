@@ -1,0 +1,706 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  SafeAreaView,
+  StatusBar,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
+import {
+  getSeason,
+  getTies,
+  getStandings,
+  getGroups,
+  getFranchises,
+  startLeaguePhase,
+} from '../../api/leagues.api';
+import { useLeagueStore } from '../../store/leagueStore';
+import { xAlert, xConfirm } from '../../utils/alert';
+import type {
+  Tie,
+  LeagueStanding,
+  LeagueGroup,
+  SeasonStatus,
+  TieStatus,
+  Franchise,
+} from '../../types/league.types';
+
+// ─── Design tokens ──────────────────────────────────────────────────────────
+const NAVY = '#001E40';
+const BLUE = '#2196F3';
+const GREEN = '#06D6A0';
+const SURFACE = '#F5F7FA';
+const BORDER = '#E2E8F0';
+const TEXT_COLOR = '#1A1D21';
+const TEXT_SUB = '#64748B';
+const TEXT_MUTED = '#94A3B8';
+const WHITE = '#FFFFFF';
+const WARN = '#FFB300';
+const RED = '#EF4444';
+const PURPLE = '#8B5CF6';
+const ORANGE = '#F97316';
+const PINK = '#EC4899';
+
+// ─── Tab definitions ────────────────────────────────────────────────────────
+const TABS = ['OVERVIEW', 'FIXTURES', 'STANDINGS'] as const;
+type Tab = (typeof TABS)[number];
+
+// ─── Phase colors ───────────────────────────────────────────────────────────
+const PHASE_CONFIG: Record<SeasonStatus, { label: string; color: string; bg: string }> = {
+  setup: { label: 'SETUP', color: TEXT_SUB, bg: '#E2E8F0' },
+  registration: { label: 'REGISTRATION', color: BLUE, bg: '#DBEAFE' },
+  league_phase: { label: 'LEAGUE PHASE', color: GREEN, bg: '#D1FAE5' },
+  knockout_phase: { label: 'KNOCKOUT', color: WARN, bg: '#FEF3C7' },
+  completed: { label: 'COMPLETED', color: NAVY, bg: '#E0E7FF' },
+};
+
+// ─── Status chip colors ─────────────────────────────────────────────────────
+const STATUS_CHIP: Record<TieStatus, { label: string; color: string; bg: string }> = {
+  scheduled: { label: 'Scheduled', color: TEXT_SUB, bg: '#F1F5F9' },
+  lineup_submitted: { label: 'Lineup In', color: BLUE, bg: '#DBEAFE' },
+  lineup_locked: { label: 'Locked', color: PURPLE, bg: '#EDE9FE' },
+  in_progress: { label: 'Live', color: ORANGE, bg: '#FFF7ED' },
+  completed: { label: 'Completed', color: GREEN, bg: '#D1FAE5' },
+  postponed: { label: 'Postponed', color: RED, bg: '#FEE2E2' },
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Component
+// ═════════════════════════════════════════════════════════════════════════════
+
+const LeagueDashboardScreen: React.FC = () => {
+  const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const { leagueId, seasonId } = route.params as { leagueId: string; seasonId: string };
+
+  const store = useLeagueStore();
+  const [activeTab, setActiveTab] = useState<Tab>('OVERVIEW');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  // Local state
+  const [ties, setTies] = useState<Tie[]>([]);
+  const [standings, setStandings] = useState<LeagueStanding[]>([]);
+  const [groups, setGroups] = useState<LeagueGroup[]>([]);
+  const [franchises, setFranchises] = useState<Franchise[]>([]);
+  const season = store.currentSeason;
+
+  // ── Data fetching ──
+  const fetchAll = useCallback(async () => {
+    try {
+      const [seasonData, tiesData, standingsData, groupsData, franchisesData] = await Promise.all([
+        getSeason(leagueId, seasonId),
+        getTies(leagueId, seasonId).catch(() => [] as Tie[]),
+        getStandings(leagueId, seasonId).catch(() => [] as LeagueStanding[]),
+        getGroups(leagueId, seasonId).catch(() => [] as LeagueGroup[]),
+        getFranchises(leagueId).catch(() => [] as Franchise[]),
+      ]);
+      store.setCurrentSeason(seasonData);
+      setTies(tiesData);
+      setStandings(standingsData);
+      setGroups(groupsData);
+      setFranchises(franchisesData);
+      store.setStandings(standingsData);
+      store.setTies(tiesData);
+      store.setGroups(groupsData);
+    } catch (err: any) {
+      xAlert('Error', err?.message || 'Failed to load league data');
+    }
+  }, [leagueId, seasonId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchAll().finally(() => setLoading(false));
+    }, [fetchAll]),
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchAll();
+    setRefreshing(false);
+  }, [fetchAll]);
+
+  // ── Helpers ──
+  const franchiseMap = React.useMemo(() => {
+    const m: Record<string, Franchise> = {};
+    franchises.forEach((f) => (m[f.id] = f));
+    return m;
+  }, [franchises]);
+
+  const teamName = (id: string) => franchiseMap[id]?.shortName || franchiseMap[id]?.name || '—';
+
+  const completedTies = ties.filter((t) => t.status === 'completed');
+  const upcomingTies = ties.filter((t) => t.status !== 'completed' && t.status !== 'postponed');
+
+  const tiesByRound = React.useMemo(() => {
+    const map = new Map<string, Tie[]>();
+    ties.forEach((t) => {
+      const arr = map.get(t.round) || [];
+      arr.push(t);
+      map.set(t.round, arr);
+    });
+    return Array.from(map.entries()).sort((a, b) => {
+      const numA = parseInt(a[0].replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt(b[0].replace(/\D/g, ''), 10) || 0;
+      return numA - numB;
+    });
+  }, [ties]);
+
+  const standingsByGroup = React.useMemo(() => {
+    const map = new Map<string, LeagueStanding[]>();
+    standings.forEach((s) => {
+      const arr = map.get(s.groupId) || [];
+      arr.push(s);
+      map.set(s.groupId, arr);
+    });
+    // Sort each group by rank/standing points
+    map.forEach((arr) => {
+      arr.sort((a, b) => (a.rank || 999) - (b.rank || 999));
+    });
+    return map;
+  }, [standings]);
+
+  const groupName = (groupId: string) => groups.find((g) => g.id === groupId)?.name || groupId;
+
+  // ── Actions ──
+  const handleStartLeague = () => {
+    xConfirm(
+      'Start League Phase',
+      'This will generate fixtures for all groups. Continue?',
+      async () => {
+        setActionLoading(true);
+        try {
+          await startLeaguePhase(leagueId, seasonId);
+          xAlert('Success', 'League phase started! Fixtures have been generated.');
+          await fetchAll();
+        } catch (err: any) {
+          xAlert('Error', err?.response?.data?.message || err?.message || 'Failed to start league');
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    );
+  };
+
+  // ─── RENDERS ──────────────────────────────────────────────────────────────
+
+  const renderPhaseBar = () => {
+    if (!season) return null;
+    const phase = PHASE_CONFIG[season.status] || PHASE_CONFIG.setup;
+    return (
+      <View style={[styles.phaseBanner, { backgroundColor: phase.bg }]}>
+        <Text style={[styles.phaseLabel, { color: phase.color }]}>{phase.label}</Text>
+        <Text style={[styles.phaseSubtext, { color: phase.color }]}>
+          {season.name}
+        </Text>
+      </View>
+    );
+  };
+
+  const renderQuickStats = () => {
+    const totalTies = ties.length;
+    const played = completedTies.length;
+    const remaining = totalTies - played;
+    // Find top team
+    const sorted = [...standings].sort((a, b) => b.standingPoints - a.standingPoints);
+    const topTeam = sorted[0] ? teamName(sorted[0].franchiseId) : '—';
+
+    const stats = [
+      { label: 'Franchises', value: String(franchises.length) },
+      { label: 'Ties Played', value: String(played) },
+      { label: 'Remaining', value: String(remaining) },
+      { label: 'Top Team', value: topTeam },
+    ];
+
+    return (
+      <View style={styles.statsRow}>
+        {stats.map((s, i) => (
+          <View key={i} style={styles.statPill}>
+            <Text style={styles.statValue}>{s.value}</Text>
+            <Text style={styles.statLabel}>{s.label}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  const renderTieCard = (tie: Tie, compact = false) => {
+    const chipCfg = STATUS_CHIP[tie.status] || STATUS_CHIP.scheduled;
+    return (
+      <TouchableOpacity
+        key={tie.id}
+        style={styles.tieCard}
+        activeOpacity={0.7}
+        onPress={() => navigation.navigate('TieDetail', { tieId: tie.id })}
+      >
+        <View style={styles.tieCardHeader}>
+          <View style={styles.roundBadge}>
+            <Text style={styles.roundBadgeText}>{tie.round}</Text>
+          </View>
+          <View style={[styles.statusChip, { backgroundColor: chipCfg.bg }]}>
+            <Text style={[styles.statusChipText, { color: chipCfg.color }]}>{chipCfg.label}</Text>
+          </View>
+        </View>
+
+        <View style={styles.tieMatchup}>
+          <Text style={styles.tieTeamName}>{tie.homeTeam?.name || teamName(tie.homeTeamId)}</Text>
+          {tie.status === 'completed' ? (
+            <View style={styles.tieScoreBox}>
+              <Text style={styles.tieScoreText}>
+                {tie.homeScore} - {tie.awayScore}
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.tieVsText}>vs</Text>
+          )}
+          <Text style={styles.tieTeamName}>{tie.awayTeam?.name || teamName(tie.awayTeamId)}</Text>
+        </View>
+
+        {tie.status === 'completed' && (tie.homeBonusPoints > 0 || tie.awayBonusPoints > 0) && (
+          <View style={styles.tieBonusRow}>
+            <Text style={styles.tieBonusText}>+{tie.homeBonusPoints} bonus</Text>
+            <Text style={styles.tieBonusText}>+{tie.awayBonusPoints} bonus</Text>
+          </View>
+        )}
+
+        {tie.matchDay && (
+          <Text style={styles.tieDateText}>
+            {new Date(tie.matchDay).toLocaleDateString('en-IN', {
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+            })}
+          </Text>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  // ── OVERVIEW TAB ──
+  const renderOverview = () => (
+    <ScrollView
+      contentContainerStyle={styles.tabContent}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
+      {renderPhaseBar()}
+      {renderQuickStats()}
+
+      {/* Upcoming Ties */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Upcoming Ties</Text>
+      </View>
+      {upcomingTies.length === 0 ? (
+        <Text style={styles.emptyText}>No upcoming ties</Text>
+      ) : (
+        upcomingTies.slice(0, 3).map((t) => renderTieCard(t))
+      )}
+
+      {/* Recent Results */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Recent Results</Text>
+      </View>
+      {completedTies.length === 0 ? (
+        <Text style={styles.emptyText}>No results yet</Text>
+      ) : (
+        completedTies.slice(-3).reverse().map((t) => renderTieCard(t))
+      )}
+
+      {/* Action: Start League */}
+      {season?.status === 'registration' && (
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={handleStartLeague}
+          disabled={actionLoading}
+        >
+          {actionLoading ? (
+            <ActivityIndicator color={WHITE} />
+          ) : (
+            <Text style={styles.primaryBtnText}>GENERATE FIXTURES & START LEAGUE</Text>
+          )}
+        </TouchableOpacity>
+      )}
+
+      <View style={{ height: 40 }} />
+    </ScrollView>
+  );
+
+  // ── FIXTURES TAB ──
+  const renderFixtures = () => (
+    <ScrollView
+      contentContainerStyle={styles.tabContent}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
+      {season?.status === 'registration' && (
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={handleStartLeague}
+          disabled={actionLoading}
+        >
+          {actionLoading ? (
+            <ActivityIndicator color={WHITE} />
+          ) : (
+            <Text style={styles.primaryBtnText}>GENERATE FIXTURES</Text>
+          )}
+        </TouchableOpacity>
+      )}
+
+      {ties.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyTitle}>No Fixtures Yet</Text>
+          <Text style={styles.emptyText}>
+            Start the league phase to generate fixtures for all groups.
+          </Text>
+        </View>
+      ) : (
+        tiesByRound.map(([round, roundTies]) => (
+          <View key={round}>
+            <View style={styles.roundHeader}>
+              <View style={styles.roundDot} />
+              <Text style={styles.roundHeaderText}>{round}</Text>
+              <View style={styles.roundLine} />
+            </View>
+            {roundTies.map((t) => renderTieCard(t))}
+          </View>
+        ))
+      )}
+      <View style={{ height: 40 }} />
+    </ScrollView>
+  );
+
+  // ── STANDINGS TAB ──
+  const renderStandingsTab = () => {
+    const groupEntries = Array.from(standingsByGroup.entries());
+    return (
+      <ScrollView
+        contentContainerStyle={styles.tabContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {groupEntries.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyTitle}>No Standings</Text>
+            <Text style={styles.emptyText}>Standings will appear once matches are played.</Text>
+          </View>
+        ) : (
+          groupEntries.map(([gId, rows]) => (
+            <View key={gId} style={styles.groupSection}>
+              <View style={styles.groupHeader}>
+                <Text style={styles.groupHeaderText}>{groupName(gId)}</Text>
+              </View>
+              {/* Table header */}
+              <View style={styles.tableHeaderRow}>
+                <Text style={[styles.tableHeaderCell, { flex: 0.4 }]}>#</Text>
+                <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Team</Text>
+                <Text style={styles.tableHeaderCell}>P</Text>
+                <Text style={styles.tableHeaderCell}>W</Text>
+                <Text style={styles.tableHeaderCell}>L</Text>
+                <Text style={styles.tableHeaderCell}>MW</Text>
+                <Text style={styles.tableHeaderCell}>SP</Text>
+                <Text style={styles.tableHeaderCell}>PD</Text>
+              </View>
+              {/* Table rows */}
+              {rows.map((row, idx) => {
+                const qualified = idx < 4;
+                return (
+                  <View
+                    key={row.id}
+                    style={[
+                      styles.tableRow,
+                      qualified && styles.tableRowQualified,
+                      idx === rows.length - 1 && { borderBottomWidth: 0 },
+                    ]}
+                  >
+                    <Text style={[styles.tableCell, { flex: 0.4, fontWeight: '700' }]}>
+                      {row.rank || idx + 1}
+                    </Text>
+                    <Text style={[styles.tableCell, { flex: 2, fontWeight: '600' }]} numberOfLines={1}>
+                      {teamName(row.franchiseId)}
+                    </Text>
+                    <Text style={styles.tableCell}>{row.tiesPlayed}</Text>
+                    <Text style={styles.tableCell}>{row.tiesWon}</Text>
+                    <Text style={styles.tableCell}>{row.tiesLost}</Text>
+                    <Text style={styles.tableCell}>{row.matchesWon}</Text>
+                    <Text style={[styles.tableCell, { fontWeight: '700', color: NAVY }]}>
+                      {row.standingPoints}
+                    </Text>
+                    <Text style={styles.tableCell}>
+                      {row.pointDiff > 0 ? `+${row.pointDiff}` : row.pointDiff}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          ))
+        )}
+
+        <TouchableOpacity
+          style={styles.secondaryBtn}
+          onPress={() => navigation.navigate('Standings', { leagueId, seasonId })}
+        >
+          <Text style={styles.secondaryBtnText}>VIEW FULL STANDINGS</Text>
+        </TouchableOpacity>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    );
+  };
+
+  // ─── MAIN RENDER ──────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.root}>
+        <StatusBar barStyle="light-content" backgroundColor={NAVY} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={BLUE} />
+          <Text style={styles.loadingText}>Loading league data...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor={NAVY} />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backBtnText}>{'<'}</Text>
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {store.currentLeague?.name || 'League'}
+          </Text>
+          <Text style={styles.headerSubtitle}>{season?.name || 'Season'}</Text>
+        </View>
+        <View style={{ width: 40 }} />
+      </View>
+
+      {/* Tab Bar */}
+      <View style={styles.tabBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBarInner}>
+          {TABS.map((tab) => {
+            const active = activeTab === tab;
+            return (
+              <TouchableOpacity
+                key={tab}
+                style={[styles.tabChip, active && styles.tabChipActive]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>{tab}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* Tab Content */}
+      {activeTab === 'OVERVIEW' && renderOverview()}
+      {activeTab === 'FIXTURES' && renderFixtures()}
+      {activeTab === 'STANDINGS' && renderStandingsTab()}
+    </SafeAreaView>
+  );
+};
+
+export default LeagueDashboardScreen;
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Styles
+// ═════════════════════════════════════════════════════════════════════════════
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: SURFACE },
+
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 12, fontSize: 14, color: TEXT_SUB },
+
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: NAVY,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  backBtnText: { color: WHITE, fontSize: 22, fontWeight: '700' },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle: { color: WHITE, fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
+  headerSubtitle: { color: TEXT_MUTED, fontSize: 12, marginTop: 2 },
+
+  // Tab bar
+  tabBar: { backgroundColor: WHITE, borderBottomWidth: 1, borderBottomColor: BORDER },
+  tabBarInner: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+  tabChip: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: SURFACE,
+  },
+  tabChipActive: { backgroundColor: NAVY },
+  tabChipText: { fontSize: 13, fontWeight: '700', color: TEXT_SUB, letterSpacing: 0.5 },
+  tabChipTextActive: { color: WHITE },
+
+  // Tab content
+  tabContent: { padding: 16, paddingBottom: 120 },
+
+  // Phase banner
+  phaseBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  phaseLabel: { fontSize: 14, fontWeight: '800', letterSpacing: 1 },
+  phaseSubtext: { fontSize: 13, fontWeight: '500' },
+
+  // Quick stats
+  statsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 24,
+  },
+  statPill: {
+    flex: 1,
+    backgroundColor: WHITE,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  statValue: { fontSize: 20, fontWeight: '800', color: NAVY },
+  statLabel: { fontSize: 10, fontWeight: '600', color: TEXT_SUB, marginTop: 4, letterSpacing: 0.3 },
+
+  // Section header
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, marginTop: 8 },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: NAVY, letterSpacing: -0.2 },
+
+  // Tie card
+  tieCard: {
+    backgroundColor: WHITE,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  tieCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  roundBadge: {
+    backgroundColor: SURFACE,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  roundBadgeText: { fontSize: 11, fontWeight: '700', color: TEXT_SUB, letterSpacing: 0.5 },
+  statusChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+  statusChipText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
+
+  tieMatchup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  tieTeamName: { flex: 1, fontSize: 15, fontWeight: '700', color: TEXT_COLOR, textAlign: 'center' },
+  tieVsText: { fontSize: 12, fontWeight: '600', color: TEXT_MUTED, marginHorizontal: 8 },
+  tieScoreBox: {
+    backgroundColor: NAVY,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginHorizontal: 8,
+  },
+  tieScoreText: { fontSize: 16, fontWeight: '800', color: WHITE },
+
+  tieBonusRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  tieBonusText: { fontSize: 11, fontWeight: '600', color: GREEN },
+  tieDateText: { fontSize: 11, color: TEXT_SUB, marginTop: 8, textAlign: 'center' },
+
+  // Round header (fixtures)
+  roundHeader: { flexDirection: 'row', alignItems: 'center', marginTop: 20, marginBottom: 12 },
+  roundDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: BLUE, marginRight: 8 },
+  roundHeaderText: { fontSize: 14, fontWeight: '800', color: NAVY, letterSpacing: 0.3 },
+  roundLine: { flex: 1, height: 1, backgroundColor: BORDER, marginLeft: 12 },
+
+  // Standings table
+  groupSection: {
+    backgroundColor: WHITE,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  groupHeader: {
+    backgroundColor: NAVY,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  groupHeaderText: { color: WHITE, fontSize: 14, fontWeight: '800', letterSpacing: 0.5 },
+  tableHeaderRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: SURFACE,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
+  tableHeaderCell: {
+    flex: 1,
+    fontSize: 10,
+    fontWeight: '700',
+    color: TEXT_SUB,
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
+  tableRowQualified: { backgroundColor: '#F0FDF4' },
+  tableCell: {
+    flex: 1,
+    fontSize: 13,
+    color: TEXT_COLOR,
+    textAlign: 'center',
+  },
+
+  // Buttons
+  primaryBtn: {
+    backgroundColor: GREEN,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  primaryBtnText: { color: NAVY, fontSize: 14, fontWeight: '800', letterSpacing: 0.5 },
+  secondaryBtn: {
+    backgroundColor: WHITE,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 8,
+    borderWidth: 1.5,
+    borderColor: NAVY,
+  },
+  secondaryBtnText: { color: NAVY, fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
+
+  // Empty
+  emptyContainer: { alignItems: 'center', paddingVertical: 40 },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: TEXT_COLOR, marginBottom: 6 },
+  emptyText: { fontSize: 13, color: TEXT_SUB, textAlign: 'center' },
+});
