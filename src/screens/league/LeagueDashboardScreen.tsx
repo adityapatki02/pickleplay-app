@@ -345,7 +345,7 @@ const LeagueDashboardScreen: React.FC = () => {
           {tie.status === 'completed' ? (
             <View style={styles.tieScoreBox}>
               <Text style={styles.tieScoreText}>
-                {tie.homeScore} - {tie.awayScore}
+                {tie.homeStandingPoints} - {tie.awayStandingPoints}
               </Text>
             </View>
           ) : (
