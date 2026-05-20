@@ -39,3 +39,39 @@ export function xConfirm(
     ]);
   }
 }
+
+/**
+ * Cross-platform prompt for a single text value. Returns entered string (or null if cancelled).
+ * On web: window.prompt. On iOS: Alert.prompt. On Android: falls back to Alert with "OK" (Android
+ * has no native prompt — caller should use a full <TextInput> modal for real Android prompts).
+ */
+export function xPrompt(
+  title: string,
+  message: string,
+  onSubmit: (value: string) => void,
+  opts?: { placeholder?: string; defaultValue?: string; keyboardType?: 'default' | 'number-pad' },
+) {
+  const { defaultValue = '' } = opts || {};
+  if (Platform.OS === 'web') {
+    // eslint-disable-next-line no-restricted-globals
+    const result = prompt(`${title}\n\n${message}`, defaultValue);
+    if (result !== null) onSubmit(result);
+    return;
+  }
+  if (Platform.OS === 'ios' && (Alert as any).prompt) {
+    (Alert as any).prompt(
+      title,
+      message,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'OK', onPress: (text: string) => onSubmit(text ?? '') },
+      ],
+      'plain-text',
+      defaultValue,
+      opts?.keyboardType === 'number-pad' ? 'number-pad' : undefined,
+    );
+    return;
+  }
+  // Android fallback — just warn, caller should build a full modal
+  Alert.alert(title, message + '\n\n(Not supported on Android — use modal form.)');
+}

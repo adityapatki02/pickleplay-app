@@ -136,6 +136,46 @@ export const completeTie = (tieId: string) =>
 export const getTieScoreboard = (tieId: string) =>
   apiClient.get(`/ties/${tieId}/scoreboard`).then((r) => (r.data as any)?.data ?? r.data);
 
+/**
+ * Replace `oldPlayerId` with `newPlayerId` on the chosen side across every
+ * still-scheduled match in this tie. In-progress and completed matches are
+ * preserved. Auth: admin or the tie's assigned scorer (enforced server-side
+ * via `verifyTieScoreAccess`).
+ */
+export const substitutePlayer = (
+  tieId: string,
+  body: { team: 'home' | 'away'; oldPlayerId: string; newPlayerId: string },
+): Promise<{ updatedMatches: number; skippedMatches: number }> =>
+  apiClient
+    .post(`/ties/${tieId}/substitute`, body)
+    .then((r) => (r.data as any)?.data ?? r.data);
+
+/**
+ * Admin-only: replace ONE player in ONE slot on ONE side. Updates the
+ * tie_sheet always, and tie_match if locked + match not yet started.
+ */
+export const adminSwapSlotPlayer = (
+  tieId: string,
+  body: {
+    team: 'home' | 'away';
+    slotNumber: number;
+    position: 'player1' | 'player2';
+    newPlayerId: string;
+  },
+): Promise<{
+  tieId: string;
+  team: 'home' | 'away';
+  slotNumber: number;
+  position: 'player1' | 'player2';
+  sheetUpdated: boolean;
+  matchUpdated: boolean;
+  matchSkipped: boolean;
+  skipReason?: string;
+}> =>
+  apiClient
+    .post(`/ties/${tieId}/admin-swap-slot-player`, body)
+    .then((r) => (r.data as any)?.data ?? r.data);
+
 // ═══════════════════════════════════════════════════════════════════════
 // Tie Sheets (Phase 2)
 // ═══════════════════════════════════════════════════════════════════════
@@ -163,8 +203,265 @@ export const getStandings = (leagueId: string, seasonId: string) =>
 // Knockout (Phase 3)
 // ═══════════════════════════════════════════════════════════════════════
 
-export const generateKnockout = (leagueId: string, seasonId: string) =>
-  apiClient.post(`/leagues/${leagueId}/seasons/${seasonId}/generate-knockout`).then((r) => (r.data as any)?.data ?? r.data);
+export const generateKnockout = (
+  leagueId: string,
+  seasonId: string,
+  overrides?: {
+    ab1?: string; ab2?: string; ab3?: string; ab4?: string;
+    cd1?: string; cd2?: string; cd3?: string; cd4?: string;
+  },
+) =>
+  apiClient.post(`/leagues/${leagueId}/seasons/${seasonId}/generate-knockout`, overrides || {}).then((r) => (r.data as any)?.data ?? r.data);
 
 export const getKnockoutBracket = (leagueId: string, seasonId: string) =>
   apiClient.get<KnockoutBracketData>(`/leagues/${leagueId}/seasons/${seasonId}/knockout`).then((r) => (r.data as any)?.data ?? r.data);
+
+export const resetKnockout = (leagueId: string, seasonId: string) =>
+  apiClient.post(`/leagues/${leagueId}/seasons/${seasonId}/reset-knockout`).then((r) => (r.data as any)?.data ?? r.data);
+
+/**
+ * Full season reset — wipes ties, matches, standings, stats, fantasy picks.
+ * Preserves league/season config, groups, rosters, admin/scorer grants.
+ * Admin confirms destructive action before calling.
+ */
+export const resetSeason = (leagueId: string, seasonId: string) =>
+  apiClient.post(`/leagues/${leagueId}/seasons/${seasonId}/reset-season`).then((r) => r.data as any);
+
+/**
+ * Reset a single COMPLETED league tie back to scheduled state. Used for
+ * pre-tournament rehearsal so organizers can replay the same tie without
+ * touching the rest of the season. Refused for knockout ties and
+ * non-completed ties on the backend. Re-triggers standings + stats + fantasy
+ * recalculations so the two teams' totals back out the tie's contribution.
+ */
+export const resetLeagueTie = (
+  leagueId: string,
+  seasonId: string,
+  tieId: string,
+): Promise<{ tieId: string; seasonId: string; matchesReset: number }> =>
+  apiClient.post(`/leagues/${leagueId}/seasons/${seasonId}/ties/${tieId}/reset-tie`).then((r) => (r.data as any)?.data ?? r.data);
+
+/**
+ * Apply the official SPPL 2026 schedule (date / time / court) to every
+ * league + knockout tie. Server reads from the rulebook PDF data baked
+ * into `sppl-default-schedule.const.ts`. Returns counts + any unmatched
+ * fixtures so the admin can verify nothing was missed.
+ */
+export const applyDefaultSchedule = (
+  leagueId: string,
+  seasonId: string,
+): Promise<{
+  leagueApplied: number;
+  knockoutApplied: number;
+  leagueUnmatched: string[];
+  knockoutUnmatched: string[];
+}> =>
+  apiClient
+    .post(`/leagues/${leagueId}/seasons/${seasonId}/apply-default-schedule`)
+    .then((r) => {
+      const body = r.data as any;
+      // Service returns the result spread directly into the response body
+      // (see tie.controller.ts), so unwrap defensively.
+      return body?.data ?? body;
+    });
+
+// ═══════════════════════════════════════════════════════════════════════
+// Default Lineups (fallback when captain misses deadline)
+// ═══════════════════════════════════════════════════════════════════════
+
+export const importDefaultLineupsCSV = (leagueId: string, seasonId: string, csvData: string) =>
+  apiClient.post(`/leagues/${leagueId}/seasons/${seasonId}/default-lineups/import-csv`, { csvData }).then((r) => (r.data as any)?.data ?? r.data);
+
+export const getAllDefaultLineups = (leagueId: string, seasonId: string) =>
+  apiClient.get(`/leagues/${leagueId}/seasons/${seasonId}/default-lineups`).then((r) => (r.data as any)?.data ?? r.data);
+
+export const getFranchiseDefaultLineups = (leagueId: string, seasonId: string, franchiseId: string) =>
+  apiClient.get(`/leagues/${leagueId}/seasons/${seasonId}/default-lineups/${franchiseId}`).then((r) => (r.data as any)?.data ?? r.data);
+
+export const setDefaultLineupSlot = (
+  leagueId: string,
+  seasonId: string,
+  franchiseId: string,
+  slot: number,
+  player1Id: string,
+  player2Id: string,
+) =>
+  apiClient
+    .post(`/leagues/${leagueId}/seasons/${seasonId}/default-lineups/${franchiseId}/slot/${slot}`, {
+      player1Id,
+      player2Id,
+    })
+    .then((r) => (r.data as any)?.data ?? r.data);
+
+export const autoApplyDefaultLineups = (leagueId: string, seasonId: string) =>
+  apiClient.post(`/leagues/${leagueId}/seasons/${seasonId}/default-lineups/auto-apply`).then((r) => (r.data as any)?.data ?? r.data);
+
+// ═══════════════════════════════════════════════════════════════════════
+// Player Stats
+// ═══════════════════════════════════════════════════════════════════════
+
+export const getAllPlayerStats = (leagueId: string, seasonId: string) =>
+  apiClient.get(`/leagues/${leagueId}/seasons/${seasonId}/player-stats`).then((r) => (r.data as any)?.data ?? r.data);
+
+export const getPlayerStat = (leagueId: string, seasonId: string, playerId: string) =>
+  apiClient.get(`/leagues/${leagueId}/seasons/${seasonId}/player-stats/${playerId}`).then((r) => (r.data as any)?.data ?? r.data);
+
+export const getTopPerformers = (
+  leagueId: string,
+  seasonId: string,
+  params?: { metric?: string; category?: string; limit?: number; stage?: string },
+) =>
+  apiClient
+    .get(`/leagues/${leagueId}/seasons/${seasonId}/player-stats/top/performers`, { params })
+    .then((r) => (r.data as any)?.data ?? r.data);
+
+export const getLifetimeStats = (playerId: string) =>
+  apiClient.get(`/players/${playerId}/lifetime-stats`).then((r) => (r.data as any)?.data ?? r.data);
+
+export const getPlayerBasicInfo = (playerId: string) =>
+  apiClient.get(`/players/${playerId}`).then((r) => (r.data as any)?.data ?? r.data);
+
+export const getPlayerMatches = (playerId: string, opts?: { seasonId?: string; limit?: number }) =>
+  apiClient
+    .get(`/players/${playerId}/matches`, { params: opts })
+    .then((r) => (r.data as any)?.data ?? r.data);
+
+export const recalculatePlayerStats = (leagueId: string, seasonId: string) =>
+  apiClient.post(`/leagues/${leagueId}/seasons/${seasonId}/player-stats/recalculate`).then((r) => (r.data as any)?.data ?? r.data);
+
+/** Recalculate league standings — re-aggregates rally totals, match wins, etc. from all completed ties. */
+export const recalculateStandings = (leagueId: string, seasonId: string) =>
+  apiClient.post(`/leagues/${leagueId}/seasons/${seasonId}/recalculate`).then((r) => (r.data as any)?.data ?? r.data);
+
+/** Backfill user.gender from roster category + optional teen CSV (for Teen-F/Teen-M split). */
+export const backfillGender = (leagueId: string, seasonId: string, teenCsvData?: string) =>
+  apiClient
+    .post(`/leagues/${leagueId}/seasons/${seasonId}/backfill-gender`, { teenCsvData })
+    .then((r) => (r.data as any)?.data ?? r.data);
+
+// ═══════════════════════════════════════════════════════════════════════
+// Scorers (league-scoped)
+// ═══════════════════════════════════════════════════════════════════════
+
+export const listScorers = (leagueId: string) =>
+  apiClient.get(`/leagues/${leagueId}/scorers`).then((r) => (r.data as any)?.data ?? r.data);
+
+export const addScorer = (leagueId: string, name: string, phone: string, pin: string) =>
+  apiClient.post(`/leagues/${leagueId}/scorers`, { name, phone, pin }).then((r) => (r.data as any)?.data ?? r.data);
+
+export const resetScorerPin = (leagueId: string, scorerUserId: string, pin: string) =>
+  apiClient.post(`/leagues/${leagueId}/scorers/${scorerUserId}/reset-pin`, { pin }).then((r) => (r.data as any)?.data ?? r.data);
+
+export const removeScorer = (leagueId: string, scorerUserId: string) =>
+  apiClient.delete(`/leagues/${leagueId}/scorers/${scorerUserId}`).then((r) => (r.data as any)?.data ?? r.data);
+
+export const sendScorerInvite = (leagueId: string, scorerUserId: string) =>
+  apiClient.post(`/leagues/${leagueId}/scorers/${scorerUserId}/send-invite`, {}).then((r) => (r.data as any)?.data ?? r.data);
+
+// ═══════════════════════════════════════════════════════════════════════
+// League Admins — co-organizers with operational powers
+// ═══════════════════════════════════════════════════════════════════════
+
+export type LeagueAdminRow = {
+  id: string | null;
+  userId: string;
+  name: string;
+  phone: string;
+  isOwner: boolean;
+  addedAt: string | null;
+};
+
+export const listLeagueAdmins = (leagueId: string): Promise<LeagueAdminRow[]> =>
+  apiClient.get(`/leagues/${leagueId}/admins`).then((r) => (r.data as any)?.data ?? r.data);
+
+export const addLeagueAdmin = (leagueId: string, name: string, phone: string) =>
+  apiClient.post(`/leagues/${leagueId}/admins`, { name, phone }).then((r) => (r.data as any)?.data ?? r.data);
+
+export const removeLeagueAdmin = (leagueId: string, adminUserId: string) =>
+  apiClient.delete(`/leagues/${leagueId}/admins/${adminUserId}`).then((r) => (r.data as any)?.data ?? r.data);
+
+// ═══════════════════════════════════════════════════════════════════════
+// Tie config (admin) — court, time, points, games
+// ═══════════════════════════════════════════════════════════════════════
+
+export type TieConfigUpdate = {
+  tieId: string;
+  matchDay?: string;
+  scheduledStart?: string;
+  notes?: string; // free-text court label shown in the overlay footer
+  pointsToWin?: number; // 11, 15, 21
+  gamesPerMatch?: number; // 1, 3, 5
+  /** Court number (1, 2, 3...) — drives persistent overlay URLs for streaming. null clears. */
+  courtNumber?: number | null;
+  /** Manually set home/away team on a tie (used for knockout stage confirmations). null to clear. */
+  homeTeamId?: string | null;
+  awayTeamId?: string | null;
+  /** Assigned scorer userId. null to unassign. */
+  scorerId?: string | null;
+};
+
+export const bulkUpdateTies = (_leagueId: string, updates: TieConfigUpdate[]) =>
+  apiClient
+    .post(`/ties/bulk-update`, { updates })
+    .then((r) => (r.data as any)?.data ?? r.data);
+
+// ═══════════════════════════════════════════════════════════════════════
+// Admin match scoring (in-app score modal — TieDetailScreen)
+// Mirrors scorer portal endpoints but authed via Firebase admin JWT.
+// ═══════════════════════════════════════════════════════════════════════
+
+/** Push an in-progress score. Overlay picks it up within ~3s. Match set to in_progress. */
+export const adminLiveScore = (tieId: string, matchId: string, teamAScore: number, teamBScore: number) =>
+  apiClient
+    .post(`/ties/${tieId}/matches/${matchId}/live-score`, { teamAScore, teamBScore })
+    .then((r) => (r.data as any)?.data ?? r.data);
+
+/** Finalize a match with a manually-picked winner (score must be valid for scoringMode). */
+export const adminFinalizeMatch = (
+  tieId: string,
+  matchId: string,
+  teamAScore: number,
+  teamBScore: number,
+  winnerId: string,
+) =>
+  apiClient
+    .post(`/ties/${tieId}/matches/${matchId}/finalize`, { teamAScore, teamBScore, winnerId })
+    .then((r) => (r.data as any)?.data ?? r.data);
+
+/** Emergency: declare winner at any score (forfeit/injury/decision). */
+export const adminDeclareWinner = (
+  tieId: string,
+  matchId: string,
+  winnerId: string,
+  teamAScore = 0,
+  teamBScore = 0,
+) =>
+  apiClient
+    .post(`/ties/${tieId}/matches/${matchId}/declare-winner`, { winnerId, teamAScore, teamBScore })
+    .then((r) => (r.data as any)?.data ?? r.data);
+
+// ═══════════════════════════════════════════════════════════════════════
+// Notifications
+// ═══════════════════════════════════════════════════════════════════════
+
+export const sendCaptainPortalLinks = (leagueId: string) =>
+  apiClient.post(`/leagues/${leagueId}/notify/captain-links`).then((r) => (r.data as any)?.data ?? r.data);
+
+export const setCaptain = (franchiseId: string, captainName: string, captainPhone: string) =>
+  apiClient.post(`/franchises/${franchiseId}/set-captain`, { captainName, captainPhone }).then((r) => (r.data as any)?.data ?? r.data);
+
+export const sendCaptainLinkToOne = (franchiseId: string) =>
+  apiClient.post(`/franchises/${franchiseId}/notify/captain-link`).then((r) => (r.data as any)?.data ?? r.data);
+
+// Default-lineup deadline reminders — uses the dedicated DEFAULT_LINEUP_REMINDER
+// template (Twilio HX57eb08…) but reuses the same {{3}}=captain token variable
+// so the reminder lands the captain on the same portal page.
+export const sendDefaultLineupReminderToOne = (franchiseId: string) =>
+  apiClient
+    .post(`/franchises/${franchiseId}/notify/default-lineup-reminder`)
+    .then((r) => (r.data as any)?.data ?? r.data);
+
+export const sendDefaultLineupReminders = (leagueId: string) =>
+  apiClient
+    .post(`/leagues/${leagueId}/notify/default-lineup-reminders`)
+    .then((r) => (r.data as any)?.data ?? r.data);
