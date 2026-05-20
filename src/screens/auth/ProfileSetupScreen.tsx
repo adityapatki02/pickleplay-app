@@ -12,17 +12,14 @@ import {
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/types';
-import { colors, typography, spacing, borderRadius, shadows } from '../../config/theme';
 import { useAuthStore } from '../../store/authStore';
 import { authApi } from '../../api/auth.api';
 import { SkillLevel } from '../../types';
+import { YColors, YFonts } from '../../config/yoiden';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'ProfileSetup'>;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const NAVY = '#001E40';
-const LOGO_HEIGHT = 120;
-const STATUS_BAR_HEIGHT = Platform.OS === 'ios' ? 44 : 24;
 
 const SKILL_LEVELS: { value: SkillLevel; label: string; rating: string }[] = [
   { value: 'beginner', label: 'BEGINNER', rating: '2.0 - 2.5' },
@@ -66,300 +63,322 @@ export const ProfileSetupScreen: React.FC<Props> = () => {
   };
 
   return (
-    <View style={styles.outerContainer}>
-      {/* Dark navy header with logo — full-width edge-to-edge */}
-      <View style={styles.logoSection}>
+    <View style={s.outer}>
+      {/* Editorial logo header */}
+      <View style={s.logoHeader}>
+        <View style={s.sideStripe} />
         <Image
           source={require('../../../assets/Logo.png')}
-          style={styles.headerIcon}
+          style={s.iconMark}
           resizeMode="contain"
         />
-        <View style={styles.stepBadge}>
-          <Text style={styles.stepText}>STEP 1 OF 1</Text>
+        <Image
+          source={require('../../../assets/name_logo.png')}
+          style={s.wordMark}
+          resizeMode="contain"
+        />
+        <View style={s.stepBadge}>
+          <Text style={s.stepText}>STEP 1 OF 1</Text>
         </View>
       </View>
 
-      {/* White scrollable content card with rounded top corners */}
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        style={s.scroll}
+        contentContainerStyle={s.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Title */}
-        <Text style={styles.title}>BUILD YOUR{'\n'}PLAYER PROFILE.</Text>
-        <Text style={styles.subtitle}>
-          This helps us match you with the right tournaments and opponents
+        <Text style={s.eyebrow}>YOUR PROFILE</Text>
+        <Text style={s.title}>BUILD YOUR</Text>
+        <Text style={s.titleAccent}>PLAYER PROFILE.</Text>
+        <Text style={s.subtitle}>
+          This helps us match you with the right tournaments and opponents.
         </Text>
 
-        {/* Form */}
-        <View style={styles.formSection}>
-          {/* Full Name */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>FULL NAME</Text>
-            <TextInput
-              style={[styles.textInput, errors.fullName ? styles.textInputError : null]}
-              placeholder="Enter your name"
-              placeholderTextColor={colors.textTertiary}
-              value={fullName}
-              onChangeText={(text) => {
-                setFullName(text);
-                setErrors((prev) => ({ ...prev, fullName: '' }));
-              }}
-              autoCapitalize="words"
-            />
-            {errors.fullName ? (
-              <Text style={styles.fieldError}>{errors.fullName}</Text>
-            ) : null}
-          </View>
+        {/* Full Name */}
+        <View style={s.fieldGroup}>
+          <Text style={s.fieldLabel}>FULL NAME</Text>
+          <TextInput
+            style={[s.textInput, errors.fullName ? s.textInputError : null]}
+            placeholder="Enter your name"
+            placeholderTextColor={YColors.ink3}
+            value={fullName}
+            onChangeText={(text) => {
+              setFullName(text);
+              setErrors((prev) => ({ ...prev, fullName: '' }));
+            }}
+            autoCapitalize="words"
+          />
+          {errors.fullName ? (
+            <Text style={s.fieldError}>{errors.fullName}</Text>
+          ) : null}
+        </View>
 
-          {/* City */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>CITY</Text>
-            <TextInput
-              style={[styles.textInput, errors.city ? styles.textInputError : null]}
-              placeholder="Enter your city"
-              placeholderTextColor={colors.textTertiary}
-              value={city}
-              onChangeText={(text) => {
-                setCity(text);
-                setErrors((prev) => ({ ...prev, city: '' }));
-              }}
-              autoCapitalize="words"
-            />
-            {errors.city ? (
-              <Text style={styles.fieldError}>{errors.city}</Text>
-            ) : null}
-          </View>
+        {/* City */}
+        <View style={s.fieldGroup}>
+          <Text style={s.fieldLabel}>CITY</Text>
+          <TextInput
+            style={[s.textInput, errors.city ? s.textInputError : null]}
+            placeholder="Enter your city"
+            placeholderTextColor={YColors.ink3}
+            value={city}
+            onChangeText={(text) => {
+              setCity(text);
+              setErrors((prev) => ({ ...prev, city: '' }));
+            }}
+            autoCapitalize="words"
+          />
+          {errors.city ? (
+            <Text style={s.fieldError}>{errors.city}</Text>
+          ) : null}
+        </View>
 
-          {/* Skill Level */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>SKILL LEVEL</Text>
-            <View style={styles.skillGrid}>
-              {SKILL_LEVELS.map((level) => (
-                <TouchableOpacity
-                  key={level.value}
+        {/* Skill Level */}
+        <View style={s.fieldGroup}>
+          <Text style={s.fieldLabel}>SKILL LEVEL</Text>
+          <View style={s.skillGrid}>
+            {SKILL_LEVELS.map((level) => (
+              <TouchableOpacity
+                key={level.value}
+                style={[
+                  s.skillCard,
+                  skill === level.value && s.skillCardSelected,
+                ]}
+                onPress={() => {
+                  setSkill(level.value);
+                  setErrors((prev) => ({ ...prev, skill: '' }));
+                }}
+                activeOpacity={0.8}
+              >
+                <Text
                   style={[
-                    styles.skillCard,
-                    skill === level.value && styles.skillCardSelected,
+                    s.skillLabel,
+                    skill === level.value && s.skillLabelSelected,
                   ]}
-                  onPress={() => {
-                    setSkill(level.value);
-                    setErrors((prev) => ({ ...prev, skill: '' }));
-                  }}
-                  activeOpacity={0.8}
                 >
-                  <View style={styles.skillCardContent}>
-                    <Text
-                      style={[
-                        styles.skillLabel,
-                        skill === level.value && styles.skillLabelSelected,
-                      ]}
-                    >
-                      {level.label}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.skillRating,
-                        skill === level.value && styles.skillRatingSelected,
-                      ]}
-                    >
-                      {level.rating}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-            {errors.skill ? (
-              <Text style={styles.fieldError}>{errors.skill}</Text>
-            ) : null}
+                  {level.label}
+                </Text>
+                <Text
+                  style={[
+                    s.skillRating,
+                    skill === level.value && s.skillRatingSelected,
+                  ]}
+                >
+                  {level.rating}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
+          {errors.skill ? (
+            <Text style={s.fieldError}>{errors.skill}</Text>
+          ) : null}
         </View>
 
         {errors.submit ? (
-          <Text style={[styles.fieldError, { textAlign: 'center', marginBottom: spacing.base }]}>
+          <Text style={[s.fieldError, { textAlign: 'center', marginBottom: 12 }]}>
             {errors.submit}
           </Text>
         ) : null}
 
-        {/* CTA */}
         <TouchableOpacity
           style={[
-            styles.ctaButton,
-            (!fullName.trim() || !city.trim() || !skill) && styles.ctaButtonDisabled,
+            s.ctaButton,
+            (!fullName.trim() || !city.trim() || !skill) && s.ctaButtonDisabled,
           ]}
           onPress={handleSubmit}
           disabled={!fullName.trim() || !city.trim() || !skill || loading}
           activeOpacity={0.85}
         >
-          <Text style={styles.ctaText}>
+          <Text style={s.ctaText}>
             {loading ? 'SAVING...' : "LET'S PLAY"}
           </Text>
-          {!loading && <Text style={styles.ctaArrow}>→</Text>}
+          {!loading && <Text style={s.ctaArrow}>→</Text>}
         </TouchableOpacity>
       </ScrollView>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  outerContainer: {
+const s = StyleSheet.create({
+  outer: {
     flex: 1,
-    backgroundColor: NAVY,
+    backgroundColor: YColors.bg,
   },
-  // Logo section — full-bleed, no horizontal padding
-  logoSection: {
-    backgroundColor: NAVY,
-    width: '100%',
-    height: LOGO_HEIGHT + STATUS_BAR_HEIGHT,
-    paddingTop: STATUS_BAR_HEIGHT,
-    justifyContent: 'center',
+  logoHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: YColors.bg,
+    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    paddingBottom: 24,
+    paddingHorizontal: 24,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: YColors.line,
+    position: 'relative',
   },
-  headerIcon: {
-    width: 40,
-    height: 40,
+  sideStripe: {
+    position: 'absolute',
+    left: 20,
+    top: Platform.OS === 'ios' ? 50 : 30,
+    bottom: 24,
+    width: 4,
+    backgroundColor: YColors.lime,
+  },
+  iconMark: {
+    width: Math.min(SCREEN_WIDTH * 0.14, 56),
+    height: Math.min(SCREEN_WIDTH * 0.14, 56),
+  },
+  wordMark: {
+    width: Math.min(SCREEN_WIDTH * 0.4, 160),
+    height: Math.min(SCREEN_WIDTH * 0.14, 56),
   },
   stepBadge: {
     position: 'absolute',
-    bottom: 10,
-    right: spacing.xl,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    bottom: 8,
+    right: 20,
+    backgroundColor: YColors.bg3,
     paddingVertical: 3,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: 8,
     borderRadius: 3,
   },
   stepText: {
-    color: 'rgba(255,255,255,0.5)',
+    fontFamily: YFonts.uiExtrabold,
+    color: YColors.ink2,
     fontSize: 9,
-    fontWeight: '700',
     letterSpacing: 2,
   },
-  // White card with rounded top corners
   scroll: {
     flex: 1,
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: YColors.bg,
   },
   scrollContent: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing['2xl'],
-    paddingBottom: spacing['4xl'],
-    maxWidth: 440,
+    paddingHorizontal: 28,
+    paddingTop: 32,
+    paddingBottom: 40,
+    maxWidth: 480,
     alignSelf: 'center',
     width: '100%',
   },
+  eyebrow: {
+    fontFamily: YFonts.uiExtrabold,
+    fontSize: 11,
+    color: YColors.accent,
+    letterSpacing: 3,
+    marginBottom: 12,
+  },
   title: {
-    fontSize: 32,
-    fontWeight: '900',
+    fontFamily: YFonts.display,
+    fontSize: 40,
     fontStyle: 'italic',
-    color: NAVY,
-    letterSpacing: -1,
-    lineHeight: 34,
-    textTransform: 'uppercase',
-    marginBottom: spacing.sm,
+    color: YColors.ink,
+    letterSpacing: 0.5,
+    lineHeight: 44,
+  },
+  titleAccent: {
+    fontFamily: YFonts.display,
+    fontSize: 40,
+    fontStyle: 'italic',
+    color: YColors.accent,
+    letterSpacing: 0.5,
+    lineHeight: 44,
+    marginBottom: 12,
   },
   subtitle: {
-    fontSize: typography.fontSize.md,
-    color: colors.textSecondary,
+    fontFamily: YFonts.ui,
+    fontSize: 14,
+    color: YColors.ink2,
     lineHeight: 20,
-    marginBottom: spacing['2xl'],
+    marginBottom: 28,
   },
-  formSection: {
-    gap: spacing.xl,
-    marginBottom: spacing['2xl'],
+  fieldGroup: {
+    marginBottom: 20,
   },
-  fieldGroup: {},
   fieldLabel: {
+    fontFamily: YFonts.uiExtrabold,
     fontSize: 10,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
+    color: YColors.ink2,
+    marginBottom: 8,
     letterSpacing: 2,
   },
   textInput: {
-    backgroundColor: colors.surfaceContainerLowest,
-    borderRadius: borderRadius.lg,
+    backgroundColor: YColors.bg2,
+    borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: colors.surfaceVariant,
-    paddingHorizontal: spacing.base,
+    borderColor: YColors.line2,
+    paddingHorizontal: 14,
     height: 52,
-    fontSize: typography.fontSize.base,
-    fontWeight: '500',
-    color: colors.text,
-    ...shadows.sm,
+    fontFamily: YFonts.uiSemibold,
+    fontSize: 16,
+    color: YColors.ink,
   },
   textInputError: {
-    borderColor: colors.error,
+    borderColor: YColors.live,
   },
   fieldError: {
-    fontSize: typography.fontSize.sm,
-    color: colors.error,
-    fontWeight: '600',
-    marginTop: spacing.xs,
+    fontFamily: YFonts.uiSemibold,
+    fontSize: 12,
+    color: YColors.live,
+    marginTop: 6,
   },
   skillGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: 8,
   },
   skillCard: {
     flex: 1,
     minWidth: '45%',
-    backgroundColor: colors.surfaceContainerLowest,
-    borderRadius: borderRadius.lg,
+    backgroundColor: YColors.bg2,
+    borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: colors.surfaceVariant,
-    paddingVertical: spacing.base,
-    paddingHorizontal: spacing.base,
-    ...shadows.sm,
+    borderColor: YColors.line2,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
   },
   skillCardSelected: {
-    borderColor: NAVY,
-    backgroundColor: colors.primaryFixed,
+    borderColor: YColors.ink,
+    backgroundColor: YColors.ink,
   },
-  skillCardContent: {},
   skillLabel: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: '800',
-    color: colors.textSecondary,
+    fontFamily: YFonts.uiExtrabold,
+    fontSize: 12,
+    color: YColors.ink2,
     letterSpacing: 1.5,
-    marginBottom: 2,
+    marginBottom: 4,
   },
   skillLabelSelected: {
-    color: NAVY,
+    color: YColors.lime,
   },
   skillRating: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: '900',
+    fontFamily: YFonts.display,
     fontStyle: 'italic',
-    color: colors.textTertiary,
+    fontSize: 20,
+    color: YColors.ink3,
   },
   skillRatingSelected: {
-    color: colors.primaryLight,
+    color: YColors.bg,
   },
   ctaButton: {
-    backgroundColor: NAVY,
-    borderRadius: borderRadius.lg,
+    backgroundColor: YColors.ink,
+    borderRadius: 14,
     height: 56,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
-    ...shadows.lg,
+    marginTop: 12,
   },
   ctaButtonDisabled: {
-    backgroundColor: colors.surfaceContainerHigh,
-    shadowOpacity: 0,
+    opacity: 0.35,
   },
   ctaText: {
-    color: '#FFFFFF',
-    fontSize: typography.fontSize.sm,
-    fontWeight: '800',
+    fontFamily: YFonts.uiBlack,
+    color: YColors.bg,
+    fontSize: 14,
     letterSpacing: 2,
   },
   ctaArrow: {
-    color: '#FFFFFF',
+    color: YColors.bg,
     fontSize: 18,
     fontWeight: '700',
   },

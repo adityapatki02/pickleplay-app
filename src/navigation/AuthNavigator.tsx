@@ -5,6 +5,7 @@ import { SplashScreen } from '../screens/auth/SplashScreen';
 import { PhoneInputScreen } from '../screens/auth/PhoneInputScreen';
 import { OTPVerifyScreen } from '../screens/auth/OTPVerifyScreen';
 import { ProfileSetupScreen } from '../screens/auth/ProfileSetupScreen';
+import { ForgotPinScreen } from '../screens/auth/ForgotPinScreen';
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
@@ -14,12 +15,14 @@ export const AuthNavigator: React.FC = () => {
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',
+        title: 'Yoiden',
       }}
     >
-      <Stack.Screen name="Splash" component={SplashScreen} />
-      <Stack.Screen name="PhoneInput" component={PhoneInputScreen} />
-      <Stack.Screen name="OTPVerify" component={OTPVerifyScreen} />
-      <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
+      <Stack.Screen name="Splash" component={SplashScreen} options={{ title: 'Yoiden' }} />
+      <Stack.Screen name="PhoneInput" component={PhoneInputScreen} options={{ title: 'Yoiden' }} />
+      <Stack.Screen name="OTPVerify" component={OTPVerifyScreen} options={{ title: 'Yoiden' }} />
+      <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} options={{ title: 'Yoiden' }} />
+      <Stack.Screen name="ForgotPin" component={ForgotPinScreen} options={{ title: 'Yoiden' }} />
     </Stack.Navigator>
   );
 };

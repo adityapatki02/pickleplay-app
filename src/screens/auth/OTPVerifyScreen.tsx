@@ -12,9 +12,9 @@ import {
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/types';
-import { colors, typography, spacing, borderRadius, shadows } from '../../config/theme';
 import { useAuthStore } from '../../store/authStore';
 import { authApi } from '../../api/auth.api';
+import { YColors, YFonts } from '../../config/yoiden';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'OTPVerify'>;
 
@@ -109,61 +109,55 @@ export const OTPVerifyScreen: React.FC<Props> = ({ navigation, route }) => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Navy header */}
-      <View style={styles.headerAccent}>
-        <View style={styles.headerGlow} />
+    <SafeAreaView style={s.container}>
+      {/* Editorial header */}
+      <View style={s.header}>
+        <View style={s.sideStripe} />
         <TouchableOpacity
-          style={styles.backButton}
+          style={s.backButton}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Text style={styles.backArrow}>←</Text>
-          <Text style={styles.backLabel}>BACK</Text>
+          <Text style={s.backArrow}>←</Text>
+          <Text style={s.backLabel}>BACK</Text>
         </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
-        style={styles.keyboardView}
+        style={s.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <Animated.View
           style={[
-            styles.content,
+            s.content,
             { opacity: fadeIn, transform: [{ translateY: slideUp }] },
           ]}
         >
-          {/* Lock icon */}
-          <View style={styles.iconContainer}>
-            <View style={styles.iconBg}>
-              <Text style={styles.iconEmoji}>🔐</Text>
-            </View>
-          </View>
-
-          {/* Header */}
-          <Text style={styles.title}>VERIFICATION{'\n'}CODE</Text>
-          <Text style={styles.subtitle}>We sent a 6-digit code to</Text>
-          <View style={styles.phoneBadge}>
-            <Text style={styles.phoneText}>{maskedPhone}</Text>
+          <Text style={s.eyebrow}>STEP 2</Text>
+          <Text style={s.title}>VERIFICATION</Text>
+          <Text style={s.titleAccent}>CODE.</Text>
+          <Text style={s.subtitle}>We sent a 6-digit code to</Text>
+          <View style={s.phoneBadge}>
+            <Text style={s.phoneText}>{maskedPhone}</Text>
           </View>
 
           {/* OTP Inputs */}
           <Animated.View
             style={[
-              styles.otpContainer,
+              s.otpContainer,
               { transform: [{ translateX: shakeAnim }] },
             ]}
           >
             {otp.map((digit, index) => (
-              <View key={index} style={styles.otpWrapper}>
+              <View key={index} style={s.otpWrapper}>
                 <TextInput
                   ref={(ref) => {
                     if (ref) inputRefs.current[index] = ref;
                   }}
                   style={[
-                    styles.otpInput,
-                    digit ? styles.otpInputFilled : null,
-                    error ? styles.otpInputError : null,
+                    s.otpInput,
+                    digit ? s.otpInputFilled : null,
+                    error ? s.otpInputError : null,
                   ]}
                   value={digit}
                   onChangeText={(value) =>
@@ -174,36 +168,34 @@ export const OTPVerifyScreen: React.FC<Props> = ({ navigation, route }) => {
                   maxLength={1}
                   selectTextOnFocus
                 />
-                {index === 2 && <View style={styles.otpDash} />}
+                {index === 2 && <View style={s.otpDash} />}
               </View>
             ))}
           </Animated.View>
 
           {error ? (
-            <View style={styles.errorRow}>
-              <View style={styles.errorDot} />
-              <Text style={styles.errorText}>{error}</Text>
+            <View style={s.errorRow}>
+              <View style={s.errorDot} />
+              <Text style={s.errorText}>{error}</Text>
             </View>
           ) : null}
 
-          {/* Verify Button */}
           <TouchableOpacity
             style={[
-              styles.verifyButton,
-              otp.some((d) => !d) && styles.verifyButtonDisabled,
+              s.verifyButton,
+              otp.some((d) => !d) && s.verifyButtonDisabled,
             ]}
             onPress={() => verifyOtp(otp.join(''))}
             disabled={otp.some((d) => !d) || loading}
             activeOpacity={0.85}
           >
-            <Text style={styles.verifyText}>
+            <Text style={s.verifyText}>
               {loading ? 'VERIFYING...' : 'VERIFY & CONTINUE'}
             </Text>
           </TouchableOpacity>
 
-          {/* Resend */}
-          <View style={styles.resendSection}>
-            <Text style={styles.resendLabel}>Didn't receive the code?</Text>
+          <View style={s.resendSection}>
+            <Text style={s.resendLabel}>Didn't receive the code?</Text>
             <TouchableOpacity
               onPress={handleResend}
               disabled={resendTimer > 0}
@@ -211,8 +203,8 @@ export const OTPVerifyScreen: React.FC<Props> = ({ navigation, route }) => {
             >
               <Text
                 style={[
-                  styles.resendAction,
-                  resendTimer > 0 && styles.resendActionDisabled,
+                  s.resendAction,
+                  resendTimer > 0 && s.resendActionDisabled,
                 ]}
               >
                 {resendTimer > 0
@@ -227,43 +219,44 @@ export const OTPVerifyScreen: React.FC<Props> = ({ navigation, route }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: YColors.bg,
   },
-  headerAccent: {
-    backgroundColor: colors.primary,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing['3xl'],
-    paddingHorizontal: spacing.xl,
-    overflow: 'hidden',
+  header: {
+    backgroundColor: YColors.bg,
+    paddingTop: 20,
+    paddingBottom: 16,
+    paddingHorizontal: 28,
+    borderBottomWidth: 1,
+    borderBottomColor: YColors.line,
+    position: 'relative',
   },
-  headerGlow: {
+  sideStripe: {
     position: 'absolute',
-    top: -80,
-    right: -60,
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: colors.secondaryContainer,
-    opacity: 0.06,
+    left: 20,
+    top: 16,
+    bottom: 12,
+    width: 4,
+    backgroundColor: YColors.lime,
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     alignSelf: 'flex-start',
+    marginLeft: 12,
   },
   backArrow: {
-    color: 'rgba(255,255,255,0.7)',
+    color: YColors.ink2,
     fontSize: 18,
     fontWeight: '600',
   },
   backLabel: {
-    color: 'rgba(255,255,255,0.7)',
+    fontFamily: YFonts.uiExtrabold,
+    color: YColors.ink2,
     fontSize: 10,
-    fontWeight: '700',
     letterSpacing: 2,
   },
   keyboardView: {
@@ -271,62 +264,61 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: spacing.xl,
-    alignItems: 'center',
-    paddingTop: spacing['2xl'],
-    maxWidth: 440,
+    paddingHorizontal: 28,
+    paddingTop: 36,
+    maxWidth: 480,
     alignSelf: 'center',
     width: '100%',
   },
-  iconContainer: {
-    marginBottom: spacing.lg,
-  },
-  iconBg: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    backgroundColor: colors.surfaceContainerLowest,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...shadows.md,
-  },
-  iconEmoji: {
-    fontSize: 28,
+  eyebrow: {
+    fontFamily: YFonts.uiExtrabold,
+    fontSize: 11,
+    color: YColors.accent,
+    letterSpacing: 3,
+    marginBottom: 12,
   },
   title: {
-    fontSize: 32,
-    fontWeight: '900',
+    fontFamily: YFonts.display,
+    fontSize: 44,
     fontStyle: 'italic',
-    color: colors.primary,
-    textAlign: 'center',
-    letterSpacing: -1,
-    lineHeight: 34,
-    textTransform: 'uppercase',
-    marginBottom: spacing.sm,
+    color: YColors.ink,
+    letterSpacing: 0.5,
+    lineHeight: 48,
+  },
+  titleAccent: {
+    fontFamily: YFonts.display,
+    fontSize: 44,
+    fontStyle: 'italic',
+    color: YColors.accent,
+    letterSpacing: 0.5,
+    lineHeight: 48,
+    marginBottom: 14,
   },
   subtitle: {
-    fontSize: typography.fontSize.md,
-    color: colors.textSecondary,
+    fontFamily: YFonts.ui,
+    fontSize: 14,
+    color: YColors.ink2,
   },
   phoneBadge: {
-    backgroundColor: colors.primaryFixed,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.base,
+    backgroundColor: YColors.bg3,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     borderRadius: 4,
-    marginTop: spacing.sm,
-    marginBottom: spacing['2xl'],
+    marginTop: 8,
+    marginBottom: 28,
+    alignSelf: 'flex-start',
   },
   phoneText: {
-    fontSize: typography.fontSize.md,
-    fontWeight: '700',
-    color: colors.primaryLight,
+    fontFamily: YFonts.monoBold,
+    fontSize: 14,
+    color: YColors.ink,
     letterSpacing: 1,
   },
   otpContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
+    justifyContent: 'flex-start',
+    gap: 8,
+    marginBottom: 18,
   },
   otpWrapper: {
     flexDirection: 'row',
@@ -336,85 +328,81 @@ const styles = StyleSheet.create({
     width: 48,
     height: 58,
     borderWidth: 1.5,
-    borderColor: colors.surfaceVariant,
-    borderRadius: borderRadius.md,
+    borderColor: YColors.line2,
+    borderRadius: 8,
     textAlign: 'center',
-    fontSize: 22,
-    fontWeight: '900',
+    fontFamily: YFonts.display,
     fontStyle: 'italic',
-    color: colors.primary,
-    backgroundColor: colors.surfaceContainerLowest,
-    ...shadows.sm,
+    fontSize: 22,
+    color: YColors.ink,
+    backgroundColor: YColors.bg2,
   },
   otpInputFilled: {
-    borderColor: colors.secondaryContainer,
-    backgroundColor: `${colors.secondaryContainer}08`,
+    borderColor: YColors.ink,
+    backgroundColor: YColors.bg2,
   },
   otpInputError: {
-    borderColor: colors.error,
-    backgroundColor: `${colors.error}08`,
+    borderColor: YColors.live,
+    backgroundColor: 'rgba(255,61,92,0.05)',
   },
   otpDash: {
     width: 12,
     height: 2,
-    backgroundColor: colors.outlineVariant,
+    backgroundColor: YColors.ink3,
     marginHorizontal: 4,
     borderRadius: 1,
   },
   errorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.base,
+    marginBottom: 12,
     gap: 6,
   },
   errorDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.error,
+    backgroundColor: YColors.live,
   },
   errorText: {
-    color: colors.error,
-    fontSize: typography.fontSize.sm,
-    fontWeight: '600',
+    fontFamily: YFonts.uiSemibold,
+    color: YColors.live,
+    fontSize: 13,
   },
   verifyButton: {
     width: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
+    backgroundColor: YColors.ink,
+    borderRadius: 14,
     height: 56,
     justifyContent: 'center',
     alignItems: 'center',
-    ...shadows.lg,
   },
   verifyButtonDisabled: {
-    backgroundColor: colors.surfaceContainerHigh,
-    shadowOpacity: 0,
+    opacity: 0.35,
   },
   verifyText: {
-    color: '#FFFFFF',
-    fontSize: typography.fontSize.sm,
-    fontWeight: '800',
+    fontFamily: YFonts.uiBlack,
+    color: YColors.bg,
+    fontSize: 14,
     letterSpacing: 2,
   },
   resendSection: {
     alignItems: 'center',
-    marginTop: spacing.xl,
+    marginTop: 24,
     gap: 4,
   },
   resendLabel: {
-    fontSize: typography.fontSize.sm,
-    color: colors.textTertiary,
+    fontFamily: YFonts.ui,
+    fontSize: 13,
+    color: YColors.ink3,
   },
   resendAction: {
-    fontSize: typography.fontSize.sm,
-    color: colors.secondary,
-    fontWeight: '800',
+    fontFamily: YFonts.uiExtrabold,
+    fontSize: 13,
+    color: YColors.accent,
     letterSpacing: 1.5,
   },
   resendActionDisabled: {
-    color: colors.textTertiary,
-    fontWeight: '600',
+    color: YColors.ink3,
   },
 });

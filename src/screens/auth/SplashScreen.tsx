@@ -4,19 +4,14 @@ import {
   Text,
   StyleSheet,
   Animated,
-  Dimensions,
   Image,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
+import { YColors, YFonts } from '../../config/yoiden';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Splash'>;
-
-const { width } = Dimensions.get('window');
-
-const NAVY = '#001E40';
-const BLUE_ACCENT = '#2196F3';
 
 export const SplashScreen: React.FC<Props> = ({ navigation }) => {
   const { setLoading } = useAuthStore();
@@ -60,6 +55,9 @@ export const SplashScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      {/* Lime side stripe — editorial chrome */}
+      <View style={styles.sideStripe} />
+
       <Animated.View
         style={[
           styles.content,
@@ -67,17 +65,15 @@ export const SplashScreen: React.FC<Props> = ({ navigation }) => {
         ]}
       >
         {/* Logo — icon mark + wordmark side by side */}
-        <View style={styles.logoBg}>
-          <View style={styles.logoRow}>
-            <Image source={require('../../../assets/Logo.png')} style={styles.iconMark} resizeMode="contain" />
-            <Image source={require('../../../assets/name_logo.png')} style={styles.wordMark} resizeMode="contain" />
-          </View>
+        <View style={styles.logoRow}>
+          <Image source={require('../../../assets/Logo.png')} style={styles.iconMark} resizeMode="contain" />
+          <Image source={require('../../../assets/name_logo.png')} style={styles.wordMark} resizeMode="contain" />
         </View>
 
-        {/* Blue accent divider */}
+        {/* Accent divider */}
         <View style={styles.divider} />
 
-        <Text style={styles.tagline}>SCHEDULE. COMPETE. DOMINATE.</Text>
+        <Text style={styles.tagline}>SCHEDULE · COMPETE · DOMINATE</Text>
       </Animated.View>
 
       {/* Bottom loading bar */}
@@ -103,65 +99,67 @@ export const SplashScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: NAVY,
+    backgroundColor: YColors.bg,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
   },
+  sideStripe: {
+    position: 'absolute',
+    top: 80,
+    left: 20,
+    width: 4,
+    height: 180,
+    backgroundColor: YColors.lime,
+  },
   content: {
     alignItems: 'center',
-  },
-  logoBg: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingHorizontal: 32,
   },
   logoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
   },
   iconMark: {
-    width: 80,
-    height: 80,
+    width: 72,
+    height: 72,
   },
   wordMark: {
     width: 200,
-    height: 80,
+    height: 72,
     marginLeft: 8,
   },
   divider: {
-    width: 60,
+    width: 48,
     height: 2,
-    backgroundColor: BLUE_ACCENT,
-    marginTop: 24,
-    marginBottom: 16,
+    backgroundColor: YColors.accent,
+    marginTop: 28,
+    marginBottom: 14,
   },
   tagline: {
+    fontFamily: YFonts.uiExtrabold,
     fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.5)',
+    color: YColors.ink2,
     letterSpacing: 4,
     textTransform: 'uppercase',
   },
   loaderContainer: {
     position: 'absolute',
-    bottom: 80,
+    bottom: 64,
     width: 140,
     alignItems: 'center',
   },
   loadingTrack: {
     width: '100%',
     height: 2,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: YColors.line,
     borderRadius: 1,
     overflow: 'hidden',
   },
   loadingFill: {
     height: '100%',
-    backgroundColor: BLUE_ACCENT,
+    backgroundColor: YColors.ink,
     borderRadius: 1,
   },
 });

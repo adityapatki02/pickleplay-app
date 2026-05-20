@@ -38,7 +38,8 @@ const WHITE = '#FFFFFF';
 const BG = '#F8F9FA';
 const BORDER = '#E1E3E4';
 
-// Proxy through our backend to avoid CORS issues
+// Proxy through our backend (CORS-safe). Backend needs GOOGLE_PLACES_API_KEY env var
+// set on Cloud Run — currently missing, so this fails until that's fixed.
 const AUTOCOMPLETE_URL = `${API_BASE_URL}/places/autocomplete`;
 const DETAILS_URL = `${API_BASE_URL}/places/details`;
 
