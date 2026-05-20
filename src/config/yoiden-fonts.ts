@@ -20,6 +20,17 @@ import {
   JetBrainsMono_700Bold,
   JetBrainsMono_800ExtraBold,
 } from '@expo-google-fonts/jetbrains-mono';
+import {
+  SpaceGrotesk_500Medium,
+  SpaceGrotesk_600SemiBold,
+  SpaceGrotesk_700Bold,
+} from '@expo-google-fonts/space-grotesk';
+import {
+  DMSans_400Regular,
+  DMSans_500Medium,
+  DMSans_600SemiBold,
+  DMSans_700Bold,
+} from '@expo-google-fonts/dm-sans';
 
 export const YoidenFontMap = {
   Anton_400Regular,
@@ -35,4 +46,11 @@ export const YoidenFontMap = {
   JetBrainsMono_500Medium,
   JetBrainsMono_700Bold,
   JetBrainsMono_800ExtraBold,
+  SpaceGrotesk_500Medium,
+  SpaceGrotesk_600SemiBold,
+  SpaceGrotesk_700Bold,
+  DMSans_400Regular,
+  DMSans_500Medium,
+  DMSans_600SemiBold,
+  DMSans_700Bold,
 } as const;
