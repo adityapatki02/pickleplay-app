@@ -69,6 +69,39 @@ def score_str(scores):
     return ", ".join(f"{s.get('team1')}-{s.get('team2')}"
                      for s in sorted(scores, key=lambda x: x.get('set', 0)))
 
+def containers(blob):
+    """Extract every self-contained object that holds a `matches` list
+    (a round-robin pool or a knockout/elimination round)."""
+    out, pos = [], 0
+    while True:
+        k = blob.find('"matches"', pos)
+        if k < 0: break
+        j, hit = k, False
+        while True:
+            j = blob.rfind('{', 0, j)
+            if j < 0 or k - j > 80000: break
+            try:
+                o, end = DEC.raw_decode(blob, j)
+                if isinstance(o, dict) and isinstance(o.get('matches'), list) and end > k:
+                    out.append(o); pos = end; hit = True; break
+            except Exception:
+                pass
+        if not hit: pos = k + 1
+    return out
+
+def stage_label(c):
+    nm = c.get('name', '') or ''
+    if c.get('roundTitle') == 'Elimination' or 'Final' in nm or 'Quarter' in nm or 'Semi' in nm:
+        return nm or 'Knockout'              # e.g. "Quarter Finals", "Semi Finals", "Finals"
+    if nm.lower().startswith('pool'):
+        return f"Round Robin ({nm})"          # e.g. "Round Robin (Pool A)"
+    return "Round Robin"
+
+def stage_order(c):
+    if c.get('roundTitle') == 'Elimination':
+        return (1, c.get('roundNumber', 99))   # knockout after pools, ordered by round
+    return (0, c.get('name', ''))              # round-robin pools first
+
 def parse_category(blob):
     structure = (re.findall(r'"matchStructure":"(\w+)"', blob) or [""])[0]
     # team id -> "Player A & Player B"
@@ -79,26 +112,29 @@ def parse_category(blob):
         if tid and names:
             tmap[tid] = " & ".join(names)
     rows, seen = [], set()
-    for m in objects_with_key(blob, 'team1'):
-        mid = m.get('id') or m.get('_id')
-        if mid and mid in seen: continue
-        if mid: seen.add(mid)
-        t1 = label(m.get('team1'), tmap)
-        t2 = label(m.get('team2'), tmap)
-        sc = score_str(m.get('scores') or [])
-        win = label(m.get('winnerTeam'), tmap) if m.get('winnerTeam') else ""
-        st = m.get('status', '') or ("SCHEDULED" if not sc else "")
-        flags = []
-        if m.get('isWalkover'): flags.append('Walkover')
-        if m.get('isBye'): flags.append('Bye')
-        if m.get('isForfeit'): flags.append('Forfeit')
-        # skip empty knockout bracket placeholders (no teams decided, no score)
-        if t1 == "TBD" and t2 == "TBD" and not sc:
-            continue
-        rows.append([t1, t2, sc, win, st, ", ".join(flags)])
+    for c in sorted(containers(blob), key=stage_order):
+        stage = stage_label(c)
+        for m in c['matches']:
+            if not isinstance(m, dict): continue
+            mid = m.get('id') or m.get('_id')
+            if mid and mid in seen: continue
+            if mid: seen.add(mid)
+            t1 = label(m.get('team1'), tmap)
+            t2 = label(m.get('team2'), tmap)
+            sc = score_str(m.get('scores') or [])
+            win = label(m.get('winnerTeam'), tmap) if m.get('winnerTeam') else ""
+            st = m.get('status', '') or ("SCHEDULED" if not sc else "")
+            flags = []
+            if m.get('isWalkover'): flags.append('Walkover')
+            if m.get('isBye'): flags.append('Bye')
+            if m.get('isForfeit'): flags.append('Forfeit')
+            # skip empty knockout bracket placeholders (no teams decided, no score)
+            if t1 == "TBD" and t2 == "TBD" and not sc:
+                continue
+            rows.append([stage, t1, t2, sc, win, st, ", ".join(flags)])
     return structure, rows
 
-HEADERS = ["Team 1", "Team 2", "Score", "Winner", "Status", "Notes"]
+HEADERS = ["Stage", "Team 1", "Team 2", "Score", "Winner", "Status", "Notes"]
 
 def main():
     results = {}
@@ -107,7 +143,7 @@ def main():
             blob = fetch_flight(cid)
             structure, rows = parse_category(blob)
             results[name] = (structure, rows)
-            comp = sum(1 for r in rows if str(r[4]).upper() == "COMPLETED")
+            comp = sum(1 for r in rows if str(r[5]).upper() == "COMPLETED")
             print(f"{name:24s} structure={structure:18s} matches={len(rows):3d} completed={comp}")
         except Exception as e:
             results[name] = ("ERROR", [])
@@ -122,7 +158,7 @@ def main():
     summary.append(["Category", "Time", "Format", "Matches", "Completed"])
     for cid, name, tm in CATS:
         structure, rows = results[name]
-        comp = sum(1 for r in rows if str(r[4]).upper() == "COMPLETED")
+        comp = sum(1 for r in rows if str(r[5]).upper() == "COMPLETED")
         summary.append([name, tm, structure, len(rows), comp])
     summary["A1"].font = Font(bold=True, size=12)
     for c in range(1, 6):
@@ -145,7 +181,7 @@ def main():
             cell = ws.cell(row=3, column=c)
             cell.font = Font(bold=True, color="FFFFFF")
             cell.fill = PatternFill("solid", fgColor="2E7D32")
-        for col, w in zip("ABCDEF", [26, 26, 16, 26, 13, 14]):
+        for col, w in zip("ABCDEFG", [20, 26, 26, 16, 26, 13, 14]):
             ws.column_dimensions[col].width = w
         # csv
         with open(os.path.join(cdir, name.replace(" ", "_") + ".csv"), "w", newline="") as f:
