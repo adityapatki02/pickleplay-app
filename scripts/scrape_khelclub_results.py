@@ -12,6 +12,7 @@ CATS = [
     ("6a1696258c90b13d8df233e9", "U-12 Boys Doubles",   "9 AM"),
     ("6a1696258c90b13d8df233eb", "U-12 Girls Singles",  "9 AM"),
     ("6a1696258c90b13d8df233ef", "U-12 Mixed Doubles",  "9 AM"),
+    ("6a1696258c90b13d8df233ed", "U-12 Girls Doubles",  "9 AM"),
     ("6a1696258c90b13d8df233e7", "U-12 Boys Singles",   "11 AM"),
     ("6a1696258c90b13d8df233e5", "U-14 Girls Doubles",  "11 AM"),
     ("6a1696258c90b13d8df233e3", "U-14 Boys Doubles",   "12 PM"),
