@@ -7,7 +7,6 @@ import { AuthNavigator } from './AuthNavigator';
 import { YoidenTabNavigator } from './YoidenTabNavigator';
 import { useAuthStore } from '../store/authStore';
 import PlayerRecapScreen from '../screens/yoiden/PlayerRecapScreen';
-import { CityPickerScreen } from '../screens/auth/CityPickerScreen';
 import { ProfileSetupScreen } from '../screens/auth/ProfileSetupScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -23,12 +22,11 @@ function isPublicRoute(): boolean {
 export const RootNavigator: React.FC = () => {
   const { isAuthenticated, isLoading, user } = useAuthStore();
   const publicRoute = isPublicRoute();
-  // Onboarding gates (run in order):
-  //   1. needsProfile: authenticated but missing name → show ProfileSetup
-  //   2. needsCity:    authenticated, has name, no city → show CityPicker
-  // Once both are filled, the user lands in AppTabs.
+  // Onboarding gate:
+  //   needsProfile: authenticated but missing name → show ProfileSetup
+  // Location is no longer a gate — users land in AppTabs and set their city from
+  // the Home header pill (which opens CityPickerScreen as a modal). See HomeScreen.
   const needsProfile = isAuthenticated && !user?.fullName;
-  const needsCity = isAuthenticated && !needsProfile && !user?.city;
 
   // Show a brief splash while AsyncStorage rehydrates the persisted auth
   // state on app start. Without this, a logged-in user would see the login
@@ -67,8 +65,6 @@ export const RootNavigator: React.FC = () => {
           <Stack.Screen name="Auth" component={AuthNavigator} />
         ) : needsProfile ? (
           <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen as any} />
-        ) : needsCity ? (
-          <Stack.Screen name="CityPicker" component={CityPickerScreen} />
         ) : (
           <Stack.Screen name="AppTabs" component={YoidenTabNavigator} />
         )}

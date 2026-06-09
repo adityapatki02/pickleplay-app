@@ -31,10 +31,15 @@ import LeaguePlayerProfileScreen from '../screens/league/PlayerProfileScreen';
 import LeagueFantasyScreen from '../screens/league/FantasyScreen';
 import ScorerDemoScreen from '../screens/league/ScorerDemoScreen';
 
+// Location picker — reused from onboarding, now opened as a modal from the Home header
+import { CityPickerScreen } from '../screens/auth/CityPickerScreen';
+
 // ─── Shared deep routes ─────────────────────────────────────────
 // Tournament management + SPPL league deep links. Registered on every tab
 // stack so MANAGE actions work from Home/Play/Me equally.
 type DetailAndManageRoutes = {
+  // Location
+  CityPicker: undefined;
   // Tournament
   TournamentDetail: { tournamentId: string };
   CreateTournament: undefined;
@@ -94,6 +99,8 @@ function registerDetailAndManageScreens<T extends DetailAndManageRoutes>(
   const S = Stack.Screen as any;
   return (
     <>
+      {/* Location — opens as a slide-up modal */}
+      <S name="CityPicker" component={CityPickerScreen} options={{ presentation: 'modal' }} />
       {/* Tournament */}
       <S name="TournamentDetail" component={TournamentDetailScreen} />
       <S name="CreateTournament" component={CreateTournamentScreen} />

@@ -23,6 +23,7 @@ import {
   SafeAreaView,
   Platform,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { YColors } from '../../components/yoiden';
 import apiClient from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
@@ -34,6 +35,8 @@ type Suggestion = {
 };
 
 export const CityPickerScreen: React.FC = () => {
+  const nav = useNavigation<any>();
+  const canClose = nav.canGoBack();
   const updateUser = useAuthStore((s: any) => s.setUser ?? s.updateUser);
   const user = useAuthStore((s: any) => s.user);
 
@@ -71,6 +74,43 @@ export const CityPickerScreen: React.FC = () => {
     return () => debounceTimer.current && clearTimeout(debounceTimer.current);
   }, [query]);
 
+  // Reverse-geocode lat/lng → { city, state }. Tries our backend first (Google
+  // Geocoding — canonical, matches manual search), then falls back to a keyless
+  // client-side service. The fallback exists because the backend's Google key
+  // currently has the Geocoding API disabled (REQUEST_DENIED), which would
+  // otherwise make "Use my location" fail even though city search works.
+  const reverseGeocode = async (
+    latitude: number,
+    longitude: number,
+  ): Promise<{ city: string; state?: string; lat?: number; lng?: number } | null> => {
+    try {
+      const res = await apiClient.get('/places/reverse-geocode', {
+        params: { lat: latitude, lng: longitude },
+      });
+      const d: any = res.data;
+      if (d?.city) {
+        return { city: d.city, state: d.state, lat: d.lat ?? latitude, lng: d.lng ?? longitude };
+      }
+    } catch {
+      // ignore — fall through to the keyless fallback below
+    }
+
+    try {
+      const res = await fetch(
+        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`,
+      );
+      const d: any = await res.json();
+      const city = d?.city || d?.locality;
+      if (city) {
+        return { city, state: d?.principalSubdivision || undefined, lat: latitude, lng: longitude };
+      }
+    } catch {
+      // ignore — caller shows a generic "couldn't detect" message
+    }
+
+    return null;
+  };
+
   // ── "Use my location" ────────────────────────────────────────────
   const detectLocation = async () => {
     setLocError(null);
@@ -93,14 +133,11 @@ export const CityPickerScreen: React.FC = () => {
     try {
       const pos = await getPosition();
       const { latitude, longitude } = pos.coords;
-      const res = await apiClient.get('/places/reverse-geocode', {
-        params: { lat: latitude, lng: longitude },
-      });
-      const d: any = res.data;
-      if (!d?.city) {
+      const result = await reverseGeocode(latitude, longitude);
+      if (!result) {
         setLocError("Couldn't detect your city. Try picking manually below.");
       } else {
-        setSelected({ city: d.city, state: d.state, lat: d.lat, lng: d.lng });
+        setSelected(result);
       }
     } catch (e: any) {
       const code = e?.code;
@@ -146,6 +183,10 @@ export const CityPickerScreen: React.FC = () => {
       const res = await apiClient.put('/auth/me', payload);
       const updated = (res.data as any)?.data ?? res.data;
       if (updated && updateUser) updateUser({ ...user, ...updated });
+      // When opened as a modal (post-login), close ourselves so Home re-renders
+      // with the new city. During onboarding (root screen) there's nothing to
+      // pop — the navigator gate handles the transition instead.
+      if (nav.canGoBack()) nav.goBack();
     } catch (e: any) {
       setSaveError(e?.response?.data?.message ?? 'Could not save your city. Please try again.');
     } finally {
@@ -156,6 +197,11 @@ export const CityPickerScreen: React.FC = () => {
   // ── Render ────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={s.screen}>
+      {canClose && (
+        <TouchableOpacity style={s.closeBtn} onPress={() => nav.goBack()} hitSlop={10} activeOpacity={0.7}>
+          <Text style={s.closeIcon}>✕</Text>
+        </TouchableOpacity>
+      )}
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         <Text style={s.eyebrow}>ONE MORE STEP</Text>
         <Text style={s.title}>Where do you play?</Text>
@@ -247,7 +293,10 @@ export const CityPickerScreen: React.FC = () => {
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: YColors.bg },
-  scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 48 },
+  scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 180 },
+
+  closeBtn: { position: 'absolute', top: 16, right: 20, zIndex: 20, elevation: 6, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: YColors.bg2, borderWidth: 1, borderColor: YColors.line },
+  closeIcon: { fontSize: 16, fontWeight: '900', color: YColors.ink },
 
   eyebrow: { fontSize: 11, fontWeight: '900', letterSpacing: 1.6, color: YColors.ink2, textTransform: 'uppercase' },
   title: { fontSize: 32, fontWeight: '900', color: YColors.ink, marginTop: 8, letterSpacing: 0.3 },

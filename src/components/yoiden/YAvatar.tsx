@@ -8,12 +8,14 @@ type YAvatarProps = {
   initials: string;
   size?: number;
   color?: string;
+  textColor?: string;
   style?: ViewStyle;
 };
 export const YAvatar: React.FC<YAvatarProps> = ({
   initials,
   size = 40,
   color = YColors.accent,
+  textColor = '#000',
   style,
 }) => (
   <View
@@ -32,7 +34,7 @@ export const YAvatar: React.FC<YAvatarProps> = ({
     <YUiText
       size={Math.round(size * 0.36)}
       weight={900}
-      color="#000"
+      color={textColor}
       style={{ letterSpacing: 0.4 }}
     >
       {initials}

@@ -116,6 +116,7 @@ export default function HomeScreen() {
   const goPlay = () => nav.navigate('PlayTab', { screen: 'Play' });
   const goHost = () => nav.navigate('PlayTab', { screen: 'CreateTournament' });
   const goMe = () => nav.navigate('MeTab', { screen: 'Me' });
+  const openLocation = () => nav.navigate('HomeTab', { screen: 'CityPicker' });
   const goSPPL = () =>
     nav.navigate('HomeTab', {
       screen: 'LeagueDashboard',
@@ -163,7 +164,35 @@ export default function HomeScreen() {
           title={
             <View>
               <YDisplay size={24} color={YColors.ink3}>HEY,</YDisplay>
-              <YDisplay size={42} color={YColors.accent} style={{ marginTop: 12 }}>{firstName}</YDisplay>
+              <View style={styles.nameRow}>
+                <YDisplay size={42} color={YColors.accent}>{firstName}</YDisplay>
+                <Pressable
+                  onPress={openLocation}
+                  hitSlop={8}
+                  style={[styles.locPill, user?.city ? styles.locPillSet : styles.locPillEmpty]}
+                >
+                  <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                    <Path
+                      d="M12 21s7-5.686 7-11a7 7 0 1 0-14 0c0 5.314 7 11 7 11z"
+                      stroke={user?.city ? '#000' : YColors.ink2}
+                      strokeWidth={1.8}
+                      strokeLinejoin="round"
+                      fill="none"
+                    />
+                    <Path
+                      d="M12 12.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"
+                      stroke={user?.city ? '#000' : YColors.ink2}
+                      strokeWidth={1.8}
+                      fill="none"
+                    />
+                  </Svg>
+                  <YUiText size={11} weight={800} color={user?.city ? '#000' : YColors.ink2} numberOfLines={1} style={{ letterSpacing: 0.6 }}>
+                    {user?.city
+                      ? (user.city.length > 9 ? user.city.slice(0, 9).toUpperCase() + '…' : user.city.toUpperCase())
+                      : 'SET LOCATION'}
+                  </YUiText>
+                </Pressable>
+              </View>
             </View>
           }
           action={
@@ -180,7 +209,7 @@ export default function HomeScreen() {
                 </Svg>
               </Pressable>
               <Pressable onPress={goMe} hitSlop={4}>
-                <YAvatar initials={initials(fullName)} size={38} color={YColors.lime} />
+                <YAvatar initials={initials(fullName)} size={38} color={YColors.accent} textColor="#fff" />
               </Pressable>
             </View>
           }
@@ -405,6 +434,29 @@ const styles = StyleSheet.create({
     borderColor: YColors.line2,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  nameRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+  },
+  locPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  locPillEmpty: {
+    backgroundColor: YColors.bg3,
+    borderColor: YColors.line2,
+  },
+  locPillSet: {
+    backgroundColor: YColors.lime,
+    borderColor: YColors.ink,
   },
   liveCard: {
     marginHorizontal: 16,
