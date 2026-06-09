@@ -338,6 +338,9 @@ export default function ScheduleScreen() {
   const [matches, setMatches] = useState<ScheduledMatch[]>([]);
   const [teamNames, setTeamNames] = useState<Record<string, string>>({});
   const [courts, setCourts] = useState<{ id: string; name: string }[]>([]);
+  // View toggle: 'court' (default — group by Court A/B/C) | 'category' (group by event)
+  const [scheduleView, setScheduleView] = useState<'court' | 'category'>('court');
+  const [scheduleCategoryFilter, setScheduleCategoryFilter] = useState<string | null>(null);
 
   // Setup form state
   const [startHour, setStartHour] = useState('09');
@@ -364,13 +367,19 @@ export default function ScheduleScreen() {
   const [loadingAdvancing, setLoadingAdvancing] = useState(false);
   const [confirmingKnockout, setConfirmingKnockout] = useState(false);
 
+  // Map of categoryId → category name for the "BY CATEGORY" view header
+  const [categoryNames, setCategoryNames] = useState<Record<string, string>>({});
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch tournament for courts
+      // Fetch tournament for courts + categories
       const tournRes = await tournamentsApi.getById(tournamentId);
       const t = tournRes.data?.data ?? tournRes.data;
       setTournamentCourts(t?.courts ?? []);
+      const catMap: Record<string, string> = {};
+      for (const c of t?.categories ?? []) catMap[c.id] = c.name;
+      setCategoryNames(catMap);
 
       // Fetch schedule
       const schedRes = await apiClient.get(`/tournaments/${tournamentId}/schedule`);
@@ -390,7 +399,9 @@ export default function ScheduleScreen() {
       }
       setTeamCheckedIn(rawCheckedIn);
       setCheckInSummary(summary);
-      setHasSchedule(matchList.length > 0 && !!matchList[0]?.scheduledStart);
+      // Sticky-ish: once any match has a time, treat the schedule as "generated".
+      // Matches without a court are TBA, not "no schedule".
+      setHasSchedule(matchList.length > 0 && matchList.some((m: any) => !!m.scheduledStart));
     } catch {
       setHasSchedule(false);
     } finally {
@@ -562,10 +573,12 @@ export default function ScheduleScreen() {
     return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
   };
 
-  // Group matches by court
+  // Group matches by court. Matches without a court (courtId=null) go under
+  // "Court TBA" — they have a preliminary scheduledStart but the court is
+  // assigned only when teams check in and the upcoming-slot cap allows it.
   const matchesByCourt: Record<string, ScheduledMatch[]> = {};
   for (const m of matches) {
-    const key = m.courtName || m.courtId || 'Unassigned';
+    const key = m.courtName || (m.courtId ? m.courtId : 'Court TBA');
     if (!matchesByCourt[key]) matchesByCourt[key] = [];
     matchesByCourt[key].push(m);
   }
@@ -756,6 +769,22 @@ export default function ScheduleScreen() {
           ) : (
             /* ──── SCHEDULE VIEW ──── */
             <View>
+              {/* View toggle: BY COURT / BY CATEGORY */}
+              <View style={s.viewToggleRow}>
+                <TouchableOpacity
+                  style={[s.viewToggleBtn, scheduleView === 'court' && s.viewToggleBtnActive]}
+                  onPress={() => { setScheduleView('court'); setScheduleCategoryFilter(null); }}
+                >
+                  <Text style={[s.viewToggleText, scheduleView === 'court' && s.viewToggleTextActive]}>BY COURT</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.viewToggleBtn, scheduleView === 'category' && s.viewToggleBtnActive]}
+                  onPress={() => setScheduleView('category')}
+                >
+                  <Text style={[s.viewToggleText, scheduleView === 'category' && s.viewToggleTextActive]}>BY CATEGORY</Text>
+                </TouchableOpacity>
+              </View>
+
               {/* Check-in summary banner + button */}
               {checkInSummary && (
                 <TouchableOpacity
@@ -781,12 +810,83 @@ export default function ScheduleScreen() {
                 </TouchableOpacity>
               )}
 
-              {Object.entries(matchesByCourt).map(([courtLabel, courtMatches]) => (
+              {/* BY CATEGORY view: 40-tile grid → drill into one */}
+              {scheduleView === 'category' && !scheduleCategoryFilter && (() => {
+                const byCat: Record<string, ScheduledMatch[]> = {};
+                for (const m of matches) {
+                  const key = m.categoryId ?? '_';
+                  if (!byCat[key]) byCat[key] = [];
+                  byCat[key].push(m);
+                }
+                const catIds = Object.keys(categoryNames);
+                if (catIds.length === 0) {
+                  return <Text style={s.sectionDesc}>No categories found.</Text>;
+                }
+                return (
+                  <View style={s.catGridWrap}>
+                    {catIds.map((cid) => {
+                      const count = byCat[cid]?.length ?? 0;
+                      return (
+                        <TouchableOpacity
+                          key={cid}
+                          style={s.catGridTile}
+                          onPress={() => setScheduleCategoryFilter(cid)}
+                        >
+                          <Text style={s.catGridTileName} numberOfLines={2}>{categoryNames[cid]}</Text>
+                          <View style={s.catGridFooter}>
+                            <View style={[s.catGridPill, count === 0 && s.catGridPillMuted]}>
+                              <Text style={[s.catGridPillText, count === 0 && s.catGridPillTextMuted]}>
+                                {count} matches
+                              </Text>
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                );
+              })()}
+
+              {/* BY CATEGORY drilled-in: header + filtered matches grouped by court */}
+              {scheduleView === 'category' && scheduleCategoryFilter && (
+                <View style={{ marginBottom: 12 }}>
+                  <TouchableOpacity onPress={() => setScheduleCategoryFilter(null)} style={s.catBackBtn}>
+                    <Text style={s.catBackText}>← All categories</Text>
+                  </TouchableOpacity>
+                  <Text style={s.catFilterTitle}>{categoryNames[scheduleCategoryFilter] ?? 'Category'}</Text>
+                </View>
+              )}
+
+              {/* BY COURT (default) OR drilled-in category view: iterate matchesByCourt
+                  but filter to the selected category when in drill-in. */}
+              {(scheduleView === 'court' || scheduleCategoryFilter) && Object.entries(matchesByCourt)
+                .map(([courtLabel, courtMatches]) => {
+                  const filtered = scheduleCategoryFilter
+                    ? courtMatches.filter((m) => m.categoryId === scheduleCategoryFilter)
+                    : courtMatches;
+                  if (filtered.length === 0) return null;
+                  return [courtLabel, filtered] as [string, ScheduledMatch[]];
+                })
+                .filter(Boolean)
+                .map((entry) => {
+                  const [courtLabel, courtMatches] = entry as [string, ScheduledMatch[]];
+                  return (
                 <View key={courtLabel} style={s.courtGroup}>
                   <View style={s.courtHeader}>
                     <Text style={s.courtHeaderText}>{courtLabel}</Text>
                     <Text style={s.courtMatchCount}>{courtMatches.length} matches</Text>
                   </View>
+
+                  {/* TBA explainer — preliminary times only, real court + start
+                      are committed once both teams have checked in and the
+                      previous matches on that court have finished. */}
+                  {courtLabel === 'Court TBA' && (
+                    <View style={s.tbaNote}>
+                      <Text style={s.tbaNoteText}>
+                        These are preliminary timings. The actual time and court will be revealed once all teams have checked in and the previous matches are completed.
+                      </Text>
+                    </View>
+                  )}
 
                   {courtMatches.map((match) => {
                     const teamA = teamNames[match.teamAId] ?? 'TBD';
@@ -870,7 +970,8 @@ export default function ScheduleScreen() {
                     );
                   })}
                 </View>
-              ))}
+                  );
+                })}
 
               {/* Move to Knockouts section */}
               {allPoolMatchesDone && (
@@ -891,7 +992,22 @@ export default function ScheduleScreen() {
                 </View>
               )}
 
-              {/* Regenerate option */}
+              {/* Refresh preliminary times — soft reshuffle without touching settings */}
+              <TouchableOpacity
+                style={s.regenerateBtn}
+                onPress={async () => {
+                  try {
+                    await matchesApi.reschedule(tournamentId);
+                    await fetchData();
+                  } catch (err: any) {
+                    xAlert('Error', err?.response?.data?.message ?? 'Could not refresh schedule');
+                  }
+                }}
+              >
+                <Text style={s.regenerateBtnText}>↻ Refresh preliminary times</Text>
+              </TouchableOpacity>
+
+              {/* Regenerate option — full reset to setup form */}
               <TouchableOpacity
                 style={s.regenerateBtn}
                 onPress={() => {
@@ -1370,6 +1486,41 @@ const s = StyleSheet.create({
     fontWeight: '700',
   },
 
+  // BY COURT / BY CATEGORY view toggle
+  viewToggleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  viewToggleBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 10,
+    backgroundColor: YColors.bg3,
+  },
+  viewToggleBtnActive: { backgroundColor: YColors.ink },
+  viewToggleText: { fontSize: 11, fontWeight: '900', letterSpacing: 1.4, color: YColors.ink2 },
+  viewToggleTextActive: { color: '#FFFFFF' },
+
+  // Category grid (drill-in landing for BY CATEGORY)
+  catGridWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  catGridTile: {
+    width: '48.5%', minHeight: 88,
+    backgroundColor: YColors.bg2, borderWidth: 1, borderColor: YColors.line,
+    borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12,
+    justifyContent: 'space-between',
+  },
+  catGridTileName: { fontSize: 12, fontWeight: '900', color: YColors.ink, letterSpacing: 0.3, textTransform: 'uppercase', lineHeight: 15 },
+  catGridFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+  catGridPill: { backgroundColor: YColors.ink, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
+  catGridPillMuted: { backgroundColor: YColors.line },
+  catGridPillText: { color: YColors.lime, fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
+  catGridPillTextMuted: { color: YColors.ink2 },
+  catBackBtn: { paddingVertical: 6, alignSelf: 'flex-start' },
+  catBackText: { fontSize: 12, fontWeight: '700', color: YColors.ink2 },
+  catFilterTitle: { fontSize: 16, fontWeight: '900', color: YColors.ink, letterSpacing: 0.5, marginTop: 4, textTransform: 'uppercase' },
+
   // Schedule view
   courtGroup: { marginBottom: 20 },
   courtHeader: {
@@ -1380,6 +1531,24 @@ const s = StyleSheet.create({
   },
   courtHeaderText: { color: BLUE, fontSize: 14, fontWeight: '800', letterSpacing: 0.5 },
   courtMatchCount: { color: '#94A3B8', fontSize: 12, fontWeight: '600' },
+
+  // TBA explainer banner — sits between the "Court TBA" header and its match list
+  tbaNote: {
+    backgroundColor: '#FFF8E1',
+    borderLeftWidth: 3,
+    borderLeftColor: '#FFB300',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 6,
+    borderRadius: 6,
+  },
+  tbaNoteText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#7C5803',
+    lineHeight: 16,
+    fontStyle: 'italic',
+  },
 
   scheduleCard: {
     backgroundColor: CARD_BG,

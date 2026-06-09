@@ -31,7 +31,6 @@ const SKILL_LEVELS: { value: SkillLevel; label: string; rating: string }[] = [
 export const ProfileSetupScreen: React.FC<Props> = () => {
   const { updateUser } = useAuthStore();
   const [fullName, setFullName] = useState('');
-  const [city, setCity] = useState('');
   const [skill, setSkill] = useState<SkillLevel | null>(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -39,7 +38,6 @@ export const ProfileSetupScreen: React.FC<Props> = () => {
   const validate = () => {
     const newErrors: Record<string, string> = {};
     if (!fullName.trim()) newErrors.fullName = 'Name is required';
-    if (!city.trim()) newErrors.city = 'City is required';
     if (!skill) newErrors.skill = 'Select your skill level';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -49,9 +47,10 @@ export const ProfileSetupScreen: React.FC<Props> = () => {
     if (!validate()) return;
     setLoading(true);
     try {
+      // Save name + skill only. City is collected on the next screen (CityPicker)
+      // via the RootNavigator's needsCity gate.
       const response = await authApi.updateProfile({
         fullName: fullName.trim(),
-        city: city.trim(),
         selfReportedSkill: skill!,
       });
       updateUser(response.data.data);
@@ -78,7 +77,7 @@ export const ProfileSetupScreen: React.FC<Props> = () => {
           resizeMode="contain"
         />
         <View style={s.stepBadge}>
-          <Text style={s.stepText}>STEP 1 OF 1</Text>
+          <Text style={s.stepText}>STEP 1 OF 2</Text>
         </View>
       </View>
 
@@ -113,24 +112,7 @@ export const ProfileSetupScreen: React.FC<Props> = () => {
           ) : null}
         </View>
 
-        {/* City */}
-        <View style={s.fieldGroup}>
-          <Text style={s.fieldLabel}>CITY</Text>
-          <TextInput
-            style={[s.textInput, errors.city ? s.textInputError : null]}
-            placeholder="Enter your city"
-            placeholderTextColor={YColors.ink3}
-            value={city}
-            onChangeText={(text) => {
-              setCity(text);
-              setErrors((prev) => ({ ...prev, city: '' }));
-            }}
-            autoCapitalize="words"
-          />
-          {errors.city ? (
-            <Text style={s.fieldError}>{errors.city}</Text>
-          ) : null}
-        </View>
+        {/* City was moved to a dedicated CityPicker step — see RootNavigator gate. */}
 
         {/* Skill Level */}
         <View style={s.fieldGroup}>

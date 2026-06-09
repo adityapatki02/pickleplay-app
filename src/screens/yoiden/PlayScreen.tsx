@@ -30,6 +30,14 @@ import type { PlayStackParamList } from '../../navigation/YoidenTabNavigator';
 
 type Nav = NativeStackNavigationProp<PlayStackParamList, 'Play'>;
 
+// Featured allowlist: hide every other tournament from discover.
+// Two slots: AIPA West Zone (live) + AIPA West Zone DEMO (sandbox).
+// Clear (set to []) to restore the normal discover behavior.
+const FEATURED_TOURNAMENT_IDS = [
+  '043c6b38-da45-41e9-968f-34f4d4d0bb05', // AIPA — live shadow
+  '77e4837b-9730-4ba6-b070-65948ff70dc6', // AIPA — DEMO
+];
+
 type Filter = 'all' | 'open' | 'live' | 'upcoming' | 'finished';
 
 const FILTERS: { id: Filter; label: string }[] = [
@@ -60,9 +68,24 @@ export default function PlayScreen() {
   const fetchTournaments = useCallback(async () => {
     try {
       setError(null);
-      const res = await tournamentsApi.discover({ limit: 50 });
-      const data = (res.data as any)?.data ?? (res.data as any) ?? [];
-      setTournaments(Array.isArray(data) ? data : []);
+      if (FEATURED_TOURNAMENT_IDS.length > 0) {
+        // Featured-only mode: fetch each by id in parallel
+        const results = await Promise.allSettled(
+          FEATURED_TOURNAMENT_IDS.map((id) => tournamentsApi.getById(id)),
+        );
+        const fetched: Tournament[] = [];
+        for (const r of results) {
+          if (r.status === 'fulfilled') {
+            const t = (r.value.data as any)?.data ?? (r.value.data as any);
+            if (t) fetched.push(t);
+          }
+        }
+        setTournaments(fetched);
+      } else {
+        const res = await tournamentsApi.discover({ limit: 50 });
+        const data = (res.data as any)?.data ?? (res.data as any) ?? [];
+        setTournaments(Array.isArray(data) ? data : []);
+      }
     } catch (e: any) {
       setError(e?.message || 'Could not load tournaments');
       setTournaments([]);

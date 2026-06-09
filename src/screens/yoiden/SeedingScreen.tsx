@@ -15,6 +15,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 
 import apiClient from '../../api/client';
 import { registrationsApi } from '../../api/registrations.api';
+import { playerContactApi } from '../../api/matches.api';
 import { xAlert, xConfirm } from '../../utils/alert';
 import { YColors, YTopBar } from '../../components/yoiden';
 
@@ -55,12 +56,14 @@ function PlayerRow({
   total,
   onMoveUp,
   onMoveDown,
+  onEditContact,
 }: {
   player: SeedPlayer;
   index: number;
   total: number;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onEditContact: (target: { userId: string; fullName: string; phone?: string }) => void;
 }) {
   const hasRating = player.rating != null && Number(player.rating) > 2.0;
   const phone = player.phone ? player.phone.replace('+91', '') : '';
@@ -79,23 +82,41 @@ function PlayerRow({
         <Text style={s.seedNum}>{index + 1}</Text>
       </View>
       <View style={s.playerInfo}>
-        {/* Player 1 */}
-        <View style={s.teamPlayerLine}>
+        {/* Player 1 \u2014 tap to edit contact */}
+        <TouchableOpacity
+          style={s.teamPlayerLine}
+          onPress={() =>
+            onEditContact({
+              userId: player.userId,
+              fullName: p1Name,
+              phone: player.phone,
+            })
+          }
+          activeOpacity={0.65}
+        >
           <Text style={s.playerName} numberOfLines={1}>{p1Name}</Text>
-          {phone ? (
-            <Text style={s.phoneInline}>{'\u260E'} {phone}</Text>
-          ) : null}
-        </View>
-        {/* Player 2 (doubles) or Partner Needed tag */}
+          <Text style={[s.phoneInline, !phone && s.phoneInlineMissing]}>
+            {'\u260E'} {phone || 'add phone'}
+          </Text>
+        </TouchableOpacity>
+        {/* Player 2 (doubles) \u2014 tap to edit contact, OR Partner Needed tag */}
         {isDoubles && hasPartner && p2Name ? (
-          <View style={s.teamPlayerLine}>
+          <TouchableOpacity
+            style={s.teamPlayerLine}
+            onPress={() =>
+              onEditContact({
+                userId: player.partner!.userId,
+                fullName: p2Name,
+                phone: player.partner!.phone,
+              })
+            }
+            activeOpacity={0.65}
+          >
             <Text style={s.partnerName} numberOfLines={1}>{p2Name}</Text>
-            {player.partner!.phone ? (
-              <Text style={s.phoneInline}>
-                {'\u260E'} {player.partner!.phone.replace('+91', '')}
-              </Text>
-            ) : null}
-          </View>
+            <Text style={[s.phoneInline, !player.partner!.phone && s.phoneInlineMissing]}>
+              {'\u260E'} {player.partner!.phone ? player.partner!.phone.replace('+91', '') : 'add phone'}
+            </Text>
+          </TouchableOpacity>
         ) : isDoubles && !hasPartner ? (
           <View style={s.partnerNeededWrap}>
             <Text style={s.partnerNeededText}>PARTNER NEEDED</Text>
@@ -143,10 +164,25 @@ function PlayerRow({
 // SeedingScreen
 // ---------------------------------------------------------------------------
 
+type CategorySummary = {
+  id: string;
+  name: string;
+  format?: string;
+  gender?: string;
+  registeredTeams?: number;
+  maxTeams?: number;
+};
+
 export default function SeedingScreen() {
   const navigation = useNavigation();
   const route = useRoute<{ key: string; name: string; params: { tournamentId: string; categoryId: string } }>();
-  const { tournamentId, categoryId } = route.params;
+  const { tournamentId } = route.params;
+  // categoryId is mutable so the user can switch between categories from the in-screen grid.
+  const [categoryId, setCategoryId] = useState<string>(route.params.categoryId);
+  const [allCategories, setAllCategories] = useState<CategorySummary[]>([]);
+  // 'grid' = pick a category, 'seed' = work on the chosen category.
+  const [view, setView] = useState<'grid' | 'seed'>('grid');
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
 
   // Player list
   const [players, setPlayers] = useState<SeedPlayer[]>([]);
@@ -168,6 +204,19 @@ export default function SeedingScreen() {
   // Auto-seed menu
   const [showAutoMenu, setShowAutoMenu] = useState(false);
 
+  // Edit-contact modal (organizer fixes a player's name/phone/email)
+  const [editContact, setEditContact] = useState<{ userId: string; fullName: string; phone?: string } | null>(null);
+  const [contactName, setContactName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [savingContact, setSavingContact] = useState(false);
+
+  useEffect(() => {
+    if (editContact) {
+      setContactName(editContact.fullName);
+      setContactPhone((editContact.phone || '').replace(/^\+91/, ''));
+    }
+  }, [editContact]);
+
   // Resolve partners modal
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [mergeTargetId, setMergeTargetId] = useState<string | null>(null);
@@ -180,13 +229,48 @@ export default function SeedingScreen() {
   // Data fetching
   // --------------------------------------------------------------------
 
+  // Fetch all categories once for the grid (independent of selected category)
+  const fetchCategories = useCallback(async () => {
+    try {
+      const catRes = await apiClient.get(`/tournaments/${tournamentId}`);
+      const t = catRes.data?.data ?? catRes.data;
+      const cats = Array.isArray(t?.categories) ? t.categories : [];
+      setAllCategories(
+        cats.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          format: c.format,
+          gender: c.gender,
+          registeredTeams: c.registeredTeams ?? 0,
+          maxTeams: c.maxTeams,
+        })),
+      );
+    } catch {}
+    setCategoriesLoading(false);
+  }, [tournamentId]);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
   const fetchPlayers = useCallback(async () => {
     try {
-      // Fetch category format
+      // Refresh the current category's format (cheap; also picks up any newly-added registrations)
       try {
         const catRes = await apiClient.get(`/tournaments/${tournamentId}`);
         const t = catRes.data?.data ?? catRes.data;
-        const cat = t?.categories?.find((c: any) => c.id === categoryId);
+        const cats = Array.isArray(t?.categories) ? t.categories : [];
+        setAllCategories(
+          cats.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            format: c.format,
+            gender: c.gender,
+            registeredTeams: c.registeredTeams ?? 0,
+            maxTeams: c.maxTeams,
+          })),
+        );
+        const cat = cats.find((c: any) => c.id === categoryId);
         if (cat?.format) setCategoryFormat(cat.format);
       } catch {}
 
@@ -203,8 +287,9 @@ export default function SeedingScreen() {
   }, [tournamentId, categoryId]);
 
   useEffect(() => {
-    fetchPlayers();
-  }, [fetchPlayers]);
+    // Only fetch players when the user is actually viewing a category's seeding.
+    if (view === 'seed') fetchPlayers();
+  }, [view, fetchPlayers]);
 
   // --------------------------------------------------------------------
   // Reorder helpers
@@ -383,24 +468,114 @@ export default function SeedingScreen() {
 
   const pools = showPreview ? getPoolPreview() : [];
 
-  if (loading) {
+  // Initial categories-loading state (before the grid can render at all)
+  if (categoriesLoading) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: YColors.bg }}>
         <SafeAreaView style={s.center}>
-          <ActivityIndicator size="large" color={'#2196F3'} />
+          <ActivityIndicator size="large" color={YColors.ink} />
         </SafeAreaView>
       </SafeAreaView>
     );
   }
 
+  // GRID VIEW: pick a category
+  if (view === 'grid') {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: YColors.bg }}>
+        <SafeAreaView style={s.container}>
+          <YTopBar
+            eyebrow="ORGANIZER"
+            title="SEEDING"
+            onBack={() => navigation.goBack()}
+          />
+          <ScrollView contentContainerStyle={s.gridScroll}>
+            <Text style={s.gridHint}>Pick a category to seed</Text>
+            <View style={s.gridWrap}>
+              {allCategories.map((c) => {
+                const count = c.registeredTeams ?? 0;
+                const max = c.maxTeams ?? 32;
+                return (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={s.gridTile}
+                    onPress={() => {
+                      setCategoryId(c.id);
+                      setLoading(true);
+                      setView('seed');
+                    }}
+                  >
+                    <Text style={s.gridTileName} numberOfLines={2}>{c.name}</Text>
+                    <View style={s.gridTileFooter}>
+                      <View style={[s.gridTileCountPill, count === 0 && s.gridTileCountPillEmpty]}>
+                        <Text style={[s.gridTileCountText, count === 0 && s.gridTileCountTextEmpty]}>
+                          {count} / {max}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </SafeAreaView>
+    );
+  }
+
+  // SEED VIEW: loading state for the chosen category
+  if (loading) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: YColors.bg }}>
+        <SafeAreaView style={s.center}>
+          <ActivityIndicator size="large" color={YColors.ink} />
+        </SafeAreaView>
+      </SafeAreaView>
+    );
+  }
+
+  // SEED VIEW: full seeding UI for the chosen category
+  const currentCat = allCategories.find((c) => c.id === categoryId);
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: YColors.bg }}>
       <SafeAreaView style={s.container}>
         <YTopBar
-          eyebrow="ORGANIZER"
+          eyebrow={currentCat?.name?.toUpperCase() ?? 'ORGANIZER'}
           title="SEEDING"
-          onBack={() => navigation.goBack()}
+          onBack={() => setView('grid')}
         />
+
+        {/* ---- CATEGORY PICKER (kept hidden — grid view replaces it) ---- */}
+        {false && allCategories.length > 1 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.catPickerRow}
+            style={s.catPickerScroll}
+          >
+            {allCategories.map((c) => {
+              const active = c.id === categoryId;
+              return (
+                <TouchableOpacity
+                  key={c.id}
+                  style={[s.catChip, active && s.catChipActive]}
+                  onPress={() => {
+                    if (c.id === categoryId) return;
+                    setLoading(true);
+                    setCategoryId(c.id);
+                  }}
+                >
+                  <Text style={[s.catChipText, active && s.catChipTextActive]} numberOfLines={1}>
+                    {c.name}
+                  </Text>
+                  <Text style={[s.catChipCount, active && s.catChipCountActive]}>
+                    {c.registeredTeams ?? 0}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
 
         {/* ---- QUICK ACTIONS ---- */}
         <View style={s.actionsRow}>
@@ -539,6 +714,7 @@ export default function SeedingScreen() {
                 total={players.length}
                 onMoveUp={() => movePlayer(idx, idx - 1)}
                 onMoveDown={() => movePlayer(idx, idx + 1)}
+                onEditContact={(target) => setEditContact(target)}
               />
             ))
           )}
@@ -747,6 +923,72 @@ export default function SeedingScreen() {
             </View>
           </View>
         </Modal>
+
+        {/* Edit-contact modal */}
+        <Modal
+          visible={editContact !== null}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setEditContact(null)}
+        >
+          <View style={s.modalOverlay}>
+            <View style={[s.modalContent, { maxWidth: 420 }]}>
+              <Text style={s.modalTitle}>Edit player contact</Text>
+              <Text style={[s.addSectionLabel, { marginTop: 4 }]}>NAME</Text>
+              <TextInput
+                style={s.input}
+                value={contactName}
+                onChangeText={setContactName}
+                placeholder="Full name"
+                placeholderTextColor={'#94A3B8'}
+              />
+              <Text style={s.addSectionLabel}>PHONE</Text>
+              <View style={s.phoneRow}>
+                <View style={s.phonePrefix}><Text style={s.phonePrefixText}>+91</Text></View>
+                <TextInput
+                  style={[s.input, s.phoneInput]}
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                  value={contactPhone}
+                  onChangeText={(v) => setContactPhone(v.replace(/\D/g, '').slice(0, 10))}
+                  placeholder="10-digit number"
+                  placeholderTextColor={'#94A3B8'}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
+                <TouchableOpacity
+                  style={[s.actionBtn, { flex: 1, backgroundColor: '#EEE' }]}
+                  onPress={() => setEditContact(null)}
+                  disabled={savingContact}
+                >
+                  <Text style={[s.actionBtnText, { color: YColors.ink }]}>CANCEL</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.actionBtn, { flex: 1, backgroundColor: YColors.ink, opacity: savingContact ? 0.5 : 1 }]}
+                  onPress={async () => {
+                    if (!editContact) return;
+                    setSavingContact(true);
+                    try {
+                      const phoneRaw = contactPhone.trim();
+                      const payload: any = { fullName: contactName.trim() };
+                      payload.phone = phoneRaw ? `+91${phoneRaw}` : '';
+                      await playerContactApi.update(tournamentId, editContact.userId, payload);
+                      setEditContact(null);
+                      await fetchPlayers();
+                    } catch (err: any) {
+                      xAlert('Error', err?.response?.data?.message ?? 'Could not save');
+                    } finally {
+                      setSavingContact(false);
+                    }
+                  }}
+                  disabled={savingContact}
+                >
+                  <Text style={[s.actionBtnText, { color: '#FFF' }]}>{savingContact ? 'SAVING…' : 'SAVE'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </SafeAreaView>
   );
@@ -767,6 +1009,125 @@ const s = StyleSheet.create({
   },
   container: {
     flex: 1,
+  },
+
+  // Category grid (landing view)
+  gridScroll: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 24,
+  },
+  gridHint: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    color: YColors.ink2,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+  },
+  gridWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  gridTile: {
+    width: '48.5%',
+    minHeight: 92,
+    backgroundColor: YColors.bg2,
+    borderWidth: 1,
+    borderColor: YColors.line,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    justifyContent: 'space-between',
+  },
+  gridTileName: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: YColors.ink,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    lineHeight: 16,
+  },
+  gridTileFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  gridTileCountPill: {
+    backgroundColor: YColors.ink,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  gridTileCountPillEmpty: {
+    backgroundColor: YColors.line,
+  },
+  gridTileCountText: {
+    color: YColors.lime,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+  },
+  gridTileCountTextEmpty: {
+    color: YColors.ink2,
+  },
+
+  // Category picker (legacy horizontal scroll — no longer rendered)
+  catPickerScroll: {
+    maxHeight: 56,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E7EB',
+  },
+  catPickerRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  catChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginRight: 6,
+  },
+  catChipActive: {
+    backgroundColor: '#111111',
+    borderColor: '#111111',
+  },
+  catChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#374151',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    maxWidth: 200,
+  },
+  catChipTextActive: {
+    color: '#FFFFFF',
+  },
+  catChipCount: {
+    marginLeft: 6,
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#6B7280',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+    overflow: 'hidden',
+    minWidth: 18,
+    textAlign: 'center',
+  },
+  catChipCountActive: {
+    color: '#111111',
+    backgroundColor: '#D7F26C',
   },
 
   // Header
@@ -974,13 +1335,13 @@ const s = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#2196F3',
+    backgroundColor: YColors.ink,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 4,
   },
   seedNum: {
-    color: '#1A1D21',
+    color: YColors.lime,
     fontSize: 14,
     fontWeight: '900',
   },
@@ -1009,6 +1370,11 @@ const s = StyleSheet.create({
   phoneInline: {
     color: '#94A3B8',
     fontSize: 11,
+  },
+  phoneInlineMissing: {
+    color: '#D97706',
+    fontStyle: 'italic',
+    textDecorationLine: 'underline',
   },
   partnerNeededWrap: {
     backgroundColor: 'rgba(255,152,0,0.15)',
@@ -1110,18 +1476,16 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
   },
   generateBtn: {
-    backgroundColor: '#2196F3',
+    backgroundColor: YColors.ink,
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(33,150,243,0.3)',
   },
   generateBtnText: {
-    color: '#1A1D21',
+    color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0.3,
+    fontWeight: '900',
+    letterSpacing: 0.6,
   },
 
   // Resolve Partners Modal

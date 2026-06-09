@@ -34,6 +34,18 @@ import { SPPL, type YoidenTabParamList } from '../../navigation/YoidenTabNavigat
 
 type Nav = BottomTabNavigationProp<YoidenTabParamList, 'HomeTab'>;
 
+// Featured tournaments shown on Home (both banner + Your Events + Nearby are
+// filtered to this allowlist). Two slots:
+//   1. AIPA West Zone — used for SHADOW SCORING (real KheloMore data)
+//   2. AIPA West Zone — DEMO — sandbox twin for live demos (synthetic players)
+// Clear both (set to []) to restore the full discover/your-events feed.
+const FEATURED_TOURNAMENT_IDS = [
+  '043c6b38-da45-41e9-968f-34f4d4d0bb05', // AIPA — live shadow
+  '77e4837b-9730-4ba6-b070-65948ff70dc6', // AIPA — DEMO
+] as const;
+const SHADOW_TOURNAMENT_ID = FEATURED_TOURNAMENT_IDS[0];
+const DEMO_TOURNAMENT_ID = FEATURED_TOURNAMENT_IDS[1];
+
 // Helpers
 const unwrap = <T,>(res: any): T => (res?.data?.data ?? res?.data ?? res) as T;
 const initials = (name: string) =>
@@ -112,10 +124,30 @@ export default function HomeScreen() {
   const openTournament = (id: string) =>
     nav.navigate('HomeTab', { screen: 'TournamentDetail', params: { tournamentId: id } });
 
-  // Pull tournaments out of registrations (when API populates them)
-  const upcomingRegs = myRegs
-    .map((r) => r.tournament)
-    .filter((t): t is Tournament => !!t);
+  // Pull tournaments out of registrations (when API populates them).
+  // A user can be registered in many categories of the same tournament — collapse
+  // to one card per tournament so "Your Events" doesn't repeat the same banner.
+  const allUpcomingRegs = (() => {
+    const seen = new Set<string>();
+    const list: Tournament[] = [];
+    for (const r of myRegs) {
+      const t = r.tournament;
+      if (!t || seen.has(t.id)) continue;
+      seen.add(t.id);
+      list.push(t);
+    }
+    return list;
+  })();
+
+  // Featured-only: keep only the AIPA + Demo tournaments. Empty allowlist = no filter.
+  const onlyFeatured = <T extends Tournament>(list: T[]): T[] =>
+    FEATURED_TOURNAMENT_IDS.length > 0
+      ? list.filter((t) => (FEATURED_TOURNAMENT_IDS as readonly string[]).includes(t.id))
+      : list;
+
+  const upcomingRegs = onlyFeatured(allUpcomingRegs);
+  const visibleHosted = onlyFeatured(myHosted);
+  const visibleNearby = onlyFeatured(nearby);
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
@@ -215,7 +247,7 @@ export default function HomeScreen() {
           <View style={{ flex: 1 }}>
             <YStatTile
               label="HOSTING"
-              value={myHosted.length}
+              value={visibleHosted.length}
               accent={YColors.accent}
               icon={
                 <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
@@ -227,36 +259,70 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Featured league — SPPL */}
+        {/* Featured 1 — AIPA West Zone (LIVE: real shadow scoring during May 29-31) */}
         <View style={styles.featuredWrap}>
-          <Pressable onPress={goSPPL} style={({ pressed }) => [styles.featuredCard, pressed && { opacity: 0.92 }]}>
+          <Pressable
+            onPress={() => openTournament(SHADOW_TOURNAMENT_ID)}
+            style={({ pressed }) => [styles.featuredCard, pressed && { opacity: 0.92 }]}
+          >
             <View style={styles.featuredBadgeRow}>
               <View style={styles.featuredBadge}>
-                <YUiText size={9} weight={900} color="#000" style={{ letterSpacing: 1.2 }}>FEATURED LEAGUE</YUiText>
+                <YUiText size={9} weight={900} color="#000" style={{ letterSpacing: 1.2 }}>LIVE TOURNAMENT</YUiText>
               </View>
               <View style={styles.featuredLiveBadge}>
-                <YUiText size={9} weight={900} color="#fff" style={{ letterSpacing: 1.2 }}>SEASON 1</YUiText>
+                <YUiText size={9} weight={900} color="#fff" style={{ letterSpacing: 1.2 }}>MAY 29–31</YUiText>
               </View>
             </View>
-            <YDisplay size={36} color="#fff" style={{ marginTop: 18, lineHeight: 34 }}>
-              SPPL
+            <YDisplay size={32} color="#fff" style={{ marginTop: 18, lineHeight: 32 }}>
+              1ST WEST ZONE
             </YDisplay>
-            <YUiText size={12} weight={700} color="rgba(255,255,255,0.85)" style={{ marginTop: 6, letterSpacing: 0.5 }}>
-              SKY CITY PICKLEBALL PREMIER LEAGUE
+            <YDisplay size={28} color="#fff" style={{ marginTop: 2, lineHeight: 28 }}>
+              CHAMPIONSHIP
+            </YDisplay>
+            <YUiText size={12} weight={700} color="rgba(255,255,255,0.85)" style={{ marginTop: 8, letterSpacing: 0.5 }}>
+              HOSTED BY AIPA · MUSCLEBAR, PUNE
             </YUiText>
             <View style={styles.featuredFooter}>
               <YUiText size={11} weight={800} color={YColors.lime} style={{ letterSpacing: 1 }}>
-                VIEW LEAGUE  →
+                VIEW TOURNAMENT  →
+              </YUiText>
+            </View>
+          </Pressable>
+        </View>
+
+        {/* Featured 2 — AIPA West Zone DEMO (sandbox for live demos; mock data) */}
+        <View style={styles.featuredWrap}>
+          <Pressable
+            onPress={() => openTournament(DEMO_TOURNAMENT_ID)}
+            style={({ pressed }) => [styles.featuredCardAlt, pressed && { opacity: 0.92 }]}
+          >
+            <View style={styles.featuredBadgeRow}>
+              <View style={[styles.featuredBadge, { backgroundColor: YColors.lime }]}>
+                <YUiText size={9} weight={900} color="#000" style={{ letterSpacing: 1.2 }}>DEMO SANDBOX</YUiText>
+              </View>
+              <View style={[styles.featuredLiveBadge, { backgroundColor: 'rgba(0,0,0,0.18)' }]}>
+                <YUiText size={9} weight={900} color={YColors.ink} style={{ letterSpacing: 1.2 }}>FULL FLOW</YUiText>
+              </View>
+            </View>
+            <YDisplay size={28} color={YColors.ink} style={{ marginTop: 18, lineHeight: 28 }}>
+              DEMO TOURNAMENT
+            </YDisplay>
+            <YUiText size={12} weight={700} color={YColors.ink2} style={{ marginTop: 8, letterSpacing: 0.5 }}>
+              SANDBOX · MOCK PLAYERS · SAFE TO PLAY WITH
+            </YUiText>
+            <View style={styles.featuredFooter}>
+              <YUiText size={11} weight={800} color={YColors.ink} style={{ letterSpacing: 1 }}>
+                OPEN DEMO  →
               </YUiText>
             </View>
           </Pressable>
         </View>
 
         {/* YOUR EVENTS — combined registrations + hosted */}
-        {(upcomingRegs.length > 0 || myHosted.length > 0) ? (
+        {(upcomingRegs.length > 0 || visibleHosted.length > 0) ? (
           <>
             <YSectionHead
-              eyebrow={`${upcomingRegs.length + myHosted.length} ACTIVE`}
+              eyebrow={`${upcomingRegs.length + visibleHosted.length} ACTIVE`}
               title="YOUR EVENTS"
             />
             <View style={styles.listWrap}>
@@ -268,7 +334,7 @@ export default function HomeScreen() {
                   style={{ marginBottom: 8 }}
                 />
               ))}
-              {myHosted.slice(0, 3).map((t) => (
+              {visibleHosted.slice(0, 3).map((t) => (
                 <YTournamentRow
                   key={`host-${t.id}`}
                   tournament={t as any}
@@ -285,14 +351,14 @@ export default function HomeScreen() {
         <YSectionHead
           eyebrow={user?.city ? user.city.toUpperCase() : 'INDIA'}
           title="UPCOMING NEARBY"
-          action={nearby.length > 0 ? 'ALL →' : undefined}
+          action={visibleNearby.length > 0 ? 'ALL →' : undefined}
         />
         <View style={styles.listWrap}>
           {loading ? (
             <View style={{ paddingVertical: 24 }}>
               <YUiText size={12} color={YColors.ink3}>Loading…</YUiText>
             </View>
-          ) : nearby.length === 0 ? (
+          ) : visibleNearby.length === 0 ? (
             <View style={styles.emptyState}>
               <YEyebrow color={YColors.ink3}>NOTHING YET</YEyebrow>
               <YUiText size={12} color={YColors.ink2} style={{ marginTop: 6 }}>
@@ -305,7 +371,7 @@ export default function HomeScreen() {
               </View>
             </View>
           ) : (
-            nearby.slice(0, 4).map((t) => (
+            visibleNearby.slice(0, 4).map((t) => (
               <YTournamentRow
                 key={t.id}
                 tournament={t as any}
@@ -391,6 +457,16 @@ const styles = StyleSheet.create({
     backgroundColor: YColors.accentDeep,
     minHeight: 180,
     overflow: 'hidden',
+  },
+  // Demo banner — light/lime variant so the two cards are visually distinct
+  featuredCardAlt: {
+    borderRadius: 14,
+    padding: 22,
+    backgroundColor: YColors.lime,
+    minHeight: 160,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: YColors.ink,
   },
   featuredBadgeRow: {
     flexDirection: 'row',

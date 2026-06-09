@@ -91,6 +91,10 @@ export default function OrganizerBracketScreen() {
   const [activeCategoryId, setActiveCategoryId] = useState<string>(categoryId);
   const [loading, setLoading] = useState(true);
   const [generatingDraw, setGeneratingDraw] = useState(false);
+  // Grid-first pattern: start on the category grid, drill into one.
+  const [view, setView] = useState<'grid' | 'bracket'>('grid');
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
 
   const fetchBracket = useCallback(async (catId: string) => {
     if (!tournamentId) { setLoading(false); return; }
@@ -106,18 +110,31 @@ export default function OrganizerBracketScreen() {
   }, [tournamentId]);
 
   const fetchCategories = useCallback(async () => {
-    if (!tournamentId) return;
+    if (!tournamentId) {
+      setCategoriesLoading(false);
+      return;
+    }
     try {
-      const res = await tournamentsApi.listCategories(tournamentId);
-      const data = res.data?.data ?? res.data ?? [];
-      setCategories(Array.isArray(data) ? data : []);
+      // Pull tournament detail (includes registeredTeams per category for the grid pills)
+      const res = await tournamentsApi.getById(tournamentId);
+      const t = (res.data as any)?.data ?? res.data;
+      const cats = Array.isArray(t?.categories) ? t.categories : [];
+      setCategories(cats);
+      const counts: Record<string, number> = {};
+      for (const c of cats) counts[c.id] = c.registeredTeams ?? 0;
+      setCategoryCounts(counts);
     } catch {}
+    setCategoriesLoading(false);
   }, [tournamentId]);
 
   useEffect(() => {
     fetchCategories();
-    fetchBracket(activeCategoryId);
-  }, [fetchCategories, fetchBracket, activeCategoryId]);
+  }, [fetchCategories]);
+
+  useEffect(() => {
+    // Only fetch bracket data when actually viewing a category.
+    if (view === 'bracket') fetchBracket(activeCategoryId);
+  }, [view, fetchBracket, activeCategoryId]);
 
   const handleGenerateDraw = () => {
     if (!tournamentId) return;
@@ -157,18 +174,67 @@ export default function OrganizerBracketScreen() {
   const noDraw = !bracketData || (!hasPools && !hasKnockout);
   const poolsComplete = bracketData ? allPoolMatchesComplete(bracketData) : false;
 
+  // Categories grid landing view
+  if (categoriesLoading) {
+    return (
+      <SafeAreaView style={[s.screen, { backgroundColor: YColors.bg }]}>
+        <View style={s.center}><ActivityIndicator size="large" color={YColors.ink} /></View>
+      </SafeAreaView>
+    );
+  }
+
+  if (view === 'grid') {
+    return (
+      <SafeAreaView style={[s.screen, { backgroundColor: YColors.bg }]}>
+        <YTopBar
+          eyebrow="ORGANIZER · DRAW & MATCHES"
+          title="BRACKETS"
+          onBack={() => navigation.goBack()}
+        />
+        <ScrollView contentContainerStyle={s.gridScroll}>
+          <Text style={s.gridHint}>Pick a category to view its draw</Text>
+          <View style={s.gridWrap}>
+            {categories.map((cat) => {
+              const count = categoryCounts[cat.id] ?? 0;
+              const max = (cat as any).maxTeams ?? 32;
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={s.gridTile}
+                  onPress={() => {
+                    setActiveCategoryId(cat.id);
+                    setLoading(true);
+                    setView('bracket');
+                  }}
+                >
+                  <Text style={s.gridTileName} numberOfLines={2}>{cat.name}</Text>
+                  <View style={s.gridTileFooter}>
+                    <View style={[s.gridTileCountPill, count === 0 && s.gridTileCountPillEmpty]}>
+                      <Text style={[s.gridTileCountText, count === 0 && s.gridTileCountTextEmpty]}>
+                        {count} / {max}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  const currentCat = categories.find((c) => c.id === activeCategoryId);
   return (
     <SafeAreaView style={[s.screen, { backgroundColor: YColors.bg }]}>
       <YTopBar
-        eyebrow="ORGANIZER · DRAW & MATCHES"
+        eyebrow={currentCat?.name?.toUpperCase() ?? 'ORGANIZER · DRAW & MATCHES'}
         title="BRACKETS"
-        onBack={() => navigation.goBack()}
+        onBack={() => setView('grid')}
       />
       <View style={s.header}>
-        {/* Category selector continues below */}
-
-        {/* Category selector inside header */}
-        {categories.length > 1 && (
+        {/* Category selector hidden — grid view replaces it. Kept for reference. */}
+        {false && categories.length > 1 && (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -514,7 +580,7 @@ const s = StyleSheet.create({
     flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
     backgroundColor: '#F5F7FA',
   },
-  tabBtnActive: { backgroundColor: BLUE },
+  tabBtnActive: { backgroundColor: YColors.ink },
   tabText: { fontSize: 11, fontWeight: '800', color: '#64748B', letterSpacing: 1.5 },
   tabTextActive: { color: WHITE },
 
@@ -523,13 +589,38 @@ const s = StyleSheet.create({
   emptyTitle: { fontSize: 16, fontWeight: '800', color: '#1A1D21', letterSpacing: 1.5, marginBottom: 8 },
   emptySub: { fontSize: 13, fontWeight: '500', color: '#64748B', textAlign: 'center', lineHeight: 20 },
 
-  // Generate button
+  // Generate button (black + white, matches Seeding screen)
   generateBtn: {
-    backgroundColor: '#E2E8F0', borderRadius: 12, paddingVertical: 14,
+    backgroundColor: YColors.ink, borderRadius: 12, paddingVertical: 14,
     alignItems: 'center', marginTop: 16, marginHorizontal: 4,
-    borderWidth: 1, borderColor: '#CBD5E1',
   },
-  generateBtnText: { fontSize: 12, fontWeight: '800', color: WHITE, letterSpacing: 1.5 },
+  generateBtnText: { fontSize: 12, fontWeight: '900', color: WHITE, letterSpacing: 1.5 },
+
+  // Category grid (landing view)
+  gridScroll: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 },
+  gridHint: {
+    fontSize: 11, fontWeight: '800', letterSpacing: 1.2, color: YColors.ink2,
+    textTransform: 'uppercase', marginBottom: 12,
+  },
+  gridWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  gridTile: {
+    width: '48.5%', minHeight: 92,
+    backgroundColor: YColors.bg2, borderWidth: 1, borderColor: YColors.line,
+    borderRadius: 14, paddingHorizontal: 12, paddingVertical: 12,
+    justifyContent: 'space-between',
+  },
+  gridTileName: {
+    fontSize: 13, fontWeight: '900', color: YColors.ink, letterSpacing: 0.3,
+    textTransform: 'uppercase', lineHeight: 16,
+  },
+  gridTileFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
+  gridTileCountPill: {
+    backgroundColor: YColors.ink, paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 999,
+  },
+  gridTileCountPillEmpty: { backgroundColor: YColors.line },
+  gridTileCountText: { color: YColors.lime, fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
+  gridTileCountTextEmpty: { color: YColors.ink2 },
 
   // Scroll
   scroll: { padding: 16 },
@@ -586,11 +677,11 @@ const s = StyleSheet.create({
   matchScoreText: { fontSize: 11, fontWeight: '700', color: BLUE, marginTop: 4 },
 
   scoreBtn: {
-    backgroundColor: BLUE, borderRadius: 8,
+    backgroundColor: YColors.ink, borderRadius: 8,
     paddingHorizontal: 14, paddingVertical: 7, marginLeft: 8,
   },
   scoreBtnDone: { backgroundColor: GREEN + '22' },
-  scoreBtnText: { fontSize: 10, fontWeight: '800', color: WHITE, letterSpacing: 1 },
+  scoreBtnText: { fontSize: 10, fontWeight: '900', color: WHITE, letterSpacing: 1 },
   scoreBtnTextDone: { color: GREEN },
 
   // Knockout bracket styles

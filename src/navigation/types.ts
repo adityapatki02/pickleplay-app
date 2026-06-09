@@ -7,6 +7,7 @@ export type AuthStackParamList = {
   PhoneInput: undefined;
   OTPVerify: { phone: string; verificationId: string };
   ProfileSetup: undefined;
+  CityPicker: undefined;
   ForgotPin: { phone?: string } | undefined;
 };
 

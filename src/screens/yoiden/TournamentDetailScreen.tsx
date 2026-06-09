@@ -32,6 +32,9 @@ import { useAuthStore } from '../../store/authStore';
 type Route = RouteProp<PlayStackParamList, 'TournamentDetail'>;
 type Nav = NativeStackNavigationProp<PlayStackParamList, 'TournamentDetail'>;
 
+// AIPA West Zone 2026 — shadow-scoring only. Hide RUN TOURNAMENT tools.
+const AIPA_TOURNAMENT_ID = '043c6b38-da45-41e9-968f-34f4d4d0bb05';
+
 const STATUS_LABEL: Record<string, string> = {
   draft: 'DRAFT',
   published: 'UPCOMING',
@@ -195,40 +198,64 @@ export default function TournamentDetailScreen() {
           ) : null}
         </View>
 
-        {/* Organizer MANAGE bar */}
+        {/* Organizer — Shadow Mode (priority path for AIPA event) */}
         {isOrganizer ? (
           <>
-            <YSectionHead eyebrow="ORGANIZER" title="MANAGE" />
+            <YSectionHead eyebrow="ORGANIZER · SHADOW MODE" title="LIVE SCORING" />
             <View style={styles.manageGrid}>
               <ManageTile
-                label="REGISTRATIONS"
-                sub="Players & teams"
-                onPress={() => openManage('RegistrationManage', { tournamentId: t.id })}
+                label="STANDINGS"
+                sub="Pools, knockout, champion"
+                onPress={() => openManage('TournamentStandings', { tournamentId: t.id })}
               />
               <ManageTile
-                label="SEEDING"
-                sub="Draw generation"
-                onPress={() =>
-                  firstCategory &&
-                  openManage('Seeding', { tournamentId: t.id, categoryId: firstCategory.id })
-                }
-                disabled={!firstCategory}
-              />
-              <ManageTile
-                label="SCHEDULE"
-                sub="Courts & rest"
-                onPress={() => openManage('Schedule', { tournamentId: t.id })}
-              />
-              <ManageTile
-                label="BRACKET"
-                sub="View / advance"
-                onPress={() =>
-                  firstCategory &&
-                  openManage('Bracket', { tournamentId: t.id, categoryId: firstCategory.id })
-                }
-                disabled={!firstCategory}
+                label="RANKINGS"
+                sub="Final per-category ranking"
+                onPress={() => openManage('TournamentRankings', { tournamentId: t.id })}
               />
             </View>
+
+            {/* Full-flow tiles — hidden for AIPA (shadow-only); shown for tournaments we run ourselves */}
+            {t.id !== AIPA_TOURNAMENT_ID ? (
+              <>
+                <YSectionHead eyebrow="ORGANIZER · FULL FLOW" title="RUN TOURNAMENT" />
+                <View style={styles.manageGrid}>
+                  <ManageTile
+                    label="SCORE LOG"
+                    sub="Pick teams, punch score"
+                    onPress={() => openManage('ScoreLogger', { tournamentId: t.id })}
+                  />
+                  <ManageTile
+                    label="REGISTRATIONS"
+                    sub="Players & teams"
+                    onPress={() => openManage('RegistrationManage', { tournamentId: t.id })}
+                  />
+                  <ManageTile
+                    label="SEEDING"
+                    sub="Draw generation"
+                    onPress={() =>
+                      firstCategory &&
+                      openManage('Seeding', { tournamentId: t.id, categoryId: firstCategory.id })
+                    }
+                    disabled={!firstCategory}
+                  />
+                  <ManageTile
+                    label="SCHEDULE"
+                    sub="Courts & rest"
+                    onPress={() => openManage('Schedule', { tournamentId: t.id })}
+                  />
+                  <ManageTile
+                    label="BRACKET"
+                    sub="View / advance"
+                    onPress={() =>
+                      firstCategory &&
+                      openManage('Bracket', { tournamentId: t.id, categoryId: firstCategory.id })
+                    }
+                    disabled={!firstCategory}
+                  />
+                </View>
+              </>
+            ) : null}
           </>
         ) : null}
 

@@ -18,6 +18,9 @@ import SeedingScreen from '../screens/yoiden/SeedingScreen';
 import ScheduleScreen from '../screens/yoiden/ScheduleScreen';
 import ScoreEntryScreen from '../screens/yoiden/ScoreEntryScreen';
 import BracketScreen from '../screens/yoiden/BracketScreen';
+import ScoreLoggerScreen from '../screens/yoiden/ScoreLoggerScreen';
+import StandingsScreen from '../screens/yoiden/StandingsScreen';
+import RankingsScreen from '../screens/yoiden/RankingsScreen';
 
 // League (SPPL) screens — themed for demo
 import LeagueDashboardScreen from '../screens/league/LeagueDashboardScreen';
@@ -41,6 +44,9 @@ type DetailAndManageRoutes = {
   Schedule: { tournamentId: string };
   ScoreEntry: { matchId: string; tournamentId?: string };
   Bracket: { tournamentId: string; categoryId: string };
+  ScoreLogger: { tournamentId: string };
+  TournamentStandings: { tournamentId: string };
+  TournamentRankings: { tournamentId: string };
   // SPPL league — route names match what the existing league screens use internally
   LeagueDashboard: { leagueId: string; seasonId: string };
   Standings: { leagueId: string; seasonId: string };
@@ -97,6 +103,9 @@ function registerDetailAndManageScreens<T extends DetailAndManageRoutes>(
       <S name="Schedule" component={ScheduleScreen} />
       <S name="ScoreEntry" component={ScoreEntryScreen} />
       <S name="Bracket" component={BracketScreen} />
+      <S name="ScoreLogger" component={ScoreLoggerScreen} />
+      <S name="TournamentStandings" component={StandingsScreen} />
+      <S name="TournamentRankings" component={RankingsScreen} />
       {/* SPPL league */}
       <S name="LeagueDashboard" component={LeagueDashboardScreen} />
       <S name="Standings" component={LeagueStandingsScreen} />

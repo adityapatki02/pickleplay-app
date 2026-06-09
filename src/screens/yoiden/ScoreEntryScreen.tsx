@@ -240,6 +240,23 @@ function InlineScoreForm({
           </View>
         );
       })}
+      {/* Live winner preview — computed from entered scores. Pickleball is
+          side-out scoring, so whoever wins more games (or the single game,
+          for best-of-1) is the winner. */}
+      {(() => {
+        const { teamAWins, teamBWins } = countWins(gameScores);
+        let label: string | null = null;
+        if (teamAWins > teamBWins && teamAWins > 0) label = teamAName;
+        else if (teamBWins > teamAWins && teamBWins > 0) label = teamBName;
+        if (!label) return null;
+        return (
+          <View style={inlineStyles.winnerBanner}>
+            <Text style={inlineStyles.winnerLabel}>WINNER</Text>
+            <Text style={inlineStyles.winnerName} numberOfLines={1}>{label}</Text>
+          </View>
+        );
+      })()}
+
       {/* Actions */}
       <View style={inlineStyles.actions}>
         <TouchableOpacity style={inlineStyles.walkoverBtn} onPress={handleWalkover}>
@@ -320,6 +337,31 @@ const inlineStyles = StyleSheet.create({
     fontWeight: '300',
     width: 20,
     textAlign: 'center',
+  },
+  winnerBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: NAVY,
+    borderRadius: borderRadius.md,
+  },
+  winnerLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: '900',
+    color: '#C8F232', // YColors.lime
+    letterSpacing: 2,
+  },
+  winnerName: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+    flexShrink: 1,
   },
   actions: {
     flexDirection: 'row',

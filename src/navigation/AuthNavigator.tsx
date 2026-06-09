@@ -5,6 +5,7 @@ import { SplashScreen } from '../screens/auth/SplashScreen';
 import { PhoneInputScreen } from '../screens/auth/PhoneInputScreen';
 import { OTPVerifyScreen } from '../screens/auth/OTPVerifyScreen';
 import { ProfileSetupScreen } from '../screens/auth/ProfileSetupScreen';
+import { CityPickerScreen } from '../screens/auth/CityPickerScreen';
 import { ForgotPinScreen } from '../screens/auth/ForgotPinScreen';
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
@@ -22,6 +23,7 @@ export const AuthNavigator: React.FC = () => {
       <Stack.Screen name="PhoneInput" component={PhoneInputScreen} options={{ title: 'Yoiden' }} />
       <Stack.Screen name="OTPVerify" component={OTPVerifyScreen} options={{ title: 'Yoiden' }} />
       <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} options={{ title: 'Yoiden' }} />
+      <Stack.Screen name="CityPicker" component={CityPickerScreen} options={{ title: 'Yoiden' }} />
       <Stack.Screen name="ForgotPin" component={ForgotPinScreen} options={{ title: 'Yoiden' }} />
     </Stack.Navigator>
   );
