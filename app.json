@@ -17,7 +17,8 @@
       "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "Yoiden needs camera access to take profile photos.",
-        "NSPhotoLibraryUsageDescription": "Yoiden needs photo library access to set a profile picture."
+        "NSPhotoLibraryUsageDescription": "Yoiden needs photo library access to set a profile picture.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -32,12 +33,25 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/icon.png",
+      "name": "Yoiden",
+      "shortName": "Yoiden",
+      "themeColor": "#0A0A0B",
+      "backgroundColor": "#F6F5F1"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3cf2fc6b-b1df-4c61-b1b1-a1520267de2e"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     },
     "extra": {
       "eas": {
         "projectId": "3cf2fc6b-b1df-4c61-b1b1-a1520267de2e"
       }
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

@@ -19,14 +19,16 @@ import { colors, spacing, typography, borderRadius } from '../../config/theme';
 import DatePickerModal, { DateField } from '../../components/ui/DatePickerModal';
 import type { CreateLeagueInput, CreateSeasonInput } from '../../types/league.types';
 
+import { YColors, YTopBar } from '../../components/yoiden';
+
 // ─── Design tokens ──────────────────────────────────────────────────────────
-const NAVY = '#001E40';
-const BLUE = '#2196F3';
+const NAVY: string = YColors.ink;
+const BLUE: string = YColors.accent;
 const GREEN = '#06D6A0';
-const SURFACE = '#F5F7FA';
-const BORDER = '#E2E8F0';
-const TEXT_COLOR = '#1A1D21';
-const TEXT_SUB = '#64748B';
+const SURFACE: string = YColors.bg;
+const BORDER: string = YColors.line2;
+const TEXT_COLOR: string = YColors.ink;
+const TEXT_SUB: string = YColors.ink2;
 
 const TOTAL_STEPS = 3;
 const STEP_LABELS = ['BASICS', 'SEASON', 'REVIEW'];
@@ -564,7 +566,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) + 8 : 8,
+    paddingBottom: spacing.md,
     backgroundColor: NAVY,
   },
   headerBtn: {

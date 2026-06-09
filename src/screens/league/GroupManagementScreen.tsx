@@ -9,6 +9,7 @@ import {
   StatusBar,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import {
@@ -22,15 +23,17 @@ import { colors, spacing, typography, borderRadius, shadows } from '../../config
 import type { Franchise, LeagueGroup, GroupAssignment } from '../../types/league.types';
 import type { LeagueStackParamList } from '../../navigation/types';
 
+import { YColors, YTopBar } from '../../components/yoiden';
+
 // ─── Design tokens ──────────────────────────────────────────────────────────
-const NAVY = '#001E40';
-const BLUE = '#2196F3';
+const NAVY: string = YColors.ink;
+const BLUE: string = YColors.accent;
 const GREEN = '#06D6A0';
 const ORANGE = '#F59E0B';
-const SURFACE = '#F5F7FA';
-const BORDER = '#E2E8F0';
-const TEXT_COLOR = '#1A1D21';
-const TEXT_SUB = '#64748B';
+const SURFACE: string = YColors.bg;
+const BORDER: string = YColors.line2;
+const TEXT_COLOR: string = YColors.ink;
+const TEXT_SUB: string = YColors.ink2;
 
 const POOL_NAMES = ['Pool A', 'Pool B', 'Pool C', 'Pool D'];
 const POOL_COLORS = [BLUE, '#8B5CF6', '#F97316', '#06D6A0'];
@@ -375,7 +378,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) + 8 : 8,
+    paddingBottom: spacing.md,
     backgroundColor: NAVY,
   },
   headerBackBtn: {

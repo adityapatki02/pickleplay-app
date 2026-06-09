@@ -14,25 +14,31 @@ type TabItem = {
   Icon: React.FC<{ size?: number; color?: string; strokeWidth?: number }>;
 };
 
+// Tournament mode: only Home + Profile shown. MyEvents/Discover tabs are
+// still registered in the Tab.Navigator (so deep-links like League Management
+// → MyEventsTab → LeagueDashboard keep working), but hidden from the bar.
 const TABS: TabItem[] = [
-  { key: 'HomeTab',     label: 'Home',     center: false, Icon: HomeIcon    },
-  { key: 'MyEventsTab', label: 'Events',   center: false, Icon: CalendarIcon },
-  { key: 'DiscoverTab', label: 'Discover', center: false, Icon: ExploreIcon },
-  { key: 'ProfileTab',  label: 'Profile',  center: false, Icon: ProfileIcon },
+  { key: 'HomeTab',     label: 'Home',    center: false, Icon: HomeIcon    },
+  { key: 'ProfileTab',  label: 'Profile', center: false, Icon: ProfileIcon },
 ];
 
 export const FloatingTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
   const insets = useSafeAreaInsets();
+  const currentRouteName = state.routes[state.index]?.name;
   return (
     <View style={[styles.wrapper, { paddingBottom: insets.bottom, backgroundColor: '#FFFFFF' }]} pointerEvents="box-none">
       <View style={styles.pill}>
-        {TABS.map((tab, index) => {
-          const isFocused = state.index === index;
+        {TABS.map((tab) => {
+          // Match focus by route name (not array index) — TABS array is a subset
+          // of registered Tab.Screens, so positional matching would be wrong.
+          const isFocused = currentRouteName === tab.key;
+          // Look up the actual route key from the navigator state for the tabPress event.
+          const routeKey = state.routes.find((r) => r.name === tab.key)?.key;
 
           const onPress = () => {
             const event = navigation.emit({
               type: 'tabPress',
-              target: state.routes[index]?.key,
+              target: routeKey,
               canPreventDefault: true,
             });
             if (!isFocused && !event.defaultPrevented) {
@@ -77,7 +83,6 @@ export const FloatingTabBar: React.FC<BottomTabBarProps> = ({ state, navigation 
               <Text style={[styles.label, isFocused && styles.labelActive]}>
                 {tab.label}
               </Text>
-              {isFocused && <View style={styles.activeDot} />}
             </TouchableOpacity>
           );
         })}

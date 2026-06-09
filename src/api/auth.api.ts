@@ -40,6 +40,18 @@ export const authApi = {
   verifyOtp: (data: VerifyOtpRequest) =>
     apiClient.post<ApiResponse<VerifyOtpResponse>>('/auth/verify-otp', data),
 
+  // Self-serve "Forgot PIN" — MSG91 widget. Single-shot:
+  //   1) Frontend opens MSG91 widget; user does phone + OTP entirely in
+  //      MSG91's modal; MSG91 hands us back an `accessToken`.
+  //   2) Post { accessToken, newPin } here → backend verifies the token
+  //      with MSG91, looks up the user by the verified phone, rotates the
+  //      PIN, and returns a Yoiden JWT.
+  resetPin: (data: { accessToken: string; newPin: string }) =>
+    apiClient.post<ApiResponse<{ user: User; accessToken: string }>>(
+      '/auth/forgot-pin/reset',
+      data,
+    ),
+
   getMe: () => apiClient.get<ApiResponse<User>>('/auth/me'),
 
   updateProfile: (data: UpdateProfileRequest) =>

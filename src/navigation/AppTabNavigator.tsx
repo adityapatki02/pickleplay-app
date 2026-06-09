@@ -43,6 +43,8 @@ import GroupManagementScreen from '../screens/league/GroupManagementScreen';
 import LeagueDashboardScreen from '../screens/league/LeagueDashboardScreen';
 import TieDetailScreen from '../screens/league/TieDetailScreen';
 import StandingsScreen from '../screens/league/StandingsScreen';
+import PlayerProfileScreen from '../screens/league/PlayerProfileScreen';
+import FantasyScreen from '../screens/league/FantasyScreen';
 
 // ─── PROFILE SCREENS ───
 import ProfileScreen from '../screens/ProfileScreen';
@@ -78,6 +80,7 @@ const HomeStackNavigator = () => (
     <HomeStack.Screen name="Home" component={OrganizerHomeScreen} />
     <HomeStack.Screen name="TournamentDetail" component={TournamentDetailScreen} />
     <HomeStack.Screen name="Registration" component={RegisterScreen} />
+    <HomeStack.Screen name="Fantasy" component={FantasyScreen} />
     <HomeStack.Screen name="Notifications">
       {() => <Placeholder title="Notifications" subtitle="Your match alerts & updates" />}
     </HomeStack.Screen>
@@ -122,6 +125,8 @@ const MyEventsStackNavigator = () => (
     <MyEventsStack.Screen name="LeagueDashboard" component={LeagueDashboardScreen} />
     <MyEventsStack.Screen name="TieDetail" component={TieDetailScreen} />
     <MyEventsStack.Screen name="Standings" component={StandingsScreen} />
+    <MyEventsStack.Screen name="PlayerProfile" component={PlayerProfileScreen} />
+    <MyEventsStack.Screen name="Fantasy" component={FantasyScreen} />
   </MyEventsStack.Navigator>
 );
 

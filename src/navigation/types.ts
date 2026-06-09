@@ -7,6 +7,8 @@ export type AuthStackParamList = {
   PhoneInput: undefined;
   OTPVerify: { phone: string; verificationId: string };
   ProfileSetup: undefined;
+  CityPicker: undefined;
+  ForgotPin: { phone?: string } | undefined;
 };
 
 // Player Tab Stacks
@@ -15,6 +17,7 @@ export type HomeStackParamList = {
   Notifications: undefined;
   TournamentDetail: { tournamentId: string };
   Registration: { tournamentId: string; categoryId: string };
+  Fantasy: { seasonId: string; leagueId?: string };
 };
 
 export type DiscoverStackParamList = {
@@ -124,6 +127,9 @@ export type LeagueStackParamList = {
   LeagueDashboard: { leagueId: string; seasonId: string };
   TieDetail: { tieId: string };
   Standings: { leagueId: string; seasonId: string };
+  LeagueStats: { leagueId: string; seasonId: string };
+  PlayerProfile: { playerId: string; leagueId?: string; seasonId?: string };
+  Fantasy: { seasonId: string; leagueId?: string };
 };
 
 // My Events unified stack
@@ -150,6 +156,9 @@ export type MyEventsStackParamList = {
   LeagueDashboard: { leagueId: string; seasonId: string };
   TieDetail: { tieId: string };
   Standings: { leagueId: string; seasonId: string };
+  LeagueStats: { leagueId: string; seasonId: string };
+  PlayerProfile: { playerId: string; leagueId?: string; seasonId?: string };
+  Fantasy: { seasonId: string; leagueId?: string };
 };
 
 // Stats stack

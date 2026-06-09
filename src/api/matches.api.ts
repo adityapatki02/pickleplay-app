@@ -56,4 +56,45 @@ export const matchesApi = {
       `/tournaments/${tournamentId}/categories/${categoryId}/regenerate-draw`,
       { assignments },
     ),
+
+  // Shadow-scoring: log a match by manually picking teams + entering score.
+  logManualMatch: (
+    tournamentId: string,
+    categoryId: string,
+    dto: {
+      teamAId: string;
+      teamBId: string;
+      round?: string;
+      teamAScore?: number;
+      teamBScore?: number;
+      games?: { teamAScore: number; teamBScore: number }[];
+      courtId?: string;
+      scheduledStart?: string;
+      scheduledEnd?: string;
+      notes?: string;
+    },
+  ) =>
+    apiClient.post(
+      `/tournaments/${tournamentId}/categories/${categoryId}/manual-matches`,
+      dto,
+    ),
+
+  listManualMatches: (tournamentId: string, categoryId: string) =>
+    apiClient.get(
+      `/tournaments/${tournamentId}/categories/${categoryId}/manual-matches`,
+    ),
+
+  // Admin: rerun the scheduler. Use when the algorithm changes and existing
+  // matches need a fresh pass without check-ins / scoring.
+  reschedule: (tournamentId: string) =>
+    apiClient.post(`/tournaments/${tournamentId}/reschedule`),
+};
+
+// Organizer: edit a player's contact info while tournament is in shadow mode.
+export const playerContactApi = {
+  update: (
+    tournamentId: string,
+    userId: string,
+    dto: { fullName?: string; phone?: string; email?: string },
+  ) => apiClient.patch(`/tournaments/${tournamentId}/users/${userId}`, dto),
 };

@@ -15,7 +15,8 @@ import {
   Platform,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { getRoster, addRosterPlayer, getFranchise } from '../../api/leagues.api';
+import { getRoster, addRosterPlayer, getFranchise, removeRosterPlayer } from '../../api/leagues.api';
+import { xAlert, xConfirm } from '../../utils/alert';
 import { useLeagueStore } from '../../store/leagueStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../config/theme';
 import type {
@@ -27,16 +28,18 @@ import type {
 import { CATEGORY_LABELS } from '../../types/league.types';
 import type { LeagueStackParamList } from '../../navigation/types';
 
+import { YColors, YTopBar } from '../../components/yoiden';
+
 // ─── Design tokens ──────────────────────────────────────────────────────────
-const NAVY = '#001E40';
-const BLUE = '#2196F3';
+const NAVY: string = YColors.ink;
+const BLUE: string = YColors.accent;
 const GREEN = '#06D6A0';
 const ORANGE = '#F59E0B';
 const RED = '#EF4444';
-const SURFACE = '#F5F7FA';
-const BORDER = '#E2E8F0';
-const TEXT_COLOR = '#1A1D21';
-const TEXT_SUB = '#64748B';
+const SURFACE: string = YColors.bg;
+const BORDER: string = YColors.line2;
+const TEXT_COLOR: string = YColors.ink;
+const TEXT_SUB: string = YColors.ink2;
 
 const CATEGORY_ORDER: CategorySlug[] = [
   'kids',
@@ -90,7 +93,11 @@ export default function RosterManagementScreen() {
         getRoster(franchiseId, seasonId),
         !currentFranchise ? getFranchise(franchiseId) : Promise.resolve(null),
       ]);
-      setRoster(Array.isArray(rosterData) ? rosterData : []);
+      // Hide released (soft-deleted) players — admin can still see them via DB if needed.
+      const activeRoster = Array.isArray(rosterData)
+        ? rosterData.filter((r: any) => r.status !== 'released')
+        : [];
+      setRoster(activeRoster);
       if (franchiseData) setCurrentFranchise(franchiseData);
     } catch (err) {
       console.error('Failed to load roster', err);
@@ -159,7 +166,12 @@ export default function RosterManagementScreen() {
       setShowAddModal(false);
       resetAddForm();
     } catch (err: any) {
-      setAddError(err?.message || 'Failed to add player');
+      // Backend Nest returns detailed message(s) in err.response.data.message — show those, not the axios generic.
+      const be = err?.response?.data?.message;
+      const msg = Array.isArray(be) ? be.join(', ') : (be || err?.response?.data?.error || err?.message || 'Failed to add player');
+      setAddError(msg);
+      // eslint-disable-next-line no-console
+      console.warn('[addRosterPlayer failed]', { status: err?.response?.status, body: err?.response?.data, sentInput: input });
     } finally {
       setSaving(false);
     }
@@ -247,6 +259,29 @@ export default function RosterManagementScreen() {
                 {item.status.toUpperCase()}
               </Text>
             </View>
+            {/* Remove player — admin only; confirmation prevents accidental deletion */}
+            <TouchableOpacity
+              onPress={() => {
+                const pname = item.player?.fullName ?? item.player?.displayName ?? 'this player';
+                xConfirm(
+                  'Remove Player?',
+                  `Remove ${pname} from the roster? This cannot be undone.`,
+                  async () => {
+                    try {
+                      await removeRosterPlayer(franchiseId, item.id);
+                      setRoster((prev) => prev.filter((r) => r.id !== item.id));
+                    } catch (err: any) {
+                      xAlert('Error', err?.response?.data?.message || err?.message || 'Failed to remove player');
+                    }
+                  },
+                );
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.removeBtn}
+              activeOpacity={0.6}
+            >
+              <Text style={styles.removeBtnText}>×</Text>
+            </TouchableOpacity>
           </View>
         )}
         renderSectionFooter={({ section }) =>
@@ -397,7 +432,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) + 8 : 8,
+    paddingBottom: spacing.md,
     backgroundColor: NAVY,
     gap: spacing.md,
   },
@@ -513,6 +549,22 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  removeBtn: {
+    marginLeft: spacing.sm,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeBtnText: {
+    fontSize: 20,
+    lineHeight: 20,
+    fontWeight: '700',
+    color: RED,
+    marginTop: -2,
   },
   emptySection: {
     fontSize: typography.fontSize.sm,

@@ -18,21 +18,15 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
 import { authApi } from '../../api/auth.api';
-import { xAlert } from '../../utils/alert';
+import { YColors, YFonts } from '../../config/yoiden';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'PhoneInput'>;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const NAVY = '#001E40';
-const BLUE_ACCENT = '#2196F3';
-const WHITE = '#FFFFFF';
-const GRAY = '#737780';
-const BORDER = '#E1E3E4';
-const RED = '#BA1A1A';
 
 type Mode = 'login' | 'register';
 
-export const PhoneInputScreen: React.FC<Props> = () => {
+export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
   const { login } = useAuthStore();
   const [mode, setMode] = useState<Mode>('login');
   const [phone, setPhone] = useState('');
@@ -98,8 +92,9 @@ export const PhoneInputScreen: React.FC<Props> = () => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ── LOGO HEADER (white) ── */}
+          {/* ── LOGO HEADER (cream w/ lime stripe) ── */}
           <View style={s.logoHeader}>
+            <View style={s.sideStripe} />
             <Image
               source={require('../../../assets/Logo.png')}
               style={s.iconMark}
@@ -112,15 +107,18 @@ export const PhoneInputScreen: React.FC<Props> = () => {
             />
           </View>
 
-          {/* ── NAVY BODY ── */}
+          {/* ── EDITORIAL BODY ── */}
           <Animated.View style={[s.body, { opacity: fadeIn }]}>
-            <Text style={s.eyebrow}>YOIDEN</Text>
+            <Text style={s.eyebrow}>{mode === 'login' ? 'LOG IN' : 'CREATE ACCOUNT'}</Text>
             <Text style={s.title}>
-              {mode === 'login' ? 'Welcome back.' : 'Let\'s get you started.'}
+              {mode === 'login' ? 'WELCOME' : "LET'S"}
+            </Text>
+            <Text style={s.titleAccent}>
+              {mode === 'login' ? 'BACK.' : 'GET YOU IN.'}
             </Text>
             <Text style={s.subtitle}>
               {mode === 'login'
-                ? 'Log in with your phone and PIN.'
+                ? 'Phone + PIN. That\'s it.'
                 : 'Create your account to find and join tournaments.'}
             </Text>
 
@@ -133,7 +131,7 @@ export const PhoneInputScreen: React.FC<Props> = () => {
                   value={name}
                   onChangeText={(t) => { setName(t); setError(''); }}
                   placeholder="e.g. Alex Kumar"
-                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  placeholderTextColor={YColors.ink3}
                   autoCapitalize="words"
                   returnKeyType="next"
                   editable={!loading}
@@ -153,11 +151,14 @@ export const PhoneInputScreen: React.FC<Props> = () => {
                   value={phone}
                   onChangeText={(t) => { setPhone(t.replace(/[^0-9]/g, '').slice(0, 10)); setError(''); }}
                   placeholder="98765 43210"
-                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  placeholderTextColor={YColors.ink3}
                   keyboardType="number-pad"
                   maxLength={10}
                   returnKeyType="next"
                   editable={!loading}
+                  autoComplete="tel"
+                  textContentType="telephoneNumber"
+                  {...(Platform.OS === 'web' ? { nativeID: 'yoiden-phone', name: 'phone' } as any : {})}
                 />
               </View>
             </View>
@@ -170,19 +171,36 @@ export const PhoneInputScreen: React.FC<Props> = () => {
                 value={pin}
                 onChangeText={(t) => { setPin(t.replace(/[^0-9]/g, '').slice(0, 6)); setError(''); }}
                 placeholder="• • • • • •"
-                placeholderTextColor="rgba(255,255,255,0.4)"
+                placeholderTextColor={YColors.ink3}
                 keyboardType="number-pad"
                 maxLength={6}
                 secureTextEntry
                 returnKeyType="done"
                 editable={!loading}
                 onSubmitEditing={canSubmit ? handleSubmit : undefined}
+                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                textContentType={mode === 'register' ? 'newPassword' : 'password'}
+                {...(Platform.OS === 'web' ? { nativeID: 'yoiden-pin', name: 'password' } as any : {})}
               />
               <Text style={s.hint}>
                 {mode === 'register'
                   ? 'Remember this PIN — you\'ll use it to log in'
                   : 'Enter the PIN you chose when signing up'}
               </Text>
+              {mode === 'login' && (
+                <TouchableOpacity
+                  onPress={() =>
+                    navigation.navigate('ForgotPin', {
+                      phone: phone.length === 10 ? phone : undefined,
+                    })
+                  }
+                  disabled={loading}
+                  style={s.forgotRow}
+                  activeOpacity={0.7}
+                >
+                  <Text style={s.forgotText}>Forgot your PIN?</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Error */}
@@ -200,7 +218,7 @@ export const PhoneInputScreen: React.FC<Props> = () => {
               activeOpacity={0.85}
             >
               {loading ? (
-                <ActivityIndicator color={NAVY} size="small" />
+                <ActivityIndicator color={YColors.bg} size="small" />
               ) : (
                 <Text style={s.submitText}>
                   {mode === 'login' ? 'LOG IN' : 'CREATE ACCOUNT'}
@@ -231,105 +249,144 @@ export default PhoneInputScreen;
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: NAVY },
+  screen: { flex: 1, backgroundColor: YColors.bg },
   scroll: { flexGrow: 1 },
 
   logoHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: WHITE,
-    paddingVertical: 28,
+    backgroundColor: YColors.bg,
+    paddingVertical: 32,
     paddingHorizontal: 24,
     gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: YColors.line,
+    position: 'relative',
+  },
+  sideStripe: {
+    position: 'absolute',
+    left: 20,
+    top: 24,
+    bottom: 24,
+    width: 4,
+    backgroundColor: YColors.lime,
   },
   iconMark: {
-    width: SCREEN_WIDTH * 0.18,
-    height: SCREEN_WIDTH * 0.18,
+    width: Math.min(SCREEN_WIDTH * 0.16, 64),
+    height: Math.min(SCREEN_WIDTH * 0.16, 64),
   },
   wordMark: {
-    flex: 1,
-    height: SCREEN_WIDTH * 0.36,
+    width: Math.min(SCREEN_WIDTH * 0.46, 184),
+    height: Math.min(SCREEN_WIDTH * 0.16, 64),
   },
 
   body: {
     flex: 1,
     paddingHorizontal: 28,
-    paddingTop: 32,
+    paddingTop: 36,
     paddingBottom: 32,
   },
 
   eyebrow: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: BLUE_ACCENT,
+    fontFamily: YFonts.uiExtrabold,
+    fontSize: 11,
+    color: YColors.accent,
     letterSpacing: 3,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: WHITE,
-    letterSpacing: -0.5,
-    marginBottom: 6,
+    fontFamily: YFonts.display,
+    fontSize: 48,
+    fontStyle: 'italic',
+    color: YColors.ink,
+    letterSpacing: 0.5,
+    lineHeight: 52,
+  },
+  titleAccent: {
+    fontFamily: YFonts.display,
+    fontSize: 48,
+    fontStyle: 'italic',
+    color: YColors.accent,
+    letterSpacing: 0.5,
+    lineHeight: 52,
+    marginBottom: 14,
   },
   subtitle: {
+    fontFamily: YFonts.ui,
     fontSize: 14,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.6)',
+    color: YColors.ink2,
     marginBottom: 32,
     lineHeight: 20,
   },
 
   field: { marginBottom: 18 },
   label: {
+    fontFamily: YFonts.uiExtrabold,
     fontSize: 10,
-    fontWeight: '800',
-    color: 'rgba(255,255,255,0.55)',
+    color: YColors.ink2,
     letterSpacing: 1.8,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: YColors.bg2,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: YColors.line2,
     paddingHorizontal: 14,
     paddingVertical: 14,
+    fontFamily: YFonts.uiSemibold,
     fontSize: 16,
-    fontWeight: '600',
-    color: WHITE,
+    color: YColors.ink,
   },
   phoneRow: { flexDirection: 'row', gap: 10 },
   countryBox: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: YColors.bg2,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: YColors.line2,
     paddingHorizontal: 14,
     justifyContent: 'center',
   },
-  countryText: { fontSize: 15, fontWeight: '700', color: WHITE },
+  countryText: {
+    fontFamily: YFonts.uiBold,
+    fontSize: 15,
+    color: YColors.ink,
+  },
   hint: {
+    fontFamily: YFonts.ui,
     fontSize: 11,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.5)',
+    color: YColors.ink3,
     marginTop: 6,
+  },
+  forgotRow: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+  },
+  forgotText: {
+    fontFamily: YFonts.uiExtrabold,
+    fontSize: 12,
+    color: YColors.accent,
+    letterSpacing: 0.5,
   },
 
   errorBox: {
-    backgroundColor: 'rgba(186,26,26,0.15)',
+    backgroundColor: 'rgba(255,61,92,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(186,26,26,0.35)',
+    borderColor: 'rgba(255,61,92,0.35)',
     borderRadius: 10,
     padding: 12,
     marginTop: 4,
     marginBottom: 10,
   },
-  errorText: { fontSize: 13, fontWeight: '600', color: '#FFB4B4' },
+  errorText: {
+    fontFamily: YFonts.uiSemibold,
+    fontSize: 13,
+    color: YColors.live,
+  },
 
   submitBtn: {
-    backgroundColor: WHITE,
+    backgroundColor: YColors.ink,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -337,13 +394,20 @@ const s = StyleSheet.create({
   },
   submitBtnDisabled: { opacity: 0.35 },
   submitText: {
+    fontFamily: YFonts.uiBlack,
     fontSize: 14,
-    fontWeight: '900',
-    color: NAVY,
+    color: YColors.bg,
     letterSpacing: 2,
   },
 
   switchLink: { marginTop: 20, alignItems: 'center', paddingVertical: 8 },
-  switchText: { fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.55)' },
-  switchLinkText: { color: BLUE_ACCENT, fontWeight: '800' },
+  switchText: {
+    fontFamily: YFonts.ui,
+    fontSize: 13,
+    color: YColors.ink2,
+  },
+  switchLinkText: {
+    fontFamily: YFonts.uiExtrabold,
+    color: YColors.accent,
+  },
 });

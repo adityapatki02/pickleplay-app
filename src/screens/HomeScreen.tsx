@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
   Animated,
   Dimensions,
   FlatList,
@@ -17,13 +15,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { tournamentsApi } from '../api/tournaments.api';
-import { registrationsApi } from '../api/registrations.api';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { getLeagues, getSeasons, getTies } from '../api/leagues.api';
 import { useAuthStore } from '../store/authStore';
-import { Tournament } from '../types/tournament.types';
-import TournamentTile from '../components/ui/TournamentTile';
-import TournamentCarousel from '../components/ui/TournamentCarousel';
+import type { League, Tie } from '../types/league.types';
 import { light } from '../config/lightTheme';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
@@ -207,84 +202,117 @@ function PulsingDot() {
   );
 }
 
-// ─── Live tournament card ────────────────────────────────────────────────────
-function LiveCard({ item, onPress }: { item: Tournament; onPress: () => void }) {
+// ─── Fixture tile (for horizontal fixtures carousel) ────────────────────────
+function FixtureTile({ tie, onPress }: { tie: Tie; onPress: () => void }) {
+  const when = tie.scheduledStart ? new Date(tie.scheduledStart) : null;
+  const dateLabel = when
+    ? when.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }).toUpperCase()
+    : (tie.matchDay ? new Date(tie.matchDay).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }).toUpperCase() : 'TBD');
+  const timeLabel = when
+    ? when.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })
+    : '';
+  const isLive = tie.status === 'in_progress';
+  const isDone = tie.status === 'completed';
+
+  const home = tie.homeTeam?.shortName || tie.homeTeam?.name || 'TBD';
+  const away = tie.awayTeam?.shortName || tie.awayTeam?.name || 'TBD';
+
   return (
-    <TouchableOpacity style={styles.liveCard} onPress={onPress} activeOpacity={0.82}>
-      <View style={styles.liveCardAccent} />
-      <View style={styles.liveCardBody}>
-        <View style={styles.liveCardBadge}>
-          <Text style={styles.liveCardBadgeText}>IN PROGRESS</Text>
-        </View>
-        <Text style={styles.liveCardName} numberOfLines={2}>{item.name}</Text>
-        <Text style={styles.liveCardCity}>📍 {item.city}</Text>
+    <TouchableOpacity style={styles.fixtureTile} onPress={onPress} activeOpacity={0.82}>
+      <View style={styles.fixtureHeader}>
+        <Text style={styles.fixtureDate}>{dateLabel}</Text>
+        {isLive ? (
+          <View style={styles.fixtureLiveBadge}>
+            <PulsingDot />
+            <Text style={styles.fixtureLiveText}>LIVE</Text>
+          </View>
+        ) : isDone ? (
+          <View style={styles.fixtureDoneBadge}>
+            <Text style={styles.fixtureDoneText}>DONE</Text>
+          </View>
+        ) : timeLabel ? (
+          <Text style={styles.fixtureTime}>{timeLabel}</Text>
+        ) : null}
       </View>
+
+      <View style={styles.fixtureTeams}>
+        <Text style={styles.fixtureTeam} numberOfLines={1}>{home}</Text>
+        <Text style={styles.fixtureVs}>vs</Text>
+        <Text style={styles.fixtureTeam} numberOfLines={1}>{away}</Text>
+      </View>
+
+      {isDone ? (
+        <Text style={styles.fixtureScore}>{tie.homeScore} – {tie.awayScore}</Text>
+      ) : (
+        <Text style={styles.fixtureRound} numberOfLines={1}>
+          {tie.round ? tie.round.replace(/_/g, ' ').toUpperCase() : 'FIXTURE'}
+          {tie.courtNumber ? ` • COURT ${tie.courtNumber}` : ''}
+        </Text>
+      )}
     </TouchableOpacity>
   );
 }
-
-// ─── (UpcomingRow removed — now inline in HomeScreen) ──────────────────────
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
   const { user } = useAuthStore();
 
-  const [liveTournaments, setLiveTournaments] = useState<Tournament[]>([]);
-  const [recommendedTournaments, setRecommendedTournaments] = useState<Tournament[]>([]);
-  const [myRegistrations, setMyRegistrations] = useState<any[]>([]);
-  const [loadingLive, setLoadingLive] = useState(true);
-  const [loadingRegs, setLoadingRegs] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // League state — show ALL leagues the user organizes
+  const [myLeagues, setMyLeagues] = useState<{ league: League; seasonId: string; seasonName: string; ties: Tie[]; status: string }[]>([]);
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
 
-    const [liveResult, regsResult, recoResult] = await Promise.allSettled([
-      tournamentsApi.list({ status: 'in_progress', limit: 5 }),
-      registrationsApi.getMyRegistrations(),
-      tournamentsApi.list({ status: 'registration_open,published,in_progress', limit: 10 }),
-    ]);
-
-    if (liveResult.status === 'fulfilled') {
-      const data = liveResult.value.data?.data ?? [];
-      setLiveTournaments(Array.isArray(data) ? data.slice(0, 5) : []);
-    } else {
-      Alert.alert('Error', 'Failed to load live tournaments');
+    // Fetch user's leagues — try with organizerId first, fall back to all
+    let leagues = await getLeagues({ organizerId: user?.id }).catch(() => []);
+    if (!Array.isArray(leagues) || leagues.length === 0) {
+      leagues = await getLeagues().catch(() => []);
     }
-    setLoadingLive(false);
-
-    if (regsResult.status === 'fulfilled') {
-      const data = regsResult.value.data?.data ?? regsResult.value.data ?? [];
-      const arr = Array.isArray(data) ? data : [];
-      // Filter upcoming (not completed/cancelled)
-      const upcoming = arr.filter((r: any) => {
-        const s = (r.tournament ?? r)?.status;
-        return s !== 'completed' && s !== 'cancelled';
-      });
-      setMyRegistrations(upcoming);
-    } else {
-      Alert.alert('Error', 'Failed to load your registrations');
+    const list: League[] = Array.isArray(leagues) ? leagues : [];
+    if (list.length === 0) {
+      setMyLeagues([]);
+      setRefreshing(false);
+      return;
     }
-    setLoadingRegs(false);
-
-    if (recoResult.status === 'fulfilled') {
-      const data = recoResult.value.data?.data ?? [];
-      // Sort by soonest start date first
-      const sorted = (Array.isArray(data) ? data : []).sort((a: Tournament, b: Tournament) => {
-        const aDate = new Date(a.startDate).getTime();
-        const bDate = new Date(b.startDate).getTime();
-        return aDate - bDate;
-      });
-      setRecommendedTournaments(sorted.slice(0, 10));
-    }
+    const enriched = await Promise.all(list.map(async (league: League) => {
+      const seasons = await getSeasons(league.id).catch(() => []);
+      const seasonList = Array.isArray(seasons) ? seasons : [];
+      if (seasonList.length === 0) return { league, seasonId: '', seasonName: '', ties: [] as Tie[], status: 'setup' };
+      const season = seasonList[0];
+      const ties = await getTies(league.id, season.id).catch(() => [] as Tie[]);
+      return { league, seasonId: season.id, seasonName: season.name, ties: Array.isArray(ties) ? ties : [], status: season.status };
+    }));
+    setMyLeagues(enriched);
 
     setRefreshing(false);
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Live polling: refresh ties every 5s while Home tab is focused.
+  // Background fetch only — does NOT toggle the pull-to-refresh spinner.
+  useFocusEffect(
+    useCallback(() => {
+      const id = setInterval(() => { fetchData(false); }, 30000);
+      return () => clearInterval(id);
+    }, [fetchData])
+  );
+
   const firstName = user?.fullName ? getFirstName(user.fullName) : 'PLAYER';
+
+  // Flatten all ties across leagues, keep only upcoming/live, sort earliest first, top 5
+  const upcomingFixtures = myLeagues
+    .flatMap((ml) => ml.ties.map((tie) => ({ tie, leagueId: ml.league.id, seasonId: ml.seasonId })))
+    .filter(({ tie }) => tie.status !== 'completed' && tie.status !== 'cancelled')
+    .sort((a, b) => {
+      const aT = new Date(a.tie.scheduledStart || a.tie.matchDay || 0).getTime();
+      const bT = new Date(b.tie.scheduledStart || b.tie.matchDay || 0).getTime();
+      return aT - bT;
+    })
+    .slice(0, 5);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
@@ -335,68 +363,104 @@ export default function HomeScreen() {
         </View>
 
 
-        {/* ── QUICK ACCESS TILES (2 tiles — Upcoming + Live) ── */}
-        <View style={styles.quickGrid}>
-          {/* Upcoming tile */}
+        {/* ── LEAGUE HERO CARDS ── */}
+        {myLeagues.map((ml) => (
           <TouchableOpacity
-            style={styles.quickTile}
-            onPress={() => (navigation as any).navigate('MyEventsTab', { screen: 'MyEvents' })}
-            activeOpacity={0.8}
+            key={ml.league.id}
+            style={styles.leagueCard}
+            activeOpacity={0.85}
+            onPress={() => navigation.navigate('LeagueDashboard', { leagueId: ml.league.id, seasonId: ml.seasonId })}
           >
-            {myRegistrations.length > 0 && (
-              <View style={styles.quickTileBadge}>
-                <Text style={styles.quickTileBadgeText}>{myRegistrations.length}</Text>
-              </View>
-            )}
-            <Text style={styles.quickTileIcon}>📅</Text>
-            <Text style={styles.quickTileLabel}>Upcoming</Text>
-            <View style={styles.quickTileDivider} />
-            <Text style={styles.quickTileInfo} numberOfLines={1}>
-              {myRegistrations.length === 0
-                ? 'No events yet'
-                : myRegistrations.length === 1
-                  ? (myRegistrations[0].tournament ?? myRegistrations[0])?.name ?? '1 event'
-                  : `${(myRegistrations[0].tournament ?? myRegistrations[0])?.name} +${myRegistrations.length - 1}`
-              }
-            </Text>
-          </TouchableOpacity>
+            <View style={styles.leagueCardGradient}>
+              {/* Live badge if any tie in progress */}
+              {ml.ties.some((t) => t.status === 'in_progress') ? (
+                <View style={styles.leagueLiveBadge}>
+                  <PulsingDot />
+                  <Text style={styles.leagueLiveBadgeText}>LIVE NOW</Text>
+                </View>
+              ) : (
+                <View style={styles.leagueStatusBadge}>
+                  <Text style={styles.leagueStatusBadgeText}>
+                    {ml.status === 'league_phase' ? 'LEAGUE PHASE' : ml.status?.replace(/_/g, ' ').toUpperCase() || 'SETUP'}
+                  </Text>
+                </View>
+              )}
 
-          {/* Live Now tile */}
+              {/* League progress % */}
+              <Text style={styles.leaguePercent}>
+                {ml.ties.length > 0
+                  ? `${Math.round((ml.ties.filter((t) => t.status === 'completed').length / ml.ties.length) * 100)}%`
+                  : '0%'}
+              </Text>
+
+              <Text style={styles.leagueName} numberOfLines={2}>{ml.league.name}</Text>
+              <Text style={styles.leagueSub}>
+                {ml.league.city || ''} {ml.league.city ? '•' : ''} {ml.ties.length > 0 ? `${ml.ties.length} ties` : ml.seasonName}
+              </Text>
+
+              {/* Progress bar */}
+              <View style={styles.leagueProgressBg}>
+                <View
+                  style={[
+                    styles.leagueProgressFill,
+                    {
+                      width: ml.ties.length > 0
+                        ? `${(ml.ties.filter((t) => t.status === 'completed').length / ml.ties.length) * 100}%`
+                        : '0%',
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={styles.leagueProgressText}>
+                {ml.ties.filter((t) => t.status === 'completed').length} / {ml.ties.length} matches done
+              </Text>
+
+              <View style={styles.leagueArrow}>
+                <Text style={styles.leagueArrowText}>OPEN MATCH HUB  →</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        ))}
+
+        {/* ── FANTASY LEAGUE CTA ── Show for each league's active season */}
+        {myLeagues.map((ml) => ml.seasonId ? (
           <TouchableOpacity
-            style={[styles.quickTile, liveTournaments.length > 0 && styles.quickTileLive]}
-            onPress={() => {
-              if (liveTournaments.length > 0) {
-                navigation.navigate('TournamentDetail', { tournamentId: liveTournaments[0].id });
-              }
-            }}
-            activeOpacity={0.8}
+            key={`fantasy-${ml.league.id}`}
+            style={styles.fantasyCard}
+            activeOpacity={0.85}
+            onPress={() => (navigation as any).navigate('Fantasy', { seasonId: ml.seasonId, leagueId: ml.league.id })}
           >
-            {liveTournaments.length > 0 && (
-              <View style={[styles.quickTileBadge, { backgroundColor: '#EF4444' }]}>
-                <Text style={styles.quickTileBadgeText}>{liveTournaments.length}</Text>
+            <View style={styles.fantasyCardBody}>
+              <Text style={styles.fantasyBadge}>🏆 FANTASY LEAGUE</Text>
+              <Text style={styles.fantasyTitle}>Pick Your Dream Team</Text>
+              <Text style={styles.fantasySub}>
+                Predict qualifiers • Build 16-player squad • Climb leaderboard
+              </Text>
+              <View style={styles.fantasyArrow}>
+                <Text style={styles.fantasyArrowText}>PLAY NOW  →</Text>
               </View>
-            )}
-            <Text style={styles.quickTileIcon}>⚡</Text>
-            <Text style={styles.quickTileLabel}>Live Now</Text>
-            <View style={styles.quickTileDivider} />
-            <Text style={[styles.quickTileInfo, liveTournaments.length > 0 && { color: '#EF4444' }]} numberOfLines={1}>
-              {liveTournaments.length === 0
-                ? 'No live events'
-                : liveTournaments[0].name
-              }
-            </Text>
+            </View>
           </TouchableOpacity>
-        </View>
+        ) : null)}
 
-        {/* ── RECOMMENDED TOURNAMENTS ── */}
-        {recommendedTournaments.length > 0 && (
+        {/* ── UPCOMING FIXTURES CAROUSEL (earliest 5, tiles) ── */}
+        {upcomingFixtures.length > 0 && (
           <View style={{ marginTop: 8 }}>
             <View style={[styles.sectionHeader, { paddingHorizontal: 24 }]}>
-              <Text style={styles.sectionTitle}>RECOMMENDED FOR YOU</Text>
+              <Text style={styles.sectionTitle}>UPCOMING FIXTURES</Text>
             </View>
-            <TournamentCarousel
-              tournaments={recommendedTournaments.slice(0, 5)}
-              onPress={(t) => navigation.navigate('TournamentDetail', { tournamentId: t.id })}
+            <FlatList
+              data={upcomingFixtures}
+              keyExtractor={(t) => t.tie.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.fixturesListContent}
+              renderItem={({ item }) => (
+                <FixtureTile
+                  tie={item.tie}
+                  onPress={() => navigation.navigate('TieDetail', { tieId: item.tie.id, leagueId: item.leagueId, seasonId: item.seasonId })}
+                />
+              )}
             />
           </View>
         )}
@@ -704,6 +768,101 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
+  // Fixture tiles (horizontal carousel)
+  fixturesListContent: {
+    paddingLeft: 20,
+    paddingRight: 8,
+    paddingVertical: 6,
+    gap: 12,
+  },
+  fixtureTile: {
+    width: 180,
+    backgroundColor: CARD_BG,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    marginRight: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  fixtureHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  fixtureDate: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: NAVY,
+    letterSpacing: 1.2,
+  },
+  fixtureTime: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: TEXT_SECONDARY,
+    letterSpacing: 0.4,
+  },
+  fixtureLiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(239,68,68,0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  fixtureLiveText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#EF4444',
+    letterSpacing: 1.2,
+  },
+  fixtureDoneBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  fixtureDoneText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: TEXT_TERTIARY,
+    letterSpacing: 1.2,
+  },
+  fixtureTeams: {
+    marginBottom: 10,
+  },
+  fixtureTeam: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: TEXT_PRIMARY,
+    letterSpacing: -0.2,
+  },
+  fixtureVs: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: TEXT_TERTIARY,
+    letterSpacing: 1.5,
+    marginVertical: 2,
+  },
+  fixtureScore: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: NAVY,
+    letterSpacing: -0.5,
+  },
+  fixtureRound: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: TEXT_TERTIARY,
+    letterSpacing: 1.2,
+  },
+
   // Upcoming compact cards (kept for other screens)
   upcomingCard: {
     flexDirection: 'row',
@@ -786,5 +945,143 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#2196F3',
     letterSpacing: 0.3,
+  },
+
+  // League hero card
+  leagueCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  leagueCardGradient: {
+    backgroundColor: NAVY,
+    padding: 20,
+    paddingBottom: 16,
+  },
+  leagueLiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(239,68,68,0.15)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginBottom: 10,
+  },
+  leagueLiveBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#EF4444',
+    letterSpacing: 1,
+  },
+  leagueStatusBadge: {
+    backgroundColor: 'rgba(33,150,243,0.15)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginBottom: 10,
+  },
+  leagueStatusBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#2196F3',
+    letterSpacing: 1,
+  },
+  leaguePercent: {
+    position: 'absolute',
+    top: 18,
+    right: 20,
+    fontSize: 28,
+    fontWeight: '900',
+    color: 'rgba(255,255,255,0.15)',
+    letterSpacing: -1,
+  },
+  leagueName: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+    lineHeight: 26,
+    marginBottom: 4,
+  },
+  leagueSub: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
+    marginBottom: 14,
+  },
+  leagueProgressBg: {
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  leagueProgressFill: {
+    height: '100%',
+    backgroundColor: '#06D6A0',
+    borderRadius: 3,
+  },
+  leagueProgressText: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.4)',
+    marginBottom: 12,
+  },
+  leagueArrow: {
+    backgroundColor: '#2196F3',
+    alignSelf: 'stretch',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  leagueArrowText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  fantasyCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  fantasyCardBody: {
+    backgroundColor: '#7C3AED', // violet accent — visually distinct from league navy
+    padding: 18,
+    borderRadius: 16,
+  },
+  fantasyBadge: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FDE68A',
+    letterSpacing: 1.5,
+    marginBottom: 6,
+  },
+  fantasyTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  fantasySub: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.85)',
+    marginBottom: 14,
+  },
+  fantasyArrow: {
+    backgroundColor: '#FDE68A',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  fantasyArrowText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#7C3AED',
+    letterSpacing: 0.8,
   },
 });
