@@ -25,6 +25,9 @@ import {
   YTournamentRow,
   YQuickAction,
   YStatTile,
+  YVenueEditorial,
+  YVenueRow,
+  type Venue,
 } from '../../components/yoiden';
 import { useAuthStore } from '../../store/authStore';
 import { tournamentsApi } from '../../api/tournaments.api';
@@ -43,8 +46,21 @@ const FEATURED_TOURNAMENT_IDS = [
   '043c6b38-da45-41e9-968f-34f4d4d0bb05', // AIPA — live shadow
   '77e4837b-9730-4ba6-b070-65948ff70dc6', // AIPA — DEMO
 ] as const;
-const SHADOW_TOURNAMENT_ID = FEATURED_TOURNAMENT_IDS[0];
-const DEMO_TOURNAMENT_ID = FEATURED_TOURNAMENT_IDS[1];
+
+// Venues shown on Home. Mock data for now — swap for a venues API when available.
+// 2 sponsored (editorial cards) + 6 normal (compact rows).
+const SPONSORED_VENUES: Venue[] = [
+  { id: 'v1', name: 'Apex Padel Club', area: 'Dockside', distanceKm: 1.2, rating: 4.9, reviews: 168, sponsored: true, sports: ['padel', 'tennis', 'football', 'swimming'], imageUrl: 'https://picsum.photos/seed/apexpadel/640/400' },
+  { id: 'v2', name: 'Smash Arena', area: 'Riverside', distanceKm: 2.1, rating: 4.8, reviews: 204, sponsored: true, sports: ['tennis', 'basketball', 'football'], imageUrl: 'https://picsum.photos/seed/smasharena/640/400' },
+];
+const NORMAL_VENUES: Venue[] = [
+  { id: 'v3', name: 'Riverside Sports Hub', area: 'Greenpoint', distanceKm: 2.5, rating: 4.8, reviews: 96, topRated: true, sports: ['football', 'basketball', 'swimming'], imageUrl: 'https://picsum.photos/seed/riverside/300/300' },
+  { id: 'v4', name: 'Baseline Tennis Centre', area: 'Hillview', distanceKm: 3.1, rating: 4.6, reviews: 74, sports: ['tennis', 'padel'], imageUrl: 'https://picsum.photos/seed/baseline/300/300' },
+  { id: 'v5', name: 'Net Zone Courts', area: 'Old Town', distanceKm: 3.8, rating: 4.5, reviews: 52, sports: ['pickleball', 'tennis', 'basketball'], imageUrl: 'https://picsum.photos/seed/netzone/300/300' },
+  { id: 'v6', name: 'Grand Slam Academy', area: 'Lakeside', distanceKm: 4.4, rating: 4.7, reviews: 131, topRated: true, sports: ['tennis', 'football', 'swimming'], imageUrl: 'https://picsum.photos/seed/grandslam/300/300' },
+  { id: 'v7', name: 'Rally Point Club', area: 'Westend', distanceKm: 5.0, rating: 4.4, reviews: 38, sports: ['padel', 'basketball'], imageUrl: 'https://picsum.photos/seed/rallypoint/300/300' },
+  { id: 'v8', name: 'Ace Sports Park', area: 'Northgate', distanceKm: 5.6, rating: 4.3, reviews: 47, sports: ['football', 'tennis', 'basketball', 'swimming'], imageUrl: 'https://picsum.photos/seed/acepark/300/300' },
+];
 
 // Helpers
 const unwrap = <T,>(res: any): T => (res?.data?.data ?? res?.data ?? res) as T;
@@ -288,63 +304,20 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Featured 1 — AIPA West Zone (LIVE: real shadow scoring during May 29-31) */}
-        <View style={styles.featuredWrap}>
-          <Pressable
-            onPress={() => openTournament(SHADOW_TOURNAMENT_ID)}
-            style={({ pressed }) => [styles.featuredCard, pressed && { opacity: 0.92 }]}
-          >
-            <View style={styles.featuredBadgeRow}>
-              <View style={styles.featuredBadge}>
-                <YUiText size={9} weight={900} color="#000" style={{ letterSpacing: 1.2 }}>LIVE TOURNAMENT</YUiText>
-              </View>
-              <View style={styles.featuredLiveBadge}>
-                <YUiText size={9} weight={900} color="#fff" style={{ letterSpacing: 1.2 }}>MAY 29–31</YUiText>
-              </View>
-            </View>
-            <YDisplay size={32} color="#fff" style={{ marginTop: 18, lineHeight: 32 }}>
-              1ST WEST ZONE
-            </YDisplay>
-            <YDisplay size={28} color="#fff" style={{ marginTop: 2, lineHeight: 28 }}>
-              CHAMPIONSHIP
-            </YDisplay>
-            <YUiText size={12} weight={700} color="rgba(255,255,255,0.85)" style={{ marginTop: 8, letterSpacing: 0.5 }}>
-              HOSTED BY AIPA · MUSCLEBAR, PUNE
-            </YUiText>
-            <View style={styles.featuredFooter}>
-              <YUiText size={11} weight={800} color={YColors.lime} style={{ letterSpacing: 1 }}>
-                VIEW TOURNAMENT  →
-              </YUiText>
-            </View>
-          </Pressable>
-        </View>
-
-        {/* Featured 2 — AIPA West Zone DEMO (sandbox for live demos; mock data) */}
-        <View style={styles.featuredWrap}>
-          <Pressable
-            onPress={() => openTournament(DEMO_TOURNAMENT_ID)}
-            style={({ pressed }) => [styles.featuredCardAlt, pressed && { opacity: 0.92 }]}
-          >
-            <View style={styles.featuredBadgeRow}>
-              <View style={[styles.featuredBadge, { backgroundColor: YColors.lime }]}>
-                <YUiText size={9} weight={900} color="#000" style={{ letterSpacing: 1.2 }}>DEMO SANDBOX</YUiText>
-              </View>
-              <View style={[styles.featuredLiveBadge, { backgroundColor: 'rgba(0,0,0,0.18)' }]}>
-                <YUiText size={9} weight={900} color={YColors.ink} style={{ letterSpacing: 1.2 }}>FULL FLOW</YUiText>
-              </View>
-            </View>
-            <YDisplay size={28} color={YColors.ink} style={{ marginTop: 18, lineHeight: 28 }}>
-              DEMO TOURNAMENT
-            </YDisplay>
-            <YUiText size={12} weight={700} color={YColors.ink2} style={{ marginTop: 8, letterSpacing: 0.5 }}>
-              SANDBOX · MOCK PLAYERS · SAFE TO PLAY WITH
-            </YUiText>
-            <View style={styles.featuredFooter}>
-              <YUiText size={11} weight={800} color={YColors.ink} style={{ letterSpacing: 1 }}>
-                OPEN DEMO  →
-              </YUiText>
-            </View>
-          </Pressable>
+        {/* VENUES NEARBY — 2 sponsored (editorial) + 6 normal (compact) */}
+        <YSectionHead
+          eyebrow={user?.city ? user.city.toUpperCase() : 'NEAR YOU'}
+          title="VENUES NEARBY"
+          action="ALL →"
+          onActionPress={goPlay}
+        />
+        <View style={styles.listWrap}>
+          {SPONSORED_VENUES.map((v) => (
+            <YVenueEditorial key={v.id} venue={v} onPress={goPlay} style={{ marginBottom: 14 }} />
+          ))}
+          {NORMAL_VENUES.map((v) => (
+            <YVenueRow key={v.id} venue={v} onPress={goPlay} style={{ marginBottom: 8 }} />
+          ))}
         </View>
 
         {/* YOUR EVENTS — combined registrations + hosted */}
@@ -498,48 +471,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: YColors.line,
-  },
-  featuredWrap: {
-    marginTop: 22,
-    paddingHorizontal: 16,
-  },
-  featuredCard: {
-    borderRadius: 14,
-    padding: 22,
-    backgroundColor: YColors.accentDeep,
-    minHeight: 180,
-    overflow: 'hidden',
-  },
-  // Demo banner — light/lime variant so the two cards are visually distinct
-  featuredCardAlt: {
-    borderRadius: 14,
-    padding: 22,
-    backgroundColor: YColors.lime,
-    minHeight: 160,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: YColors.ink,
-  },
-  featuredBadgeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  featuredBadge: {
-    backgroundColor: YColors.lime,
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    borderRadius: 3,
-  },
-  featuredLiveBadge: {
-    backgroundColor: '#000',
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    borderRadius: 3,
-  },
-  featuredFooter: {
-    marginTop: 18,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
   },
 });
