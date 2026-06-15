@@ -38,6 +38,7 @@ import { venuesApi } from '../../api/venues.api';
 import type { Tournament } from '../../types/tournament.types';
 import type { Venue as ApiVenue } from '../../types/booking.types';
 import { SPPL, type YoidenTabParamList } from '../../navigation/YoidenTabNavigator';
+import { DEMO_VENUE_ID } from '../../config/demo-venues';
 
 type Nav = BottomTabNavigationProp<YoidenTabParamList, 'HomeTab'>;
 
@@ -51,6 +52,19 @@ const FEATURED_TOURNAMENT_IDS = [
   '77e4837b-9730-4ba6-b070-65948ff70dc6', // AIPA — DEMO
 ] as const;
 
+
+// Demo venue — always shown, routes directly to VenueDetailScreen (no backend needed).
+const CIDCO_DEMO_CARD: Venue = {
+  id: DEMO_VENUE_ID,
+  name: 'Cidco Padel Arena',
+  area: 'Cidco N-6',
+  distanceKm: 0,
+  rating: 0,
+  reviews: 0,
+  sports: ['padel'],
+  sponsored: true,
+  imageUrl: 'https://images.unsplash.com/photo-1622547748225-3fc4abd2cca0?w=640&fit=crop&q=80',
+};
 
 // Fallback venues for Chhatrapati Sambhaji Nagar shown when the backend
 // returns no venues for this city. Swap out once real listings are seeded.
@@ -308,11 +322,12 @@ export default function HomeScreen() {
       topRated: (v.rating ?? 0) >= 4.5,
     };
   };
-  // Use API data when available; fall back to CSN seed venues until the backend
-  // has real listings for this city.
-  const displayVenues: Venue[] = apiVenues.length > 0
+  // Always prepend the demo card. Then fill with API venues if available,
+  // or CSN fallbacks while the backend is being set up.
+  const apiOrFallback: Venue[] = apiVenues.length > 0
     ? apiVenues.map(toDisplayVenue)
     : (!loading ? CSN_FALLBACK_VENUES : []);
+  const displayVenues: Venue[] = [CIDCO_DEMO_CARD, ...apiOrFallback.filter((v) => v.id !== DEMO_VENUE_ID)];
   const sponsoredVenues = displayVenues.filter((v) => v.sponsored);
   const normalVenues = displayVenues.filter((v) => !v.sponsored);
 

@@ -22,11 +22,35 @@ import {
   YBadge,
   YButton,
 } from '../../components/yoiden';
-import RazorpayCheckout from 'react-native-razorpay';
+import { openRazorpay } from '../../utils/razorpay';
 import { venuesApi } from '../../api/venues.api';
 import { bookingsApi } from '../../api/bookings.api';
 import { useAuthStore } from '../../store/authStore';
 import type { Venue, CourtAvailability, BookingCell } from '../../types/booking.types';
+
+/** Map the backend's { courtId, courtName, slots } shape → CourtAvailability */
+const mapAvailability = (raw: any[]): CourtAvailability[] =>
+  raw.map((c) => ({
+    court: {
+      id: c.courtId ?? c.court?.id,
+      venueId: c.venueId ?? '',
+      name: c.courtName ?? c.court?.name ?? 'Court',
+      sport: c.sport ?? c.court?.sport ?? '',
+      slotDurationMin: c.slotDurationMin ?? c.court?.slotDurationMin ?? 60,
+      basePrice: c.basePrice ?? c.court?.basePrice ?? 0,
+      peakPrice: c.peakPrice ?? c.court?.peakPrice ?? null,
+      peakWindows: c.peakWindows ?? c.court?.peakWindows ?? [],
+      isActive: true,
+      displayOrder: c.displayOrder ?? c.court?.displayOrder ?? 0,
+    },
+    chunks: (c.slots ?? c.chunks ?? []).map((s: any) => ({
+      startTime: s.startTime,
+      endTime: s.endTime,
+      isPeak: s.isPeak ?? false,
+      price: s.price,
+      available: s.available,
+    })),
+  }));
 import type { BookStackParamList } from '../../navigation/YoidenTabNavigator';
 
 type Nav = NativeStackNavigationProp<BookStackParamList, 'VenueDetail'>;
@@ -121,7 +145,8 @@ export default function VenueDetailScreen() {
     setAvailLoading(true);
     try {
       const res = await venuesApi.getAvailability(venueId, date);
-      setCourts((res.data as any)?.data?.courts ?? []);
+      const raw = (res.data as any)?.data?.courts ?? [];
+      setCourts(mapAvailability(raw));
     } catch (e: any) {
       setError(e?.message || 'Could not load availability');
       setCourts([]);
@@ -188,6 +213,7 @@ export default function VenueDetailScreen() {
 
   const submit = async (channel: 'online' | 'offline') => {
     if (cells.length === 0) return;
+
     setModalError(null);
     if (!isAuthed && (!guestName.trim() || !guestPhone.trim())) {
       setModalError('Enter your name and phone to book as a guest.');
@@ -210,9 +236,9 @@ export default function VenueDetailScreen() {
       if (channel === 'online' && payment?.orderId) {
         setSheetOpen(false);
         try {
-          const rzpRes = await RazorpayCheckout.open({
+          const rzpRes = await openRazorpay({
             key: payment.key,
-            amount: payment.amount,          // already in paise from backend
+            amount: payment.amount,
             currency: payment.currency ?? 'INR',
             order_id: payment.orderId,
             name: venue?.name ?? 'Yoiden',

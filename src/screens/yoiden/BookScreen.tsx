@@ -25,6 +25,7 @@ import {
 import { venuesApi } from '../../api/venues.api';
 import type { Venue } from '../../types/booking.types';
 import type { BookStackParamList } from '../../navigation/YoidenTabNavigator';
+import { DEMO_VENUE_ID, DEMO_VENUE } from '../../config/demo-venues';
 
 type Nav = NativeStackNavigationProp<BookStackParamList, 'Book'>;
 
@@ -97,9 +98,40 @@ export default function BookScreen() {
         />
 
         <YSectionHead
-          eyebrow={`${venues.length} VENUE${venues.length === 1 ? '' : 'S'}`}
+          eyebrow={`${venues.length + 1} VENUE${venues.length === 0 ? '' : 'S'}`}
           title="NEARBY COURTS"
         />
+
+        {/* ── Demo venue — always shown ── */}
+        <View style={[styles.list, { marginBottom: 4 }]}>
+          <Pressable
+            onPress={() => openVenue(DEMO_VENUE_ID)}
+            style={({ pressed }) => [styles.card, styles.demoCard, pressed && { opacity: 0.92 }]}
+          >
+            <View style={styles.cardHead}>
+              <View style={{ flex: 1 }}>
+                <YDisplay size={22} color={YColors.accent} style={{ lineHeight: 24 }}>
+                  {DEMO_VENUE.name}
+                </YDisplay>
+                <YUiText size={12} color={YColors.ink2} style={{ marginTop: 4 }}>
+                  {DEMO_VENUE.city}
+                </YUiText>
+              </View>
+              <YBadge color="#000" bg={YColors.lime}>₹1–₹2/hr</YBadge>
+            </View>
+            <YUiText size={12} color={YColors.ink3} style={{ marginTop: 10 }}>
+              {DEMO_VENUE.address}
+            </YUiText>
+            <View style={styles.cardFoot}>
+              <YMono size={10} color={YColors.ink3} style={{ letterSpacing: 1 }}>
+                2 COURTS · {DEMO_VENUE.openTime}–{DEMO_VENUE.closeTime}
+              </YMono>
+              <YButton variant="primary" size="sm" onPress={() => openVenue(DEMO_VENUE_ID)}>
+                BOOK
+              </YButton>
+            </View>
+          </Pressable>
+        </View>
 
         {loading ? (
           <View style={styles.center}>
@@ -184,6 +216,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
     marginBottom: 12,
+  },
+  demoCard: {
+    borderColor: YColors.accent,
+    borderWidth: 1.5,
   },
   cardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   cardFoot: {
