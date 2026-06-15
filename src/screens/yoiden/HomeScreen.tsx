@@ -133,6 +133,7 @@ export default function HomeScreen() {
 
   const goPlay = () => nav.navigate('PlayTab', { screen: 'Play' });
   const goHost = () => nav.navigate('PlayTab', { screen: 'CreateTournament' });
+  const goBook = () => nav.navigate('BookTab', { screen: 'Book' });
   const goMe = () => nav.navigate('MeTab', { screen: 'Me' });
   const openLocation = () => nav.navigate('HomeTab', { screen: 'CityPicker' });
   const goSPPL = () =>
@@ -570,6 +571,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     flexDirection: 'row',
     gap: 10,
+  },
+  bookCardWrap: {
+    marginTop: 14,
+    paddingHorizontal: 16,
+  },
+  bookCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: YColors.accentDeep,
+    borderRadius: 16,
+    padding: 18,
   },
   listWrap: {
     paddingHorizontal: 16,

@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YColors } from '../../config/yoiden';
 import { YMono } from './YText';
 
-type TabId = 'home' | 'play' | 'fantasy' | 'me';
+type TabId = 'home' | 'play' | 'book' | 'fantasy' | 'me';
 
 const TabIcon: React.FC<{ id: TabId; color: string; active: boolean; size?: number }> = ({
   id,
@@ -41,6 +41,15 @@ const TabIcon: React.FC<{ id: TabId; color: string; active: boolean; size?: numb
       </Svg>
     );
   }
+  if (id === 'book') {
+    // Calendar — court booking
+    return (
+      <Svg width={size} height={size} viewBox="0 0 24 24">
+        <Path d="M4 7a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7z" {...stroke} />
+        <Path d="M4 10h16M8 4v3M16 4v3" {...stroke} />
+      </Svg>
+    );
+  }
   if (id === 'fantasy') {
     // Cleaner trophy
     return (
@@ -63,6 +72,7 @@ const TabIcon: React.FC<{ id: TabId; color: string; active: boolean; size?: numb
 const TAB_META: { id: TabId; label: string }[] = [
   { id: 'home',    label: 'HOME' },
   { id: 'play',    label: 'PLAY' },
+  { id: 'book',    label: 'BOOK' },
   { id: 'fantasy', label: 'FANTASY' },
   { id: 'me',      label: 'ME' },
 ];
@@ -71,6 +81,7 @@ const routeToTab = (route: string): TabId => {
   const lower = route.toLowerCase();
   if (lower.includes('home'))    return 'home';
   if (lower.includes('play'))    return 'play';
+  if (lower.includes('book'))    return 'book';
   if (lower.includes('fantasy')) return 'fantasy';
   return 'me';
 };
