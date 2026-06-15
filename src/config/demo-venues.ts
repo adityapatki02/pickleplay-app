@@ -5,7 +5,7 @@
 
 import type { Venue, CourtAvailability } from '../types/booking.types';
 
-export const DEMO_VENUE_ID = 'demo-cidco-padel';
+export const DEMO_VENUE_ID = 'b6055ba6-e2ba-409c-8676-386896e92aa7';
 
 // Mock server court IDs (razorpay-mock/db.js courts 6 & 7)
 export const DEMO_MOCK_COURT: Record<string, number> = {

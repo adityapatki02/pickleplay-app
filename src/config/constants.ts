@@ -1,6 +1,6 @@
 export const GOOGLE_PLACES_API_KEY = 'AIzaSyA1a4ztLnO3wL-4TQ8JF5u933pZL_TK_Bs';
 
-export const API_BASE_URL = 'https://yoiden-api-460478077750.asia-south1.run.app/api/v1';
+export const API_BASE_URL = 'https://yoiden-api-lonnxhto7a-el.a.run.app/api/v1';
 
 /** Razorpay publishable key — safe to expose in the app bundle.
  *  Use rzp_test_... for development, rzp_live_... for production. */

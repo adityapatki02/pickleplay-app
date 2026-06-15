@@ -27,6 +27,7 @@ import { venuesApi } from '../../api/venues.api';
 import { bookingsApi } from '../../api/bookings.api';
 import { useAuthStore } from '../../store/authStore';
 import type { Venue, CourtAvailability, BookingCell } from '../../types/booking.types';
+import { DEMO_VENUE_ID } from '../../config/demo-venues';
 
 /** Map the backend's { courtId, courtName, slots } shape → CourtAvailability */
 const mapAvailability = (raw: any[]): CourtAvailability[] =>
@@ -213,7 +214,6 @@ export default function VenueDetailScreen() {
 
   const submit = async (channel: 'online' | 'offline') => {
     if (cells.length === 0) return;
-
     setModalError(null);
     if (!isAuthed && (!guestName.trim() || !guestPhone.trim())) {
       setModalError('Enter your name and phone to book as a guest.');

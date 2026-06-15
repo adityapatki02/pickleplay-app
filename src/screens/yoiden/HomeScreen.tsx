@@ -66,80 +66,6 @@ const CIDCO_DEMO_CARD: Venue = {
   imageUrl: 'https://images.unsplash.com/photo-1622547748225-3fc4abd2cca0?w=640&fit=crop&q=80',
 };
 
-// Fallback venues for Chhatrapati Sambhaji Nagar shown when the backend
-// returns no venues for this city. Swap out once real listings are seeded.
-const CSN_FALLBACK_VENUES: Venue[] = [
-  // ── Sponsored / editorial (2) ────────────────────────────────────────
-  {
-    id: 'csn-v1', _fallback: true,
-    name: 'Prozone Padel Arena',
-    area: 'Jalna Road',
-    distanceKm: 0, rating: 0, reviews: 0,
-    sponsored: true,
-    sports: ['padel'],
-    imageUrl: 'https://images.unsplash.com/photo-1622547748225-3fc4abd2cca0?w=640&fit=crop&q=80',
-  },
-  {
-    id: 'csn-v2', _fallback: true,
-    name: 'Aurangabad Badminton Academy',
-    area: 'Cidco N-6',
-    distanceKm: 0, rating: 0, reviews: 0,
-    sponsored: true,
-    sports: ['badminton'],
-    imageUrl: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=640&fit=crop&q=80',
-  },
-  // ── Normal / compact rows (6) ─────────────────────────────────────────
-  {
-    id: 'csn-v3', _fallback: true,
-    name: 'City Sports Club',
-    area: 'Garkheda',
-    distanceKm: 0, rating: 0, reviews: 0,
-    sports: ['padel', 'badminton'],
-    imageUrl: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&fit=crop&q=80',
-  },
-  {
-    id: 'csn-v4', _fallback: true,
-    name: 'MAAC Badminton Courts',
-    area: 'Bajajnagar',
-    distanceKm: 0, rating: 0, reviews: 0,
-    topRated: true,
-    sports: ['badminton'],
-    imageUrl: 'https://images.unsplash.com/photo-1547347298-4074fc3086f0?w=400&fit=crop&q=80',
-  },
-  {
-    id: 'csn-v5', _fallback: true,
-    name: 'Samrat Indoor Sports',
-    area: 'Aurangpura',
-    distanceKm: 0, rating: 0, reviews: 0,
-    sports: ['padel', 'badminton'],
-    imageUrl: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&fit=crop&q=80',
-  },
-  {
-    id: 'csn-v6', _fallback: true,
-    name: 'Milestone Padel Club',
-    area: 'Waluj',
-    distanceKm: 0, rating: 0, reviews: 0,
-    sports: ['padel'],
-    imageUrl: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=400&fit=crop&q=80',
-  },
-  {
-    id: 'csn-v7', _fallback: true,
-    name: 'Green City Badminton Hall',
-    area: 'Cidco N-5',
-    distanceKm: 0, rating: 0, reviews: 0,
-    sports: ['badminton'],
-    imageUrl: 'https://images.unsplash.com/photo-1508614999368-9260051292e5?w=400&fit=crop&q=80',
-  },
-  {
-    id: 'csn-v8', _fallback: true,
-    name: 'Elite Sports Centre',
-    area: 'Kranti Chowk',
-    distanceKm: 0, rating: 0, reviews: 0,
-    topRated: true,
-    sports: ['padel', 'badminton'],
-    imageUrl: 'https://images.unsplash.com/photo-1519861531473-9200262188bf?w=400&fit=crop&q=80',
-  },
-];
 
 // Helpers
 const unwrap = <T,>(res: any): T => (res?.data?.data ?? res?.data ?? res) as T;
@@ -322,12 +248,10 @@ export default function HomeScreen() {
       topRated: (v.rating ?? 0) >= 4.5,
     };
   };
-  // Always prepend the demo card. Then fill with API venues if available,
-  // or CSN fallbacks while the backend is being set up.
-  const apiOrFallback: Venue[] = apiVenues.length > 0
-    ? apiVenues.map(toDisplayVenue)
-    : (!loading ? CSN_FALLBACK_VENUES : []);
-  const displayVenues: Venue[] = [CIDCO_DEMO_CARD, ...apiOrFallback.filter((v) => v.id !== DEMO_VENUE_ID)];
+  const displayVenues: Venue[] = [
+    CIDCO_DEMO_CARD,
+    ...apiVenues.map(toDisplayVenue).filter((v) => v.id !== DEMO_VENUE_ID),
+  ];
   const sponsoredVenues = displayVenues.filter((v) => v.sponsored);
   const normalVenues = displayVenues.filter((v) => !v.sponsored);
 
@@ -569,10 +493,10 @@ export default function HomeScreen() {
               ) : (
                 <>
                   {sponsoredVenues.map((v) => (
-                    <YVenueEditorial key={v.id} venue={v} onPress={v._fallback ? goBook : () => openVenue(v.id)} style={{ marginBottom: 14 }} />
+                    <YVenueEditorial key={v.id} venue={v} onPress={() => openVenue(v.id)} style={{ marginBottom: 14 }} />
                   ))}
                   {normalVenues.map((v) => (
-                    <YVenueRow key={v.id} venue={v} onPress={v._fallback ? goBook : () => openVenue(v.id)} style={{ marginBottom: 8 }} />
+                    <YVenueRow key={v.id} venue={v} onPress={() => openVenue(v.id)} style={{ marginBottom: 8 }} />
                   ))}
                 </>
               )}
