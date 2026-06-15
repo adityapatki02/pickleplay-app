@@ -30,13 +30,10 @@ import type { PlayStackParamList } from '../../navigation/YoidenTabNavigator';
 
 type Nav = NativeStackNavigationProp<PlayStackParamList, 'Play'>;
 
-// Featured allowlist: hide every other tournament from discover.
-// Two slots: AIPA West Zone (live) + AIPA West Zone DEMO (sandbox).
-// Clear (set to []) to restore the normal discover behavior.
-const FEATURED_TOURNAMENT_IDS = [
-  '043c6b38-da45-41e9-968f-34f4d4d0bb05', // AIPA — live shadow
-  '77e4837b-9730-4ba6-b070-65948ff70dc6', // AIPA — DEMO
-];
+// Featured allowlist: when non-empty, hides every other tournament from
+// discover. Empty = normal discovery (all tournaments). Opened up for the
+// real end-user app; re-add IDs here to curate a featured-only feed.
+const FEATURED_TOURNAMENT_IDS: string[] = [];
 
 type Filter = 'all' | 'open' | 'live' | 'upcoming' | 'finished';
 

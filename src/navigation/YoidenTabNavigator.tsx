@@ -22,6 +22,11 @@ import ScoreLoggerScreen from '../screens/yoiden/ScoreLoggerScreen';
 import StandingsScreen from '../screens/yoiden/StandingsScreen';
 import RankingsScreen from '../screens/yoiden/RankingsScreen';
 
+// Court booking screens
+import BookScreen from '../screens/yoiden/BookScreen';
+import VenueDetailScreen from '../screens/yoiden/VenueDetailScreen';
+import MyBookingsScreen from '../screens/yoiden/MyBookingsScreen';
+
 // League (SPPL) screens — themed for demo
 import LeagueDashboardScreen from '../screens/league/LeagueDashboardScreen';
 import LeagueStandingsScreen from '../screens/league/StandingsScreen';
@@ -81,6 +86,12 @@ export type FantasyStackParamList = {
   Fantasy: undefined;
 };
 
+export type BookStackParamList = {
+  Book: undefined;
+  VenueDetail: { venueId: string };
+  MyBookings: { justBooked?: string } | undefined;
+};
+
 export type MeStackParamList = DetailAndManageRoutes & {
   Me: undefined;
 };
@@ -88,6 +99,7 @@ export type MeStackParamList = DetailAndManageRoutes & {
 export type YoidenTabParamList = {
   HomeTab: NavigatorScreenParams<HomeStackParamList>;
   PlayTab: NavigatorScreenParams<PlayStackParamList>;
+  BookTab: NavigatorScreenParams<BookStackParamList>;
   FantasyTab: NavigatorScreenParams<FantasyStackParamList>;
   MeTab: NavigatorScreenParams<MeStackParamList>;
 };
@@ -149,6 +161,15 @@ const FantasyStackNavigator = () => (
   </FantasyStack.Navigator>
 );
 
+const BookStack = createNativeStackNavigator<BookStackParamList>();
+const BookStackNavigator = () => (
+  <BookStack.Navigator screenOptions={{ headerShown: false }}>
+    <BookStack.Screen name="Book" component={BookScreen} />
+    <BookStack.Screen name="VenueDetail" component={VenueDetailScreen} />
+    <BookStack.Screen name="MyBookings" component={MyBookingsScreen} />
+  </BookStack.Navigator>
+);
+
 const MeStack = createNativeStackNavigator<MeStackParamList>();
 const MeStackNavigator = () => (
   <MeStack.Navigator screenOptions={{ headerShown: false }}>
@@ -167,6 +188,7 @@ export const YoidenTabNavigator: React.FC = () => (
   >
     <Tab.Screen name="HomeTab" component={HomeStackNavigator} />
     <Tab.Screen name="PlayTab" component={PlayStackNavigator} />
+    <Tab.Screen name="BookTab" component={BookStackNavigator} />
     <Tab.Screen name="FantasyTab" component={FantasyStackNavigator} />
     <Tab.Screen name="MeTab" component={MeStackNavigator} />
   </Tab.Navigator>

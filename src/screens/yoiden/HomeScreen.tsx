@@ -39,12 +39,9 @@ type Nav = BottomTabNavigationProp<YoidenTabParamList, 'HomeTab'>;
 //   1. AIPA West Zone — used for SHADOW SCORING (real KheloMore data)
 //   2. AIPA West Zone — DEMO — sandbox twin for live demos (synthetic players)
 // Clear both (set to []) to restore the full discover/your-events feed.
-const FEATURED_TOURNAMENT_IDS = [
-  '043c6b38-da45-41e9-968f-34f4d4d0bb05', // AIPA — live shadow
-  '77e4837b-9730-4ba6-b070-65948ff70dc6', // AIPA — DEMO
-] as const;
-const SHADOW_TOURNAMENT_ID = FEATURED_TOURNAMENT_IDS[0];
-const DEMO_TOURNAMENT_ID = FEATURED_TOURNAMENT_IDS[1];
+// Opened up for the real end-user app: empty = show the full discover /
+// your-events feed. Re-add tournament IDs here to curate a featured-only home.
+const FEATURED_TOURNAMENT_IDS: string[] = [];
 
 // Helpers
 const unwrap = <T,>(res: any): T => (res?.data?.data ?? res?.data ?? res) as T;
@@ -115,6 +112,7 @@ export default function HomeScreen() {
 
   const goPlay = () => nav.navigate('PlayTab', { screen: 'Play' });
   const goHost = () => nav.navigate('PlayTab', { screen: 'CreateTournament' });
+  const goBook = () => nav.navigate('BookTab', { screen: 'Book' });
   const goMe = () => nav.navigate('MeTab', { screen: 'Me' });
   const openLocation = () => nav.navigate('HomeTab', { screen: 'CityPicker' });
   const goSPPL = () =>
@@ -226,6 +224,25 @@ export default function HomeScreen() {
           </YUiText>
         </View>
 
+        {/* Primary CTA — book a court */}
+        <View style={styles.bookCardWrap}>
+          <Pressable
+            onPress={goBook}
+            style={({ pressed }) => [styles.bookCard, pressed && { opacity: 0.92 }]}
+          >
+            <View style={{ flex: 1 }}>
+              <YEyebrow color="rgba(255,255,255,0.7)">RESERVE A COURT</YEyebrow>
+              <YDisplay size={26} color="#fff" style={{ marginTop: 6 }}>
+                BOOK A COURT
+              </YDisplay>
+              <YUiText size={12} color="rgba(255,255,255,0.85)" style={{ marginTop: 6 }}>
+                Find a slot near you and play today.
+              </YUiText>
+            </View>
+            <YUiText size={28} color={YColors.lime}>→</YUiText>
+          </Pressable>
+        </View>
+
         {/* Big quick actions */}
         <View style={styles.quickRow}>
           <View style={{ flex: 1 }}>
@@ -288,64 +305,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Featured 1 — AIPA West Zone (LIVE: real shadow scoring during May 29-31) */}
-        <View style={styles.featuredWrap}>
-          <Pressable
-            onPress={() => openTournament(SHADOW_TOURNAMENT_ID)}
-            style={({ pressed }) => [styles.featuredCard, pressed && { opacity: 0.92 }]}
-          >
-            <View style={styles.featuredBadgeRow}>
-              <View style={styles.featuredBadge}>
-                <YUiText size={9} weight={900} color="#000" style={{ letterSpacing: 1.2 }}>LIVE TOURNAMENT</YUiText>
-              </View>
-              <View style={styles.featuredLiveBadge}>
-                <YUiText size={9} weight={900} color="#fff" style={{ letterSpacing: 1.2 }}>MAY 29–31</YUiText>
-              </View>
-            </View>
-            <YDisplay size={32} color="#fff" style={{ marginTop: 18, lineHeight: 32 }}>
-              1ST WEST ZONE
-            </YDisplay>
-            <YDisplay size={28} color="#fff" style={{ marginTop: 2, lineHeight: 28 }}>
-              CHAMPIONSHIP
-            </YDisplay>
-            <YUiText size={12} weight={700} color="rgba(255,255,255,0.85)" style={{ marginTop: 8, letterSpacing: 0.5 }}>
-              HOSTED BY AIPA · MUSCLEBAR, PUNE
-            </YUiText>
-            <View style={styles.featuredFooter}>
-              <YUiText size={11} weight={800} color={YColors.lime} style={{ letterSpacing: 1 }}>
-                VIEW TOURNAMENT  →
-              </YUiText>
-            </View>
-          </Pressable>
-        </View>
-
-        {/* Featured 2 — AIPA West Zone DEMO (sandbox for live demos; mock data) */}
-        <View style={styles.featuredWrap}>
-          <Pressable
-            onPress={() => openTournament(DEMO_TOURNAMENT_ID)}
-            style={({ pressed }) => [styles.featuredCardAlt, pressed && { opacity: 0.92 }]}
-          >
-            <View style={styles.featuredBadgeRow}>
-              <View style={[styles.featuredBadge, { backgroundColor: YColors.lime }]}>
-                <YUiText size={9} weight={900} color="#000" style={{ letterSpacing: 1.2 }}>DEMO SANDBOX</YUiText>
-              </View>
-              <View style={[styles.featuredLiveBadge, { backgroundColor: 'rgba(0,0,0,0.18)' }]}>
-                <YUiText size={9} weight={900} color={YColors.ink} style={{ letterSpacing: 1.2 }}>FULL FLOW</YUiText>
-              </View>
-            </View>
-            <YDisplay size={28} color={YColors.ink} style={{ marginTop: 18, lineHeight: 28 }}>
-              DEMO TOURNAMENT
-            </YDisplay>
-            <YUiText size={12} weight={700} color={YColors.ink2} style={{ marginTop: 8, letterSpacing: 0.5 }}>
-              SANDBOX · MOCK PLAYERS · SAFE TO PLAY WITH
-            </YUiText>
-            <View style={styles.featuredFooter}>
-              <YUiText size={11} weight={800} color={YColors.ink} style={{ letterSpacing: 1 }}>
-                OPEN DEMO  →
-              </YUiText>
-            </View>
-          </Pressable>
-        </View>
 
         {/* YOUR EVENTS — combined registrations + hosted */}
         {(upcomingRegs.length > 0 || visibleHosted.length > 0) ? (
@@ -474,6 +433,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     flexDirection: 'row',
     gap: 10,
+  },
+  bookCardWrap: {
+    marginTop: 14,
+    paddingHorizontal: 16,
+  },
+  bookCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: YColors.accentDeep,
+    borderRadius: 16,
+    padding: 18,
   },
   listWrap: {
     paddingHorizontal: 16,
