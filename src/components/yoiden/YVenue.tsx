@@ -5,7 +5,7 @@ import { YColors } from '../../config/yoiden';
 import { YUiText } from './YText';
 
 // Sports a venue can offer. Drives the sport-icon chips on each card.
-export type Sport = 'tennis' | 'padel' | 'pickleball' | 'football' | 'basketball' | 'swimming';
+export type Sport = 'tennis' | 'padel' | 'pickleball' | 'football' | 'basketball' | 'swimming' | 'badminton';
 
 // Venue shape rendered by both the editorial (sponsored) card and the compact row.
 export type Venue = {
@@ -19,6 +19,7 @@ export type Venue = {
   imageUrl?: string;
   sponsored?: boolean; // shows the "SPONSORED" badge on the editorial card
   topRated?: boolean; // shows the "TOP RATED" badge on the compact row
+  _fallback?: boolean; // frontend-only seed data; no real backend record exists
 };
 
 const GREY = YColors.ink2;
@@ -82,6 +83,16 @@ const SportRacket = ({ size = 18, color = YColors.ink }: IconProps) => (
     <Path d="M12 14.5V21" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
   </Svg>
 );
+const SportBadminton = ({ size = 18, color = YColors.ink }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    {/* Cork */}
+    <Ellipse cx={12} cy={18.5} rx={2.4} ry={1.7} stroke={color} strokeWidth={1.5} />
+    {/* Feather stems fanning upward from cork */}
+    <Path d="M10 17L7 7M12 17V6M14 17L17 7" stroke={color} strokeWidth={1.3} strokeLinecap="round" />
+    {/* Arc connecting feather tips */}
+    <Path d="M7 7Q12 3.5 17 7" stroke={color} strokeWidth={1.3} strokeLinecap="round" fill="none" />
+  </Svg>
+);
 const SportSwimming = ({ size = 18, color = YColors.ink }: IconProps) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <Circle cx={7.4} cy={7} r={1.7} fill={color} />
@@ -94,6 +105,7 @@ const SPORT_ICONS: Record<Sport, (p: IconProps) => React.JSX.Element> = {
   tennis: SportRacket,
   padel: SportRacket,
   pickleball: SportRacket,
+  badminton: SportBadminton,
   football: SportFootball,
   basketball: SportBasketball,
   swimming: SportSwimming,
@@ -139,24 +151,26 @@ export const YVenueEditorial: React.FC<EditorialProps> = ({ venue, onPress, styl
     </View>
 
     <View style={styles.eBody}>
-      <View style={styles.ratingRow}>
-        <Star size={15} color={YColors.accent} />
-        <YUiText size={14} weight={800} color={YColors.accent} style={{ marginLeft: 4 }}>
-          {venue.rating.toFixed(1)}
-        </YUiText>
-        <YUiText size={13} weight={600} color={GREY} style={{ marginLeft: 6 }}>
-          · {venue.reviews} reviews
-        </YUiText>
-      </View>
+      {venue.rating > 0 && (
+        <View style={styles.ratingRow}>
+          <Star size={15} color={YColors.accent} />
+          <YUiText size={14} weight={800} color={YColors.accent} style={{ marginLeft: 4 }}>
+            {venue.rating.toFixed(1)}
+          </YUiText>
+          <YUiText size={13} weight={600} color={GREY} style={{ marginLeft: 6 }}>
+            · {venue.reviews} reviews
+          </YUiText>
+        </View>
+      )}
 
-      <YUiText size={24} weight={900} color={YColors.ink} numberOfLines={1} style={{ marginTop: 6, letterSpacing: -0.4 }}>
+      <YUiText size={24} weight={900} color={YColors.ink} numberOfLines={1} style={{ marginTop: venue.rating > 0 ? 6 : 0, letterSpacing: -0.4 }}>
         {venue.name}
       </YUiText>
 
       <View style={styles.locRow}>
         <Pin size={13} color={GREY} />
         <YUiText size={13} weight={600} color={GREY} style={{ marginLeft: 5 }}>
-          {venue.area} · {venue.distanceKm} km away
+          {venue.area}{venue.distanceKm > 0 ? ` · ${venue.distanceKm} km away` : ''}
         </YUiText>
       </View>
 
@@ -200,18 +214,20 @@ export const YVenueRow: React.FC<RowProps> = ({ venue, onPress, style }) => (
         <YUiText size={16} weight={800} color={YColors.ink} numberOfLines={1} style={{ flex: 1, letterSpacing: -0.2 }}>
           {venue.name}
         </YUiText>
-        <View style={styles.ratingChip}>
-          <Star size={12} color={YColors.accent} />
-          <YUiText size={12.5} weight={700} color={YColors.ink} style={{ marginLeft: 3 }}>
-            {venue.rating.toFixed(1)}
-          </YUiText>
-        </View>
+        {venue.rating > 0 && (
+          <View style={styles.ratingChip}>
+            <Star size={12} color={YColors.accent} />
+            <YUiText size={12.5} weight={700} color={YColors.ink} style={{ marginLeft: 3 }}>
+              {venue.rating.toFixed(1)}
+            </YUiText>
+          </View>
+        )}
       </View>
 
       <View style={styles.locRow}>
         <Pin size={12} color={GREY} />
         <YUiText size={12.5} weight={600} color={GREY} style={{ marginLeft: 4 }} numberOfLines={1}>
-          {venue.area} · {venue.distanceKm} km
+          {venue.area}{venue.distanceKm > 0 ? ` · ${venue.distanceKm} km` : ''}
         </YUiText>
       </View>
 

@@ -33,7 +33,9 @@ import {
 import { useAuthStore } from '../../store/authStore';
 import { tournamentsApi } from '../../api/tournaments.api';
 import { registrationsApi } from '../../api/registrations.api';
+import { venuesApi } from '../../api/venues.api';
 import type { Tournament } from '../../types/tournament.types';
+import type { Venue as ApiVenue } from '../../types/booking.types';
 import { SPPL, type YoidenTabParamList } from '../../navigation/YoidenTabNavigator';
 
 type Nav = BottomTabNavigationProp<YoidenTabParamList, 'HomeTab'>;
@@ -48,19 +50,80 @@ const FEATURED_TOURNAMENT_IDS = [
   '77e4837b-9730-4ba6-b070-65948ff70dc6', // AIPA — DEMO
 ] as const;
 
-// Venues shown on Home. Mock data for now — swap for a venues API when available.
-// 2 sponsored (editorial cards) + 6 normal (compact rows).
-const SPONSORED_VENUES: Venue[] = [
-  { id: 'v1', name: 'Apex Padel Club', area: 'Dockside', distanceKm: 1.2, rating: 4.9, reviews: 168, sponsored: true, sports: ['padel', 'tennis', 'football', 'swimming'], imageUrl: 'https://picsum.photos/seed/apexpadel/640/400' },
-  { id: 'v2', name: 'Smash Arena', area: 'Riverside', distanceKm: 2.1, rating: 4.8, reviews: 204, sponsored: true, sports: ['tennis', 'basketball', 'football'], imageUrl: 'https://picsum.photos/seed/smasharena/640/400' },
-];
-const NORMAL_VENUES: Venue[] = [
-  { id: 'v3', name: 'Riverside Sports Hub', area: 'Greenpoint', distanceKm: 2.5, rating: 4.8, reviews: 96, topRated: true, sports: ['football', 'basketball', 'swimming'], imageUrl: 'https://picsum.photos/seed/riverside/300/300' },
-  { id: 'v4', name: 'Baseline Tennis Centre', area: 'Hillview', distanceKm: 3.1, rating: 4.6, reviews: 74, sports: ['tennis', 'padel'], imageUrl: 'https://picsum.photos/seed/baseline/300/300' },
-  { id: 'v5', name: 'Net Zone Courts', area: 'Old Town', distanceKm: 3.8, rating: 4.5, reviews: 52, sports: ['pickleball', 'tennis', 'basketball'], imageUrl: 'https://picsum.photos/seed/netzone/300/300' },
-  { id: 'v6', name: 'Grand Slam Academy', area: 'Lakeside', distanceKm: 4.4, rating: 4.7, reviews: 131, topRated: true, sports: ['tennis', 'football', 'swimming'], imageUrl: 'https://picsum.photos/seed/grandslam/300/300' },
-  { id: 'v7', name: 'Rally Point Club', area: 'Westend', distanceKm: 5.0, rating: 4.4, reviews: 38, sports: ['padel', 'basketball'], imageUrl: 'https://picsum.photos/seed/rallypoint/300/300' },
-  { id: 'v8', name: 'Ace Sports Park', area: 'Northgate', distanceKm: 5.6, rating: 4.3, reviews: 47, sports: ['football', 'tennis', 'basketball', 'swimming'], imageUrl: 'https://picsum.photos/seed/acepark/300/300' },
+
+// Fallback venues for Chhatrapati Sambhaji Nagar shown when the backend
+// returns no venues for this city. Swap out once real listings are seeded.
+const CSN_FALLBACK_VENUES: Venue[] = [
+  // ── Sponsored / editorial (2) ────────────────────────────────────────
+  {
+    id: 'csn-v1', _fallback: true,
+    name: 'Prozone Padel Arena',
+    area: 'Jalna Road',
+    distanceKm: 0, rating: 0, reviews: 0,
+    sponsored: true,
+    sports: ['padel'],
+    imageUrl: 'https://images.unsplash.com/photo-1622547748225-3fc4abd2cca0?w=640&fit=crop&q=80',
+  },
+  {
+    id: 'csn-v2', _fallback: true,
+    name: 'Aurangabad Badminton Academy',
+    area: 'Cidco N-6',
+    distanceKm: 0, rating: 0, reviews: 0,
+    sponsored: true,
+    sports: ['badminton'],
+    imageUrl: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=640&fit=crop&q=80',
+  },
+  // ── Normal / compact rows (6) ─────────────────────────────────────────
+  {
+    id: 'csn-v3', _fallback: true,
+    name: 'City Sports Club',
+    area: 'Garkheda',
+    distanceKm: 0, rating: 0, reviews: 0,
+    sports: ['padel', 'badminton'],
+    imageUrl: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&fit=crop&q=80',
+  },
+  {
+    id: 'csn-v4', _fallback: true,
+    name: 'MAAC Badminton Courts',
+    area: 'Bajajnagar',
+    distanceKm: 0, rating: 0, reviews: 0,
+    topRated: true,
+    sports: ['badminton'],
+    imageUrl: 'https://images.unsplash.com/photo-1547347298-4074fc3086f0?w=400&fit=crop&q=80',
+  },
+  {
+    id: 'csn-v5', _fallback: true,
+    name: 'Samrat Indoor Sports',
+    area: 'Aurangpura',
+    distanceKm: 0, rating: 0, reviews: 0,
+    sports: ['padel', 'badminton'],
+    imageUrl: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&fit=crop&q=80',
+  },
+  {
+    id: 'csn-v6', _fallback: true,
+    name: 'Milestone Padel Club',
+    area: 'Waluj',
+    distanceKm: 0, rating: 0, reviews: 0,
+    sports: ['padel'],
+    imageUrl: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=400&fit=crop&q=80',
+  },
+  {
+    id: 'csn-v7', _fallback: true,
+    name: 'Green City Badminton Hall',
+    area: 'Cidco N-5',
+    distanceKm: 0, rating: 0, reviews: 0,
+    sports: ['badminton'],
+    imageUrl: 'https://images.unsplash.com/photo-1508614999368-9260051292e5?w=400&fit=crop&q=80',
+  },
+  {
+    id: 'csn-v8', _fallback: true,
+    name: 'Elite Sports Centre',
+    area: 'Kranti Chowk',
+    distanceKm: 0, rating: 0, reviews: 0,
+    topRated: true,
+    sports: ['padel', 'badminton'],
+    imageUrl: 'https://images.unsplash.com/photo-1519861531473-9200262188bf?w=400&fit=crop&q=80',
+  },
 ];
 
 // Helpers
@@ -94,14 +157,16 @@ export default function HomeScreen() {
   const [myRegs, setMyRegs] = useState<Registration[]>([]);
   const [myHosted, setMyHosted] = useState<Tournament[]>([]);
   const [nearby, setNearby] = useState<Tournament[]>([]);
+  const [apiVenues, setApiVenues] = useState<ApiVenue[]>([]);
   const [activeSport, setActiveSport] = useState<string | null>(null);
 
   const fetchAll = useCallback(async () => {
     try {
-      const [regsRes, hostedRes, discoverRes] = await Promise.allSettled([
+      const [regsRes, hostedRes, discoverRes, venuesRes] = await Promise.allSettled([
         registrationsApi.getMyRegistrations(),
         tournamentsApi.getMyTournaments(),
         tournamentsApi.discover({ limit: 5 }),
+        venuesApi.list({ city: user?.city || undefined, limit: 8 }),
       ]);
 
       if (regsRes.status === 'fulfilled') {
@@ -115,6 +180,11 @@ export default function HomeScreen() {
       if (discoverRes.status === 'fulfilled') {
         const data = unwrap<Tournament[]>(discoverRes.value);
         setNearby(Array.isArray(data) ? data : []);
+      }
+      if (venuesRes.status === 'fulfilled') {
+        const res = venuesRes.value as any;
+        const data: ApiVenue[] = res?.data?.data ?? res?.data ?? [];
+        setApiVenues(Array.isArray(data) ? data : []);
       }
     } finally {
       setLoading(false);
@@ -134,6 +204,8 @@ export default function HomeScreen() {
   const goPlay = () => nav.navigate('PlayTab', { screen: 'Play' });
   const goHost = () => nav.navigate('PlayTab', { screen: 'CreateTournament' });
   const goBook = () => nav.navigate('BookTab', { screen: 'Book' });
+  const openVenue = (venueId: string) =>
+    nav.navigate('BookTab', { screen: 'VenueDetail', params: { venueId } });
   const goMe = () => nav.navigate('MeTab', { screen: 'Me' });
   const openLocation = () => nav.navigate('HomeTab', { screen: 'CityPicker' });
   const goSPPL = () =>
@@ -168,6 +240,29 @@ export default function HomeScreen() {
   const upcomingRegs = onlyFeatured(allUpcomingRegs);
   const visibleHosted = onlyFeatured(myHosted);
   const visibleNearby = onlyFeatured(nearby);
+
+  // Transform API venues → display shape for YVenueEditorial / YVenueRow.
+  // Fields not yet in the backend (rating, distanceKm, sports) are zeroed so
+  // the card components hide them via their own guards.
+  const toDisplayVenue = (v: ApiVenue, i: number): Venue => ({
+    id: v.id,
+    name: v.name,
+    area: v.city,
+    distanceKm: 0,
+    rating: 0,
+    reviews: 0,
+    sports: [],
+    imageUrl: (v as any).photos?.[0]?.url ?? `https://picsum.photos/seed/${v.id}/640/400`,
+    sponsored: i < 2,
+    topRated: false,
+  });
+  // Use API data when available; fall back to CSN seed venues until the backend
+  // has real listings for this city.
+  const displayVenues: Venue[] = apiVenues.length > 0
+    ? apiVenues.map(toDisplayVenue)
+    : (!loading ? CSN_FALLBACK_VENUES : []);
+  const sponsoredVenues = displayVenues.filter((v) => v.sponsored);
+  const normalVenues = displayVenues.filter((v) => !v.sponsored);
 
   // Live card is shown only when at least one tournament spans today
   const todayStr = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
@@ -359,8 +454,8 @@ export default function HomeScreen() {
           </YUiText>
           <View style={styles.sportRow}>
             {([
-              { key: 'pickleball', label: 'Pickleball' },
-              { key: 'badminton',  label: 'Badminton'  },
+              { key: 'padel',     label: 'Padel' },
+              { key: 'badminton', label: 'Badminton' },
             ] as const).map(({ key, label }) => {
               const active = activeSport === key;
               const stroke = active ? YColors.ink : YColors.ink2;
@@ -370,12 +465,20 @@ export default function HomeScreen() {
                   onPress={() => setActiveSport(active ? null : key)}
                   style={[styles.sportChip, active && styles.sportChipActive]}
                 >
-                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-                    <Ellipse cx={12} cy={8.5} rx={5.2} ry={6} stroke={stroke} strokeWidth={1.6} />
-                    <Line x1={6.8} y1={8.5} x2={17.2} y2={8.5} stroke={stroke} strokeWidth={1} opacity={0.5} />
-                    <Line x1={12} y1={2.6} x2={12} y2={14.4} stroke={stroke} strokeWidth={1} opacity={0.5} />
-                    <Path d="M12 14.5V21" stroke={stroke} strokeWidth={2} strokeLinecap="round" />
-                  </Svg>
+                  {key === 'padel' ? (
+                    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                      <Ellipse cx={12} cy={8.5} rx={5.2} ry={6} stroke={stroke} strokeWidth={1.6} />
+                      <Line x1={6.8} y1={8.5} x2={17.2} y2={8.5} stroke={stroke} strokeWidth={1} opacity={0.5} />
+                      <Line x1={12} y1={2.6} x2={12} y2={14.4} stroke={stroke} strokeWidth={1} opacity={0.5} />
+                      <Path d="M12 14.5V21" stroke={stroke} strokeWidth={2} strokeLinecap="round" />
+                    </Svg>
+                  ) : (
+                    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                      <Ellipse cx={12} cy={18.5} rx={2.4} ry={1.7} stroke={stroke} strokeWidth={1.5} />
+                      <Path d="M10 17L7 7M12 17V6M14 17L17 7" stroke={stroke} strokeWidth={1.3} strokeLinecap="round" />
+                      <Path d="M7 7Q12 3.5 17 7" stroke={stroke} strokeWidth={1.3} strokeLinecap="round" fill="none" />
+                    </Svg>
+                  )}
                   <YUiText size={13} weight={700} color={stroke}>{label}</YUiText>
                 </Pressable>
               );
@@ -383,21 +486,32 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* VENUES NEARBY — 2 sponsored (editorial) + 6 normal (compact) */}
-        <YSectionHead
-          eyebrow={user?.city ? user.city.toUpperCase() : 'NEAR YOU'}
-          title="VENUES NEARBY"
-          action="ALL →"
-          onActionPress={goPlay}
-        />
-        <View style={styles.listWrap}>
-          {SPONSORED_VENUES.map((v) => (
-            <YVenueEditorial key={v.id} venue={v} onPress={goPlay} style={{ marginBottom: 14 }} />
-          ))}
-          {NORMAL_VENUES.map((v) => (
-            <YVenueRow key={v.id} venue={v} onPress={goPlay} style={{ marginBottom: 8 }} />
-          ))}
-        </View>
+        {/* VENUES NEARBY — live from /venues API */}
+        {(loading || displayVenues.length > 0) && (
+          <>
+            <YSectionHead
+              eyebrow={user?.city ? user.city.toUpperCase() : 'NEAR YOU'}
+              title="VENUES NEARBY"
+              action={displayVenues.length > 0 ? 'ALL →' : undefined}
+              onActionPress={goBook}
+            />
+            <View style={styles.listWrap}>
+              {loading ? (
+                // Skeleton placeholders while fetching
+                [0, 1].map((i) => <View key={i} style={styles.venueSkeleton} />)
+              ) : (
+                <>
+                  {sponsoredVenues.map((v) => (
+                    <YVenueEditorial key={v.id} venue={v} onPress={v._fallback ? goBook : () => openVenue(v.id)} style={{ marginBottom: 14 }} />
+                  ))}
+                  {normalVenues.map((v) => (
+                    <YVenueRow key={v.id} venue={v} onPress={v._fallback ? goBook : () => openVenue(v.id)} style={{ marginBottom: 8 }} />
+                  ))}
+                </>
+              )}
+            </View>
+          </>
+        )}
 
         {/* YOUR EVENTS — combined registrations + hosted */}
         {(upcomingRegs.length > 0 || visibleHosted.length > 0) ? (
@@ -590,6 +704,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     right: 8,
+  },
+  venueSkeleton: {
+    height: 240,
+    borderRadius: 14,
+    backgroundColor: YColors.bg2,
+    borderWidth: 1,
+    borderColor: YColors.line2,
+    marginBottom: 14,
   },
   emptyState: {
     backgroundColor: YColors.bg2,
