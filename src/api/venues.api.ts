@@ -4,7 +4,7 @@ import { Venue, AvailabilityResponse, QuoteResponse } from '../types/booking.typ
 
 export const venuesApi = {
   // Public discovery
-  list: (params?: { city?: string; q?: string; page?: number; limit?: number }) =>
+  list: (params?: { city?: string; sport?: string; q?: string; lat?: number; lng?: number; page?: number; limit?: number }) =>
     apiClient.get<{ success: boolean; data: Venue[]; total: number; page: number; limit: number }>(
       '/venues',
       { params },

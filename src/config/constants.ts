@@ -1,8 +1,6 @@
 export const GOOGLE_PLACES_API_KEY = 'AIzaSyA1a4ztLnO3wL-4TQ8JF5u933pZL_TK_Bs';
 
-export const API_BASE_URL = __DEV__
-  ? 'https://yoiden-api-460478077750.asia-south1.run.app/api/v1'
-  : 'https://yoiden-api-460478077750.asia-south1.run.app/api/v1';
+export const API_BASE_URL = 'https://yoiden-api-460478077750.asia-south1.run.app/api/v1';
 
 export const DEFAULT_RATING = 1200;
 export const DEFAULT_GROUP_SIZE = 4;

@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import * as Location from 'expo-location';
 import {
   View,
   ScrollView,
@@ -159,14 +160,30 @@ export default function HomeScreen() {
   const [nearby, setNearby] = useState<Tournament[]>([]);
   const [apiVenues, setApiVenues] = useState<ApiVenue[]>([]);
   const [activeSport, setActiveSport] = useState<string | null>(null);
+  // Fetched once on mount — null means not yet resolved, undefined means denied/unavailable
+  const userCoords = useRef<{ lat: number; lng: number } | null>(null);
+
+  const loadVenues = useCallback(async (sport?: string | null) => {
+    try {
+      const coords = userCoords.current;
+      const res = await venuesApi.list({
+        city: coords ? undefined : (user?.city || undefined), // prefer GPS over city text
+        lat: coords?.lat,
+        lng: coords?.lng,
+        limit: 8,
+        sport: sport || undefined,
+      }) as any;
+      const data: ApiVenue[] = res?.data?.data ?? res?.data ?? [];
+      setApiVenues(Array.isArray(data) ? data : []);
+    } catch { /* silent — fallback venues shown */ }
+  }, [user?.city]);
 
   const fetchAll = useCallback(async () => {
     try {
-      const [regsRes, hostedRes, discoverRes, venuesRes] = await Promise.allSettled([
+      const [regsRes, hostedRes, discoverRes] = await Promise.allSettled([
         registrationsApi.getMyRegistrations(),
         tournamentsApi.getMyTournaments(),
         tournamentsApi.discover({ limit: 5 }),
-        venuesApi.list({ city: user?.city || undefined, limit: 8 }),
       ]);
 
       if (regsRes.status === 'fulfilled') {
@@ -181,20 +198,47 @@ export default function HomeScreen() {
         const data = unwrap<Tournament[]>(discoverRes.value);
         setNearby(Array.isArray(data) ? data : []);
       }
-      if (venuesRes.status === 'fulfilled') {
-        const res = venuesRes.value as any;
-        const data: ApiVenue[] = res?.data?.data ?? res?.data ?? [];
-        setApiVenues(Array.isArray(data) ? data : []);
-      }
+      await loadVenues(null);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  }, [loadVenues]);
+
+  // Ask for location ONCE on mount, then kick off the full data load.
+  // We request foreground permission (no background tracking ever).
+  useEffect(() => {
+    let cancelled = false;
+    const init = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted' && !cancelled) {
+          const pos = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced, // fast, city-level precision
+          });
+          if (!cancelled) {
+            userCoords.current = {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+            };
+          }
+        }
+      } catch { /* permission denied or GPS unavailable — city filter used instead */ }
+      if (!cancelled) fetchAll();
+    };
+    init();
+    return () => { cancelled = true; };
+  // fetchAll is stable (wrapped in useCallback) — safe to include
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Re-fetch venues whenever the sport chip changes (after initial load)
   useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+    if (!loading) {
+      loadVenues(activeSport);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSport]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -244,18 +288,26 @@ export default function HomeScreen() {
   // Transform API venues → display shape for YVenueEditorial / YVenueRow.
   // Fields not yet in the backend (rating, distanceKm, sports) are zeroed so
   // the card components hide them via their own guards.
-  const toDisplayVenue = (v: ApiVenue, i: number): Venue => ({
-    id: v.id,
-    name: v.name,
-    area: v.city,
-    distanceKm: 0,
-    rating: 0,
-    reviews: 0,
-    sports: [],
-    imageUrl: (v as any).photos?.[0]?.url ?? `https://picsum.photos/seed/${v.id}/640/400`,
-    sponsored: i < 2,
-    topRated: false,
-  });
+  const toDisplayVenue = (v: ApiVenue, i: number): Venue => {
+    // photos may be {url,caption}[] or string[] depending on backend version
+    const firstPhoto = Array.isArray(v.photos)
+      ? typeof v.photos[0] === 'string'
+        ? (v.photos[0] as string)
+        : (v.photos[0] as { url: string })?.url
+      : undefined;
+    return {
+      id: v.id,
+      name: v.name,
+      area: v.neighbourhood || v.city,
+      distanceKm: v.distanceKm ?? 0,         // 0 = hide distance chip on card
+      rating: v.rating ?? 0,
+      reviews: v.reviewCount ?? 0,
+      sports: (v.sports ?? []) as unknown as Venue['sports'],
+      imageUrl: firstPhoto ?? `https://picsum.photos/seed/${v.id}/640/400`,
+      sponsored: i < 2,
+      topRated: (v.rating ?? 0) >= 4.5,
+    };
+  };
   // Use API data when available; fall back to CSN seed venues until the backend
   // has real listings for this city.
   const displayVenues: Venue[] = apiVenues.length > 0

@@ -22,6 +22,7 @@ import {
   YBadge,
   YButton,
 } from '../../components/yoiden';
+import RazorpayCheckout from 'react-native-razorpay';
 import { venuesApi } from '../../api/venues.api';
 import { bookingsApi } from '../../api/bookings.api';
 import { useAuthStore } from '../../store/authStore';
@@ -202,12 +203,45 @@ export default function VenueDetailScreen() {
         ...(isAuthed ? {} : { guestName: guestName.trim(), guestPhone: guestPhone.trim() }),
       });
       const result = res.data;
-      setSheetOpen(false);
+      const booking = result.booking;
+      const payment = result.payment;
+
+      // ── Online payment → open Razorpay checkout ──────────────────
+      if (channel === 'online' && payment?.orderId) {
+        setSheetOpen(false);
+        try {
+          const rzpRes = await RazorpayCheckout.open({
+            key: payment.key,
+            amount: payment.amount,          // already in paise from backend
+            currency: payment.currency ?? 'INR',
+            order_id: payment.orderId,
+            name: venue?.name ?? 'Yoiden',
+            description: `Court booking · ${date}`,
+            prefill: {
+              contact: guestPhone.trim() || '',
+              name: guestName.trim() || '',
+            },
+            theme: { color: '#1B4FD8' },
+          });
+          // Verify signature on backend → marks booking confirmed
+          await bookingsApi.confirmPayment(booking.id, {
+            razorpayOrderId: rzpRes.razorpay_order_id,
+            razorpayPaymentId: rzpRes.razorpay_payment_id,
+            razorpaySignature: rzpRes.razorpay_signature,
+          });
+        } catch (rzpErr: any) {
+          // User dismissed Razorpay or payment failed — booking stays 'pending'
+          // Don't show as an error — they can retry from MyBookings
+          console.warn('[Razorpay]', rzpErr?.description ?? rzpErr);
+        }
+      }
+
+      // ── Cleanup + navigate ────────────────────────────────────────
       setSelected([]);
       setGuestName('');
       setGuestPhone('');
       await loadAvailability();
-      nav.navigate('MyBookings', { justBooked: result.booking?.id });
+      nav.navigate('MyBookings', { justBooked: booking?.id });
     } catch (e: any) {
       const status = e?.response?.status;
       const msg =
@@ -249,6 +283,33 @@ export default function VenueDetailScreen() {
           </Svg>
         </Pressable>
       </View>
+
+      {/* Venue info strip — sports chips + open/close hours */}
+      {venue && (
+        <View style={styles.venueInfo}>
+          <View style={styles.venueInfoLeft}>
+            {(venue as any).sports?.length > 0 ? (
+              <View style={styles.sportPills}>
+                {((venue as any).sports as string[]).map((s: string) => (
+                  <View key={s} style={styles.sportPill}>
+                    <YMono size={9} bold color={YColors.accent} style={{ letterSpacing: 0.8 }}>
+                      {s.toUpperCase()}
+                    </YMono>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            {venue.address ? (
+              <YUiText size={11} color={YColors.ink3} numberOfLines={1} style={{ marginTop: 2 }}>
+                {venue.address}
+              </YUiText>
+            ) : null}
+          </View>
+          <YMono size={10} color={YColors.ink2} style={{ letterSpacing: 0.5 }}>
+            {to12h(venue.openTime)} – {to12h(venue.closeTime)}
+          </YMono>
+        </View>
+      )}
 
       {/* Court column headers — blue bar with lime capsules */}
       <View style={styles.colHead}>
@@ -435,6 +496,27 @@ const styles = StyleSheet.create({
   center: { flex: 1, padding: 40, alignItems: 'center', justifyContent: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 12, gap: 8, backgroundColor: '#FFFFFF' },
   headerBtn: { width: 36, height: 36, borderRadius: 999, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: YColors.line2 },
+  venueInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: YColors.bg2,
+    borderBottomWidth: 1,
+    borderBottomColor: YColors.line,
+    gap: 10,
+  },
+  venueInfoLeft: { flex: 1, gap: 2 },
+  sportPills: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  sportPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: '#EEF3FF',
+    borderWidth: 1,
+    borderColor: '#D0DEFF',
+  },
   colHead: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: YColors.line },
   colHeadCell: { flex: 1, alignItems: 'center' },
   courtCapsule: { backgroundColor: YColors.lime, paddingHorizontal: 22, paddingVertical: 7, borderRadius: 999 },

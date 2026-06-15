@@ -28,10 +28,15 @@ export interface Venue {
   lng?: number | null;
   city: string;
   state?: string | null;
+  neighbourhood?: string | null;
   contactPhone?: string | null;
   contactEmail?: string | null;
-  photos?: string[] | null;
+  photos?: { url: string; caption?: string }[] | string[] | null;
   amenities?: string[] | null;
+  sports?: string[];
+  rating?: number | null;
+  reviewCount?: number | null;
+  distanceKm?: number | null;
   openTime: string;
   closeTime: string;
   timezone: string;
