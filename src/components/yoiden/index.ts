@@ -10,4 +10,6 @@ export { YTournamentRow } from './YTournamentRow';
 export { YQuickAction } from './YQuickAction';
 export { YCoverImage } from './YCoverImage';
 export { YStatTile } from './YStatTile';
+export { YVenueEditorial, YVenueRow } from './YVenue';
+export type { Venue } from './YVenue';
 export { YColors, YFonts, YType, YSpacing, YRadius, YShadow } from '../../config/yoiden';
