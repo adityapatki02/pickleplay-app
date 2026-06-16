@@ -515,7 +515,7 @@ const TieDetailScreen: React.FC = () => {
 
   const handleAdminSubmitLineup = async () => {
     if (!tie) return;
-    const lineupData = SPPL_MATCH_SLOTS.map((slot) => {
+    const lineupData = tieSlots.map((slot) => {
       const picks = lineupSlots[slot.slotNumber];
       return {
         slotNumber: slot.slotNumber,
@@ -580,14 +580,14 @@ const TieDetailScreen: React.FC = () => {
       round === 'knockout_q2' ||
       round === 'knockout_final';
     const slotNumbers = hasRallyGame
-      ? [0, ...Array.from({ length: 13 }, (_, i) => i + 1)]
-      : Array.from({ length: 13 }, (_, i) => i + 1);
+      ? [0, ...tieSlots.map((s) => s.slotNumber)]
+      : tieSlots.map((s) => s.slotNumber);
     const slots = slotNumbers.map((slotNum) => {
       const homeSlot = homeSheet?.lineupData?.find((s: any) => s.slotNumber === slotNum);
       const awaySlot = awaySheet?.lineupData?.find((s: any) => s.slotNumber === slotNum);
       return {
         slotNumber: slotNum,
-        gameLabel: SPPL_TIE_SHEET_LABELS[slotNum] || '',
+        gameLabel: SPPL_TIE_SHEET_LABELS[slotNum] || (slotNum === 0 ? 'Rally' : `Game ${slotNum}`),
         team1Player1: nameOf(homeSlot?.player1Id),
         team1Player2: nameOf(homeSlot?.player2Id),
         team2Player1: nameOf(awaySlot?.player1Id),
@@ -623,6 +623,27 @@ const TieDetailScreen: React.FC = () => {
 
   const allMatchesCompleted =
     tie?.tieMatches?.every((tm) => tm.match?.status === 'completed') || false;
+
+  // Per-tie lineup slots, derived from the tie's actual games (data-driven) so
+  // this screen works for any format: SPPL (13 categorized slots) or cross_5game
+  // (5 generic "Game N" slots, any player eligible). Excludes the rally game (slot 0).
+  const tieSlots = React.useMemo(() => {
+    const tms = (tie?.tieMatches || [])
+      .filter((tm) => !tm.isRallyPointGame && tm.slotNumber > 0)
+      .slice()
+      .sort((a, b) => a.slotNumber - b.slotNumber);
+    return tms.map((tm) => {
+      const sppl = SPPL_MATCH_SLOTS.find((s) => s.slotNumber === tm.slotNumber);
+      const generic = tm.categorySlug === ('open' as any) || !sppl;
+      return {
+        slotNumber: tm.slotNumber,
+        categorySlug: tm.categorySlug,
+        allowedCategories: generic ? [] : sppl!.allowedCategories,
+        label: generic ? `Game ${tm.slotNumber}` : sppl!.label,
+        pointValue: tm.pointValue,
+      };
+    });
+  }, [tie]);
 
   // ── Live score computation from individual matches (must be before early return) ──
   const liveScores = React.useMemo(() => {
@@ -983,7 +1004,7 @@ const TieDetailScreen: React.FC = () => {
     currentPlayerId: string | null,
   ) => {
     if (!isAdmin) return;
-    const slotCfg = SPPL_MATCH_SLOTS.find((s) => s.slotNumber === slotNumber);
+    const slotCfg = tieSlots.find((s) => s.slotNumber === slotNumber);
     const slotLabel = slotCfg ? slotCfg.label : `Slot ${slotNumber}`;
     setSlotSwapModal({
       visible: true,
@@ -1220,7 +1241,7 @@ const TieDetailScreen: React.FC = () => {
           </View>
 
           {/* Slot rows */}
-          {Array.from({ length: 13 }, (_, i) => i + 1).map((slotNum) => {
+          {tieSlots.map((s) => s.slotNumber).map((slotNum) => {
             const homeSlot = homeSheet?.lineupData?.find((s: any) => s.slotNumber === slotNum);
             const awaySlot = awaySheet?.lineupData?.find((s: any) => s.slotNumber === slotNum);
             const catSlug = homeSlot?.categorySlug || awaySlot?.categorySlug || '';
@@ -1502,7 +1523,7 @@ const TieDetailScreen: React.FC = () => {
             </Text>
 
             <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator>
-              {SPPL_MATCH_SLOTS.map((slot) => {
+              {tieSlots.map((slot) => {
                 // Mixed-gender slots (#2 K&TM, #5 W1&M1, #8 W2&M2) have TWO
                 // categories in allowedCategories — index [0] is for Player 1
                 // and [1] is for Player 2 (matches the slot label order, e.g.,
