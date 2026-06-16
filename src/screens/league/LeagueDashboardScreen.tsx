@@ -2780,8 +2780,9 @@ const LeagueDashboardScreen: React.FC = () => {
         )}
       </View>
 
-      {/* Branded tournament hero — persistent above the tabs */}
-      {renderBrandedHero()}
+      {/* Branded tournament hero — persistent above the tabs.
+          Gated to cross_5game so existing SPPL leagues are untouched. */}
+      {(season as any)?.format === 'cross_5game' && renderBrandedHero()}
 
       {/* Tab Bar — 2 rows, all visible (no horizontal scroll).
           KNOCKOUT is admin-only: it contains setup, advancement, and reset
