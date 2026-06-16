@@ -502,6 +502,39 @@ const LeagueDashboardScreen: React.FC = () => {
     );
   };
 
+  // Branded tournament hero — makes the dashboard read as the event's own page
+  // (shown above the tabs, persistent across them). Reads already-loaded league
+  // + season data, so it works for any league.
+  const renderBrandedHero = () => {
+    const name = store.currentLeague?.name || season?.name || 'Tournament';
+    const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const fmt = (d?: string) => {
+      if (!d) return '';
+      const parts = d.slice(0, 10).split('-');
+      const day = Number(parts[2]);
+      const mon = MONTHS[Number(parts[1]) - 1] || '';
+      return `${day} ${mon}`;
+    };
+    const dateRange = season?.startDate
+      ? `${fmt(season.startDate)}${season.endDate ? ' – ' + fmt(season.endDate) : ''}`
+      : '';
+    const phase = season ? (PHASE_CONFIG[season.status] || PHASE_CONFIG.setup) : null;
+    return (
+      <View style={styles.brandHero}>
+        <Text style={styles.brandHeroEyebrow}>YOIDEN · LIVE LEAGUE</Text>
+        <Text style={styles.brandHeroTitle} numberOfLines={2}>{name.toUpperCase()}</Text>
+        <View style={styles.brandHeroMetaRow}>
+          {dateRange ? <Text style={styles.brandHeroMeta}>{dateRange}</Text> : null}
+          {phase ? (
+            <View style={[styles.brandHeroBadge, { backgroundColor: phase.bg }]}>
+              <Text style={[styles.brandHeroBadgeText, { color: phase.color }]}>{phase.label}</Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
+    );
+  };
+
   const renderQuickStats = () => {
     const totalTies = ties.length;
     const played = completedTies.length;
@@ -1936,7 +1969,63 @@ const LeagueDashboardScreen: React.FC = () => {
   };
 
   // ── KNOCKOUT TAB ──
+  // KNOCKOUT (cross_5game format): 2 semis → final. SF1 = A1·B2, SF2 = B1·A2;
+  // the backend seeds these and auto-advances the Final from the SF winners.
+  const renderCrossPoolKnockout = () => {
+    const sf1 = knockoutData?.sf1;
+    const sf2 = knockoutData?.sf2;
+    const final = knockoutData?.final;
+    const seeded = !!(sf1?.homeTeamId && sf2?.homeTeamId);
+    const nm = (id?: string | null) => (id ? teamNamePlain(id) : 'TBD');
+
+    const Card = ({ tie, label }: { tie?: Tie | null; label: string }) => (
+      <TouchableOpacity
+        disabled={!tie?.id}
+        activeOpacity={0.7}
+        onPress={() => tie?.id && navigation.navigate('TieDetail', { tieId: tie.id, leagueId })}
+        style={{ backgroundColor: WHITE, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', padding: 16, marginBottom: 12 }}
+      >
+        <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', letterSpacing: 0.5, marginBottom: 8 }}>{label}</Text>
+        <Text style={{ fontSize: 16, fontWeight: '800', color: NAVY }}>{nm(tie?.homeTeamId)}</Text>
+        <Text style={{ fontSize: 12, color: '#94A3B8', marginVertical: 2 }}>vs</Text>
+        <Text style={{ fontSize: 16, fontWeight: '800', color: NAVY }}>{nm(tie?.awayTeamId)}</Text>
+        {tie?.status === 'completed' && tie?.winnerId ? (
+          <Text style={{ fontSize: 12, fontWeight: '800', color: GREEN, marginTop: 8 }}>✓ {nm(tie.winnerId)} won</Text>
+        ) : null}
+      </TouchableOpacity>
+    );
+
+    return (
+      <ScrollView contentContainerStyle={styles.tabContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: NAVY, marginBottom: 14 }}>KNOCKOUT</Text>
+        {!seeded ? (
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 12 }}>
+              Top 2 of each group advance. SF1 = A1 vs B2, SF2 = B1 vs A2.
+            </Text>
+            <TouchableOpacity
+              disabled={actionLoading}
+              onPress={() => xConfirm('Generate Knockout', 'Seed the semifinals from the current group standings?', async () => {
+                setActionLoading(true);
+                try { await generateKnockout(leagueId, resolvedSeasonId); await fetchAll(); }
+                catch (err: any) { xAlert('Error', err?.response?.data?.message || err?.message || 'Failed'); }
+                finally { setActionLoading(false); }
+              })}
+              style={{ backgroundColor: BLUE, borderRadius: 10, padding: 16, alignItems: 'center' }}
+            >
+              <Text style={{ color: WHITE, fontWeight: '800', fontSize: 14 }}>{actionLoading ? 'WORKING…' : 'GENERATE KNOCKOUT'}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+        <Card tie={sf1} label="SEMIFINAL 1" />
+        <Card tie={sf2} label="SEMIFINAL 2" />
+        <Card tie={final} label="FINAL" />
+      </ScrollView>
+    );
+  };
+
   const renderKnockoutTab = () => {
+    if ((season as any)?.format === 'cross_5game') return renderCrossPoolKnockout();
     const seasonStatus = season?.status;
     // "Has knockout ties" = knockouts have actually been GENERATED (teams
     // assigned), not just that empty shells exist. Shell ties are pre-created
@@ -2690,6 +2779,9 @@ const LeagueDashboardScreen: React.FC = () => {
           <View style={{ width: 40, height: 40 }} />
         )}
       </View>
+
+      {/* Branded tournament hero — persistent above the tabs */}
+      {renderBrandedHero()}
 
       {/* Tab Bar — 2 rows, all visible (no horizontal scroll).
           KNOCKOUT is admin-only: it contains setup, advancement, and reset
@@ -4420,6 +4512,13 @@ const styles = StyleSheet.create({
   },
   phaseLabel: { fontSize: 14, fontWeight: '800', letterSpacing: 1 },
   phaseSubtext: { fontSize: 13, fontWeight: '500' },
+  brandHero: { backgroundColor: NAVY, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 18 },
+  brandHeroEyebrow: { color: BLUE, fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 6 },
+  brandHeroTitle: { color: WHITE, fontSize: 28, fontWeight: '900', letterSpacing: 0.5, lineHeight: 30 },
+  brandHeroMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
+  brandHeroMeta: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  brandHeroBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  brandHeroBadgeText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
 
   // Quick stats
   statsRow: {
