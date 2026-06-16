@@ -12,6 +12,27 @@
 
 ---
 
+## ⚠️ REVISION 2026-06-17 — branded page + deep link (SUPERSEDES global single-event mode)
+
+Decision changed: instead of hiding the whole app (which would rip out the team's venue-booking home for all users), we do a **non-destructive** approach:
+- **Branded Mumbai Open hero** added to the existing **League Dashboard** (the dashboard *becomes* the branded tournament page).
+- **Deep-link access only** — a web URL `event/:leagueId` opens straight to the dashboard. No home card; the rest of the app is untouched.
+- The `SINGLE_EVENT` global-hide config is removed (done).
+
+**Revised task list (this supersedes Tasks 2–4 below; Tasks 5–8 stand):**
+- **Task 1 ✅** — branch synced onto latest `origin/main` (team's header redesign kept; stale local WIP dropped).
+- **Task 2 ✅** — removed the `SINGLE_EVENT` config.
+- **Task R3** — Branded hero on `LeagueDashboardScreen` (`renderBrandedHero()`: tournament name from `league.name`, dates from `season.startDate/endDate`, phase from `season.status`; injected at the top of the content, above the tabs). Reads already-loaded data; works for any league.
+- **Task R4** — Add web deep-link `event/:leagueId` → `AppTabs > HomeTab > LeagueDashboard` in `RootNavigator.tsx` `linking.config.screens` (mirror the existing `PublicPlayerRecap: 'player/:userId'` pattern, nested to match the navigator tree). Dashboard auto-resolves the latest season, so only `leagueId` is needed in the URL.
+- **Task 5** — Format-aware knockout SF/Final (unchanged, see below).
+- **Task 6** — Group-phase verification (unchanged).
+- **Task 7** — Rename league → "Mumbai Open" (unchanged).
+- **Task 8** — Deploy via Netlify (unchanged). Hand organizers the URL `https://console.yoiden.com/event/69776e9d-62b7-43a9-95a1-cecb24647b7b`.
+
+The original Tasks 3 & 4 (HomeScreen / Play / Me hiding) are **cancelled**.
+
+---
+
 ## File Structure
 
 | File | Responsibility | Change |
