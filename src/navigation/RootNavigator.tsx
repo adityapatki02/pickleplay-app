@@ -47,6 +47,18 @@ export const RootNavigator: React.FC = () => {
     config: {
       screens: {
         PublicPlayerRecap: 'player/:userId',
+        // Deep link straight to a tournament's dashboard (e.g. Mumbai Open):
+        //   /event/<leagueId>  → AppTabs > HomeTab > LeagueDashboard
+        // The dashboard auto-resolves the latest season, so only leagueId is needed.
+        AppTabs: {
+          screens: {
+            HomeTab: {
+              screens: {
+                LeagueDashboard: 'event/:leagueId',
+              },
+            },
+          },
+        },
       },
     },
   } : undefined;
