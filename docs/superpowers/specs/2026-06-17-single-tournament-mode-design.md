@@ -31,7 +31,7 @@ export const SINGLE_EVENT = {
   enabled: true,
   leagueId: '69776e9d-62b7-43a9-95a1-cecb24647b7b',   // prod: the Mumbai league
   seasonId: '4ad2b657-de6c-4db2-ae00-e8ab392c37ae',   // prod: its season
-  name: 'TBD — real tournament name (see Open item 1)',
+  name: 'Mumbai Open', // working name (no official name yet)
 };
 ```
 One source of truth. `enabled: false` restores the normal multi-tournament app with zero other changes.
@@ -66,7 +66,7 @@ Click-test against the live league and fix any cross_5game breakage:
 Fix anything that assumes 13 slots or SPPL categories.
 
 ### 3.6 Rename the league (backend)
-Update the league name from "21st June Mumbai League [TEST]" to the real name (single SQL/API update on prod). Set `SINGLE_EVENT.name` to match.
+Update the league name from "21st June Mumbai League [TEST]" to **"Mumbai Open"** (working name; single SQL/API update on prod). `SINGLE_EVENT.name` is set to match.
 
 ### 3.7 Deploy
 Merge the frontend branch and let Netlify build/deploy `console.yoiden.com` (`npm run build:web` → `dist`). Confirm the deployed site shows single-event mode.
@@ -82,5 +82,5 @@ Merge the frontend branch and let Netlify build/deploy `console.yoiden.com` (`np
 - Frontend `main` advanced (team's venue/booking work) — the branch must be synced onto latest `origin/main` before deploy so we don't ship stale code.
 
 ## 6. Open items
-1. The **real tournament name** to rename to + set in `SINGLE_EVENT.name`.
+1. ~~Real tournament name~~ → using working name **"Mumbai Open"** until the official name is decided (easy to change later: update the league name + `SINGLE_EVENT.name`).
 2. Whether the **Play/Discover tab** should be hidden entirely or just emptied (minor UX — default: keep the tab, show only the league / an empty state).
