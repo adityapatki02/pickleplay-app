@@ -1,7 +1,24 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { NavigatorScreenParams } from '@react-navigation/native';
+import type {
+  DetailAndManageRoutes,
+  HomeStackParamList,
+  PlayStackParamList,
+  FantasyStackParamList,
+  BookStackParamList,
+  MeStackParamList,
+  YoidenTabParamList,
+} from './nav-types';
+// Re-export types so existing `import type` from YoidenTabNavigator keep working
+export type {
+  HomeStackParamList,
+  PlayStackParamList,
+  FantasyStackParamList,
+  BookStackParamList,
+  MeStackParamList,
+  YoidenTabParamList,
+} from './nav-types';
 
 import { YTabBar } from '../components/yoiden';
 
@@ -26,6 +43,8 @@ import RankingsScreen from '../screens/yoiden/RankingsScreen';
 import BookScreen from '../screens/yoiden/BookScreen';
 import VenueDetailScreen from '../screens/yoiden/VenueDetailScreen';
 import MyBookingsScreen from '../screens/yoiden/MyBookingsScreen';
+import BookingSuccessScreen from '../screens/yoiden/BookingSuccessScreen';
+import BookingDetailScreen from '../screens/yoiden/BookingDetailScreen';
 
 // League (SPPL) screens — themed for demo
 import LeagueDashboardScreen from '../screens/league/LeagueDashboardScreen';
@@ -38,71 +57,6 @@ import ScorerDemoScreen from '../screens/league/ScorerDemoScreen';
 
 // Location picker — reused from onboarding, now opened as a modal from the Home header
 import { CityPickerScreen } from '../screens/auth/CityPickerScreen';
-
-// ─── Shared deep routes ─────────────────────────────────────────
-// Tournament management + SPPL league deep links. Registered on every tab
-// stack so MANAGE actions work from Home/Play/Me equally.
-type DetailAndManageRoutes = {
-  // Location
-  CityPicker: undefined;
-  // Tournament
-  TournamentDetail: { tournamentId: string };
-  CreateTournament: undefined;
-  Register: { tournamentId: string; categoryId?: string };
-  RegistrationManage: { tournamentId: string };
-  Seeding: { tournamentId: string; categoryId: string };
-  Schedule: { tournamentId: string };
-  ScoreEntry: { matchId: string; tournamentId?: string };
-  Bracket: { tournamentId: string; categoryId: string };
-  ScoreLogger: { tournamentId: string };
-  TournamentStandings: { tournamentId: string };
-  TournamentRankings: { tournamentId: string };
-  // SPPL league — route names match what the existing league screens use internally
-  LeagueDashboard: { leagueId: string; seasonId: string };
-  Standings: { leagueId: string; seasonId: string };
-  LeagueStats: { leagueId: string; seasonId: string };
-  TieDetail: { tieId: string; leagueId?: string; seasonId?: string };
-  PlayerProfile: { playerId: string; leagueId?: string; seasonId?: string };
-  LeagueFantasy: { seasonId: string; leagueId?: string };
-  ScorerDemo: {
-    homeName?: string;
-    awayName?: string;
-    slotLabel?: string;
-    matchNo?: string;
-    court?: string;
-  };
-};
-
-// ─── Stack param lists ───────────────────────────────────────────
-export type HomeStackParamList = DetailAndManageRoutes & {
-  Home: undefined;
-};
-
-export type PlayStackParamList = DetailAndManageRoutes & {
-  Play: undefined;
-};
-
-export type FantasyStackParamList = {
-  Fantasy: undefined;
-};
-
-export type BookStackParamList = {
-  Book: undefined;
-  VenueDetail: { venueId: string };
-  MyBookings: { justBooked?: string } | undefined;
-};
-
-export type MeStackParamList = DetailAndManageRoutes & {
-  Me: undefined;
-};
-
-export type YoidenTabParamList = {
-  HomeTab: NavigatorScreenParams<HomeStackParamList>;
-  PlayTab: NavigatorScreenParams<PlayStackParamList>;
-  BookTab: NavigatorScreenParams<BookStackParamList>;
-  FantasyTab: NavigatorScreenParams<FantasyStackParamList>;
-  MeTab: NavigatorScreenParams<MeStackParamList>;
-};
 
 // ─── Shared screen registration helper ──────────────────────────
 function registerDetailAndManageScreens<T extends DetailAndManageRoutes>(
@@ -167,6 +121,8 @@ const BookStackNavigator = () => (
     <BookStack.Screen name="Book" component={BookScreen} />
     <BookStack.Screen name="VenueDetail" component={VenueDetailScreen} />
     <BookStack.Screen name="MyBookings" component={MyBookingsScreen} />
+    <BookStack.Screen name="BookingSuccess" component={BookingSuccessScreen} options={{ gestureEnabled: false }} />
+    <BookStack.Screen name="BookingDetail" component={BookingDetailScreen} />
   </BookStack.Navigator>
 );
 

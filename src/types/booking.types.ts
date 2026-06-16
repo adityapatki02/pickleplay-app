@@ -99,6 +99,8 @@ export interface Booking {
   amount: number | string;
   currency: string;
   razorpayOrderId?: string | null;
+  razorpayPaymentId?: string | null;
+  invoiceNumber?: string | null;
   venue?: Venue;
   court?: VenueCourt;
 }

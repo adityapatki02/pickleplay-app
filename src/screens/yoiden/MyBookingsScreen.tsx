@@ -7,6 +7,7 @@ import {
   RefreshControl,
   Alert,
   Platform,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect, type RouteProp } from '@react-navigation/native';
@@ -160,9 +161,10 @@ export default function MyBookingsScreen() {
               const sc = statusColor(b.status);
               const cancellable = b.status === 'confirmed' || b.status === 'pending';
               return (
-                <View
+                <Pressable
                   key={b.id}
                   style={[styles.card, b.id === justBooked && { borderColor: YColors.lime, borderWidth: 2 }]}
+                  onPress={() => nav.navigate('BookingDetail', { bookingId: b.id })}
                 >
                   <View style={styles.cardHead}>
                     <View style={{ flex: 1 }}>
@@ -189,13 +191,13 @@ export default function MyBookingsScreen() {
                         variant="ghost"
                         size="sm"
                         disabled={cancellingId === b.id}
-                        onPress={() => onCancel(b)}
+                        onPress={(e) => { e.stopPropagation?.(); onCancel(b); }}
                       >
                         {cancellingId === b.id ? '…' : 'CANCEL'}
                       </YButton>
                     ) : null}
                   </View>
-                </View>
+                </Pressable>
               );
             })}
           </View>

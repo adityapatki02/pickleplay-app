@@ -243,6 +243,31 @@ export default function MeScreen() {
           </View>
         </View>
 
+        {/* My Bookings card */}
+        <YSectionHead eyebrow="COURT TIME" title="MY BOOKINGS" />
+        <Pressable
+          style={styles.bookingsCard}
+          onPress={() => nav.navigate('BookTab', { screen: 'MyBookings' })}
+        >
+          <View style={styles.bookingsIcon}>
+            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+              <Path d="M8 2v3M16 2v3M3 8h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" stroke={YColors.accent} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M8 13h.01M12 13h.01M16 13h.01M8 17h.01M12 17h.01" stroke={YColors.accent} strokeWidth={2} strokeLinecap="round" />
+            </Svg>
+          </View>
+          <View style={{ flex: 1 }}>
+            <YUiText size={13} weight={800} color={YColors.ink} style={{ letterSpacing: 0.5 }}>
+              MY BOOKINGS
+            </YUiText>
+            <YUiText size={12} color={YColors.ink3} style={{ marginTop: 2 }}>
+              View and manage your court reservations
+            </YUiText>
+          </View>
+          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+            <Path d="M9 6l6 6-6 6" stroke={YColors.ink3} strokeWidth={2} strokeLinecap="round" />
+          </Svg>
+        </Pressable>
+
         {/* Hosting section */}
         {myHosted.length > 0 ? (
           <>
@@ -394,6 +419,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: YColors.line,
+  },
+
+  // ── My Bookings card ────────────────────────────────────────────
+  bookingsCard: {
+    marginHorizontal: 16,
+    backgroundColor: YColors.bg2,
+    borderWidth: 1,
+    borderColor: YColors.line2,
+    borderRadius: 14,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  bookingsIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(24,88,214,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // ── MY GAME card ────────────────────────────────────────────────

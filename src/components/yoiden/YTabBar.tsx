@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { Platform, View, Pressable, StyleSheet } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -157,11 +157,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: YColors.line2,
-    shadowColor: '#0A0A0B',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
     elevation: 8,
+    ...Platform.select({
+      web: { boxShadow: '0 -2px 12px rgba(10,10,11,0.04)' } as object,
+      default: {
+        shadowColor: '#0A0A0B',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+      },
+    }),
   },
   row: {
     flexDirection: 'row',

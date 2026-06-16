@@ -13,6 +13,9 @@ export const bookingsApi = {
 
   myBookings: () => apiClient.get<ApiResponse<Booking[]>>('/my/bookings'),
 
+  getById: (bookingId: string) =>
+    apiClient.get<ApiResponse<Booking>>(`/my/bookings/${bookingId}`),
+
   cancel: (bookingId: string) =>
     apiClient.post<ApiResponse<Booking>>(`/bookings/${bookingId}/cancel`),
 };

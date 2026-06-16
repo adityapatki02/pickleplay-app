@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   View,
   ScrollView,
   StyleSheet,
@@ -235,6 +236,7 @@ export default function VenueDetailScreen() {
       // ── Online payment → open Razorpay checkout ──────────────────
       if (channel === 'online' && payment?.orderId) {
         setSheetOpen(false);
+        let paymentConfirmed = false;
         try {
           const rzpRes = await openRazorpay({
             key: payment.key,
@@ -255,19 +257,42 @@ export default function VenueDetailScreen() {
             razorpayPaymentId: rzpRes.razorpay_payment_id,
             razorpaySignature: rzpRes.razorpay_signature,
           });
+          paymentConfirmed = true;
         } catch (rzpErr: any) {
-          // User dismissed Razorpay or payment failed — booking stays 'pending'
-          // Don't show as an error — they can retry from MyBookings
           console.warn('[Razorpay]', rzpErr?.description ?? rzpErr);
+        }
+
+        if (!paymentConfirmed) {
+          // Cancel the pending booking so slots free up immediately
+          try { await bookingsApi.cancel(booking.id); } catch (_) {}
+          await loadAvailability();
+          setSelected([]);
+          Alert.alert(
+            'Payment Cancelled',
+            'Your booking was not completed. The slots are now available again.',
+          );
+          return;
         }
       }
 
-      // ── Cleanup + navigate ────────────────────────────────────────
+      // ── Cleanup + navigate (offline always; online only if payment confirmed) ──
       setSelected([]);
       setGuestName('');
       setGuestPhone('');
       await loadAvailability();
-      nav.navigate('MyBookings', { justBooked: booking?.id });
+      nav.navigate('BookingSuccess', {
+        bookingId: booking.id,
+        venueName: venue?.name ?? '',
+        venueAddress: (venue as any)?.address ?? '',
+        date,
+        courts: cells.map((cell) => ({
+          name: courtById.get(cell.courtId)?.court.name ?? 'Court',
+          startTime: cell.startTime,
+          endTime: addMinutes(cell.startTime, courtById.get(cell.courtId)?.court.slotDurationMin ?? 60),
+          price: priceAt(cell.courtId, cell.startTime),
+        })),
+        total,
+      });
     } catch (e: any) {
       const status = e?.response?.status;
       const msg =

@@ -37,8 +37,7 @@ import { registrationsApi } from '../../api/registrations.api';
 import { venuesApi } from '../../api/venues.api';
 import type { Tournament } from '../../types/tournament.types';
 import type { Venue as ApiVenue } from '../../types/booking.types';
-import { SPPL, type YoidenTabParamList } from '../../navigation/YoidenTabNavigator';
-import { DEMO_VENUE_ID } from '../../config/demo-venues';
+import { SPPL, type YoidenTabParamList } from '../../navigation/nav-types';
 
 type Nav = BottomTabNavigationProp<YoidenTabParamList, 'HomeTab'>;
 
@@ -52,19 +51,6 @@ const FEATURED_TOURNAMENT_IDS = [
   '77e4837b-9730-4ba6-b070-65948ff70dc6', // AIPA — DEMO
 ] as const;
 
-
-// Demo venue — always shown, routes directly to VenueDetailScreen (no backend needed).
-const CIDCO_DEMO_CARD: Venue = {
-  id: DEMO_VENUE_ID,
-  name: 'Cidco Padel Arena',
-  area: 'Cidco N-6',
-  distanceKm: 0,
-  rating: 0,
-  reviews: 0,
-  sports: ['padel'],
-  sponsored: true,
-  imageUrl: 'https://images.unsplash.com/photo-1622547748225-3fc4abd2cca0?w=640&fit=crop&q=80',
-};
 
 
 // Helpers
@@ -244,14 +230,11 @@ export default function HomeScreen() {
       reviews: v.reviewCount ?? 0,
       sports: (v.sports ?? []) as unknown as Venue['sports'],
       imageUrl: firstPhoto ?? `https://picsum.photos/seed/${v.id}/640/400`,
-      sponsored: i < 2,
+      sponsored: false,
       topRated: (v.rating ?? 0) >= 4.5,
     };
   };
-  const displayVenues: Venue[] = [
-    CIDCO_DEMO_CARD,
-    ...apiVenues.map(toDisplayVenue).filter((v) => v.id !== DEMO_VENUE_ID),
-  ];
+  const displayVenues: Venue[] = apiVenues.map(toDisplayVenue);
   const sponsoredVenues = displayVenues.filter((v) => v.sponsored);
   const normalVenues = displayVenues.filter((v) => !v.sponsored);
 
