@@ -50,7 +50,7 @@ import type {
 } from '../../types/league.types';
 import { SPPL_MATCH_SLOTS } from '../../types/league.types';
 
-import { YColors, YTopBar } from '../../components/yoiden';
+import { YColors, YTopBar, YDisplay, YUiText, YEyebrow, YBadge } from '../../components/yoiden';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
 const NAVY: string = YColors.ink;
@@ -723,22 +723,14 @@ const TieDetailScreen: React.FC = () => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backBtnText}>{'<'}</Text>
         </TouchableOpacity>
-        <View style={[styles.statusChip, { backgroundColor: chipCfg.bg }]}>
-          <Text style={[styles.statusChipText, { color: chipCfg.color }]}>{chipCfg.label}</Text>
-        </View>
+        <YBadge color={chipCfg.color} bg={chipCfg.bg}>{chipCfg.label}</YBadge>
       </View>
 
       {/* Standing Points — hero */}
       <View style={{ alignItems: 'center', marginTop: 2, marginBottom: 12 }}>
-        <Text style={{ fontSize: 10, fontWeight: '800', color: YColors.ink2, letterSpacing: 1.5 }}>
-          STANDING POINTS
-        </Text>
-        <Text style={{ fontSize: 40, fontWeight: '900', color: YColors.ink, letterSpacing: 2, marginTop: 4 }}>
-          {liveScores.homeSP}  –  {liveScores.awaySP}
-        </Text>
-        <Text style={{ fontSize: 11, color: YColors.ink3, marginTop: 4, fontWeight: '600' }}>
-          {liveScores.completed} of {liveScores.total} matches played
-        </Text>
+        <YEyebrow size={10} color={YColors.ink2}>STANDING POINTS</YEyebrow>
+        <YDisplay size={48} color={YColors.ink} style={{ marginTop: 4, lineHeight: 50 }}>{`${liveScores.homeSP} – ${liveScores.awaySP}`}</YDisplay>
+        <YUiText size={11} weight={600} color={YColors.ink3} style={{ marginTop: 4 }}>{`${liveScores.completed} of ${liveScores.total} matches played`}</YUiText>
       </View>
 
       {/* Teams + breakdown */}
