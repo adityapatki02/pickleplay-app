@@ -1572,16 +1572,23 @@ const LeagueDashboardScreen: React.FC = () => {
 
         {/* Sub-tabs */}
         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-          {SUB_TABS.map((t) => (
-            <YChip
-              key={t.key}
-              active={standingsSubTab === t.key}
-              onPress={() => setStandingsSubTab(t.key)}
-              style={{ flex: 1, alignItems: 'center' }}
-            >
-              {t.label}
-            </YChip>
-          ))}
+          {SUB_TABS.map((t) => {
+            const active = standingsSubTab === t.key;
+            return (
+              <TouchableOpacity
+                key={t.key}
+                onPress={() => setStandingsSubTab(t.key)}
+                activeOpacity={0.8}
+                style={{
+                  flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 20, borderWidth: 1,
+                  backgroundColor: active ? YColors.lime : YColors.bg2,
+                  borderColor: active ? YColors.lime : YColors.line2,
+                }}
+              >
+                <YUiText size={12} weight={800} color={active ? YColors.ink : YColors.ink2}>{t.label}</YUiText>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {standingsSubTab === 'qf' && hasQfRanking ? (
@@ -2726,16 +2733,24 @@ const LeagueDashboardScreen: React.FC = () => {
           scorers, captains, and players. */}
       <View style={[styles.tabBar, { paddingHorizontal: 12, paddingVertical: 10 }]}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-          {TABS.filter((tab) => tab !== 'KNOCKOUT' || isAdmin).map((tab) => (
-            <YChip
-              key={tab}
-              active={activeTab === tab}
-              onPress={() => setActiveTab(tab)}
-              style={{ flexGrow: 1, flexBasis: '31%', alignItems: 'center' }}
-            >
-              {tab}
-            </YChip>
-          ))}
+          {TABS.filter((tab) => tab !== 'KNOCKOUT' || isAdmin).map((tab) => {
+            const active = activeTab === tab;
+            return (
+              <TouchableOpacity
+                key={tab}
+                onPress={() => setActiveTab(tab)}
+                activeOpacity={0.8}
+                style={{
+                  flexGrow: 1, flexBasis: '31%', alignItems: 'center',
+                  paddingVertical: 10, borderRadius: 22, borderWidth: 1,
+                  backgroundColor: active ? YColors.lime : YColors.bg2,
+                  borderColor: active ? YColors.lime : YColors.line2,
+                }}
+              >
+                <YUiText size={12} weight={800} color={active ? YColors.ink : YColors.ink2} style={{ letterSpacing: 0.5 }}>{tab}</YUiText>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
 
