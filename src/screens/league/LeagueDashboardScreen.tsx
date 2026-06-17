@@ -611,13 +611,13 @@ const LeagueDashboardScreen: React.FC = () => {
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-          <YDisplay size={22} color={YColors.ink} numberOfLines={1} style={{ flexShrink: 1, textAlign: 'right', lineHeight: 26 }}>{homeDisplay}</YDisplay>
+          <YDisplay size={22} color={YColors.ink} numberOfLines={1} style={{ flexShrink: 1, textAlign: 'right', lineHeight: 26, paddingRight: 4 }}>{homeDisplay}</YDisplay>
           {tie.status === 'completed' ? (
-            <YDisplay size={22} color={YColors.accent} style={{ marginHorizontal: 12, lineHeight: 26 }}>{`${tie.homeStandingPoints}–${tie.awayStandingPoints}`}</YDisplay>
+            <YDisplay size={22} color={YColors.accent} style={{ marginHorizontal: 10, lineHeight: 26, paddingRight: 4 }}>{`${tie.homeStandingPoints}–${tie.awayStandingPoints}`}</YDisplay>
           ) : (
-            <YEyebrow size={11} color={YColors.ink3} style={{ marginHorizontal: 12 }}>VS</YEyebrow>
+            <YEyebrow size={11} color={YColors.ink3} style={{ marginHorizontal: 10 }}>VS</YEyebrow>
           )}
-          <YDisplay size={22} color={YColors.ink} numberOfLines={1} style={{ flexShrink: 1, textAlign: 'left', lineHeight: 26 }}>{awayDisplay}</YDisplay>
+          <YDisplay size={22} color={YColors.ink} numberOfLines={1} style={{ flexShrink: 1, textAlign: 'left', lineHeight: 26, paddingRight: 6 }}>{awayDisplay}</YDisplay>
         </View>
 
         {tie.status === 'completed' && (tie.homeBonusPoints > 0 || tie.awayBonusPoints > 0) ? (
