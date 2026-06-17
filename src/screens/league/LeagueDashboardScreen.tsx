@@ -611,13 +611,13 @@ const LeagueDashboardScreen: React.FC = () => {
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <YUiText size={15} weight={700} color={YColors.ink} numberOfLines={1} style={{ flex: 1 }}>{homeDisplay}</YUiText>
+          <YDisplay size={22} color={YColors.ink} numberOfLines={1} style={{ flex: 1, lineHeight: 24 }}>{homeDisplay}</YDisplay>
           {tie.status === 'completed' ? (
-            <YDisplay size={18} color={YColors.ink} style={{ marginHorizontal: 12 }}>{`${tie.homeStandingPoints} - ${tie.awayStandingPoints}`}</YDisplay>
+            <YDisplay size={22} color={YColors.accent} style={{ marginHorizontal: 12, lineHeight: 24 }}>{`${tie.homeStandingPoints}–${tie.awayStandingPoints}`}</YDisplay>
           ) : (
-            <YUiText size={11} weight={700} color={YColors.ink3} style={{ marginHorizontal: 12 }}>vs</YUiText>
+            <YEyebrow size={11} color={YColors.ink3} style={{ marginHorizontal: 12 }}>VS</YEyebrow>
           )}
-          <YUiText size={15} weight={700} color={YColors.ink} numberOfLines={1} style={{ flex: 1, textAlign: 'right' }}>{awayDisplay}</YUiText>
+          <YDisplay size={22} color={YColors.ink} numberOfLines={1} style={{ flex: 1, textAlign: 'right', lineHeight: 24 }}>{awayDisplay}</YDisplay>
         </View>
 
         {tie.status === 'completed' && (tie.homeBonusPoints > 0 || tie.awayBonusPoints > 0) ? (
@@ -1000,28 +1000,38 @@ const LeagueDashboardScreen: React.FC = () => {
       );
     }
 
-    // League-phase fallback — pre-QF standings sorted by SP, top 5.
-    const sorted = [...standings].sort((a, b) => b.standingPoints - a.standingPoints);
-    const top = sorted.slice(0, 5);
-    if (top.length === 0) return null;
+    // League-phase: per-group standings (every team in each group).
+    const byGroup = [...groups]
+      .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+      .map((g) => ({
+        group: g,
+        rows: standings.filter((s) => s.groupId === g.id).sort((a, b) => b.standingPoints - a.standingPoints),
+      }))
+      .filter((x) => x.rows.length > 0);
+    if (byGroup.length === 0) return null;
     return (
       <View style={{ marginHorizontal: 20 }}>
         <YSectionHead eyebrow="LEAGUE" title="Standings" action="View All" onActionPress={() => setActiveTab('STANDINGS')} />
-        {top.map((row, idx) => {
-          const fr = franchiseMap[row.franchiseId];
-          const accent = (fr as any)?.primaryColor || YColors.accent;
-          return (
-            <View key={row.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: YColors.line2 }}>
-              <YDisplay size={30} color={idx < 4 ? YColors.accent : YColors.ink3} style={{ width: 46, lineHeight: 30 }}>{String(idx + 1)}</YDisplay>
-              <View style={{ width: 4, height: 38, borderRadius: 2, backgroundColor: accent, marginRight: 14 }} />
-              <YUiText size={17} weight={800} color={YColors.ink} numberOfLines={1} style={{ flex: 1 }}>{teamName(row.franchiseId)}</YUiText>
-              <View style={{ alignItems: 'flex-end' }}>
-                <YDisplay size={24} color={YColors.ink} style={{ lineHeight: 24 }}>{String(row.standingPoints)}</YDisplay>
-                <YEyebrow size={8} color={YColors.ink3} style={{ marginTop: 2 }}>{`SP · ${row.tiesPlayed}P ${row.tiesWon}W`}</YEyebrow>
-              </View>
-            </View>
-          );
-        })}
+        {byGroup.map(({ group, rows }) => (
+          <View key={group.id} style={{ marginBottom: 18 }}>
+            <YEyebrow size={10} color={YColors.ink3} style={{ marginBottom: 2 }}>{(group.name || 'GROUP').toUpperCase()}</YEyebrow>
+            {rows.map((row, idx) => {
+              const fr = franchiseMap[row.franchiseId];
+              const accent = (fr as any)?.primaryColor || YColors.accent;
+              return (
+                <View key={row.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: YColors.line2 }}>
+                  <YDisplay size={26} color={idx < 2 ? YColors.accent : YColors.ink3} style={{ width: 40, lineHeight: 26 }}>{String(idx + 1)}</YDisplay>
+                  <View style={{ width: 4, height: 32, borderRadius: 2, backgroundColor: accent, marginRight: 12 }} />
+                  <YUiText size={16} weight={800} color={YColors.ink} numberOfLines={1} style={{ flex: 1 }}>{teamName(row.franchiseId)}</YUiText>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <YDisplay size={22} color={YColors.ink} style={{ lineHeight: 22 }}>{String(row.standingPoints)}</YDisplay>
+                    <YEyebrow size={8} color={YColors.ink3} style={{ marginTop: 2 }}>{`SP · ${row.tiesPlayed}P ${row.tiesWon}W`}</YEyebrow>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ))}
       </View>
     );
   };
@@ -4425,11 +4435,11 @@ const styles = StyleSheet.create({
   },
   phaseLabel: { fontSize: 14, fontWeight: '800', letterSpacing: 1 },
   phaseSubtext: { fontSize: 13, fontWeight: '500' },
-  brandHero: { backgroundColor: NAVY, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 18 },
-  brandHeroEyebrow: { color: BLUE, fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 6 },
-  brandHeroTitle: { color: WHITE, fontSize: 28, fontWeight: '900', letterSpacing: 0.5, lineHeight: 30 },
+  brandHero: { backgroundColor: WHITE, borderBottomWidth: 1, borderBottomColor: YColors.line2, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 18 },
+  brandHeroEyebrow: { color: YColors.ink3, fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 6 },
+  brandHeroTitle: { color: BLUE, fontSize: 30, fontWeight: '900', letterSpacing: 0.5, lineHeight: 32 },
   brandHeroMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
-  brandHeroMeta: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  brandHeroMeta: { color: YColors.ink2, fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
   brandHeroBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   brandHeroBadgeText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
 
