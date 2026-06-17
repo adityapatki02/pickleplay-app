@@ -626,8 +626,8 @@ const LeagueDashboardScreen: React.FC = () => {
 
         {tie.status === 'completed' && (tie.homeBonusPoints > 0 || tie.awayBonusPoints > 0) ? (
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
-            <YEyebrow size={9} color={YColors.lime}>+{tie.homeBonusPoints} BONUS</YEyebrow>
-            <YEyebrow size={9} color={YColors.lime}>+{tie.awayBonusPoints} BONUS</YEyebrow>
+            <YEyebrow size={9} color={YColors.accent}>+{tie.homeBonusPoints} BONUS</YEyebrow>
+            <YEyebrow size={9} color={YColors.accent}>+{tie.awayBonusPoints} BONUS</YEyebrow>
           </View>
         ) : null}
 

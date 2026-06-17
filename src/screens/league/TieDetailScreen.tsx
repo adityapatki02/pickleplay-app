@@ -321,12 +321,18 @@ const TieDetailScreen: React.FC = () => {
     });
   };
 
-  const handleStartTie = () => {
-    // Open the court-confirmation modal. Pre-select any existing court assignment.
-    setStartCourtModal({
-      visible: true,
-      courtNumber: (tie as any)?.courtNumber ?? null,
-    });
+  const handleStartTie = async () => {
+    // OBS overlay isn't used for this league, so skip the court-confirmation
+    // step and start the tie directly.
+    setActionLoading(true);
+    try {
+      await startTie(tieId);
+      await fetchData();
+    } catch (err: any) {
+      xAlert('Error', err?.response?.data?.message || err?.message || 'Failed to start tie');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   /** Called when the user confirms a court from the start-tie modal. */
