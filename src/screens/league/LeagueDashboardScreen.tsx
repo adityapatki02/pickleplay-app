@@ -72,6 +72,7 @@ import type {
 } from '../../types/league.types';
 
 import { YColors, YTopBar } from '../../components/yoiden';
+import { SPPL } from '../../navigation/nav-types';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
 const NAVY: string = YColors.ink;
@@ -1347,8 +1348,9 @@ const LeagueDashboardScreen: React.FC = () => {
         completedTies.slice(-3).reverse().map((t) => renderTieCard(t))
       )}
 
-      {/* Best Performers — curated category MVPs (replaces old Stats tab) */}
-      {renderBestPerformers()}
+      {/* Best Performers — hand-curated SPPL Season 1 MVPs (static data).
+          Only valid for the SPPL league; hidden everywhere else (e.g. Mumbai Open). */}
+      {leagueId === SPPL.leagueId && renderBestPerformers()}
 
       {/* Action: Start League (only in setup/registration, admin only) */}
       {isAdmin && (season?.status === 'setup' || season?.status === 'registration') && (
