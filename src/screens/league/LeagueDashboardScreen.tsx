@@ -381,7 +381,7 @@ const LeagueDashboardScreen: React.FC = () => {
     return m;
   }, [groups, ties]);
 
-  const teamNamePlain = (id: string) => franchiseMap[id]?.shortName || franchiseMap[id]?.name || '—';
+  const teamNamePlain = (id: string) => franchiseMap[id]?.name || franchiseMap[id]?.shortName || '—';
   const teamName = (id: string) => teamNamePlain(id); // plain for non-JSX usage
   const teamPoolTag = (id: string) => poolTagMap[id] || '';
 
@@ -612,15 +612,15 @@ const LeagueDashboardScreen: React.FC = () => {
 
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ flex: 1, alignItems: 'flex-end' }}>
-            <YDisplay size={22} color={YColors.ink} numberOfLines={1} style={{ lineHeight: 26, paddingRight: 4 }}>{homeDisplay}</YDisplay>
+            <YDisplay size={17} color={YColors.ink} numberOfLines={1} style={{ lineHeight: 21, paddingRight: 4 }}>{homeDisplay}</YDisplay>
           </View>
           {tie.status === 'completed' ? (
-            <YDisplay size={22} color={YColors.accent} style={{ marginHorizontal: 12, lineHeight: 26 }}>{`${tie.homeStandingPoints}–${tie.awayStandingPoints}`}</YDisplay>
+            <YDisplay size={20} color={YColors.accent} style={{ marginHorizontal: 10, lineHeight: 22 }}>{`${tie.homeStandingPoints}–${tie.awayStandingPoints}`}</YDisplay>
           ) : (
-            <YEyebrow size={11} color={YColors.ink3} style={{ marginHorizontal: 12 }}>VS</YEyebrow>
+            <YEyebrow size={10} color={YColors.ink3} style={{ marginHorizontal: 10 }}>VS</YEyebrow>
           )}
           <View style={{ flex: 1, alignItems: 'flex-start' }}>
-            <YDisplay size={22} color={YColors.ink} numberOfLines={1} style={{ lineHeight: 26, paddingRight: 6 }}>{awayDisplay}</YDisplay>
+            <YDisplay size={17} color={YColors.ink} numberOfLines={1} style={{ lineHeight: 21, paddingRight: 6 }}>{awayDisplay}</YDisplay>
           </View>
         </View>
 
