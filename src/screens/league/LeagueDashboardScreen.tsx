@@ -557,10 +557,12 @@ const LeagueDashboardScreen: React.FC = () => {
     const isMyAssignedTie = !!authUser?.id && (tie as any).scorerId === authUser.id;
 
     // Human-readable knockout stage label + placeholder names before teams are seeded
+    const isCross = (season as any)?.format === 'cross_5game';
     const KNOCKOUT_LABELS: Record<string, string> = {
       knockout_qf1: 'QF 1', knockout_qf2: 'QF 2', knockout_qf3: 'QF 3', knockout_qf4: 'QF 4',
       knockout_q1: 'QUALIFIER 1', knockout_eliminator: 'ELIMINATOR',
       knockout_q2: 'QUALIFIER 2', knockout_final: 'FINAL',
+      knockout_sf1: 'SEMIFINAL 1', knockout_sf2: 'SEMIFINAL 2',
     };
     const KO_PLACEHOLDERS: Record<string, [string, string]> = {
       knockout_qf1: ['AB1', 'CD4'],
@@ -570,7 +572,10 @@ const LeagueDashboardScreen: React.FC = () => {
       knockout_q1: ['H1', 'H2'],
       knockout_eliminator: ['H3', 'H4'],
       knockout_q2: ['Loser Q1', 'Winner Elim'],
-      knockout_final: ['Winner Q1', 'Winner Q2'],
+      // cross_5game seeding: SF1 = A1·B2, SF2 = B1·A2, Final = SF1·SF2
+      knockout_sf1: ['A1', 'B2'],
+      knockout_sf2: ['B1', 'A2'],
+      knockout_final: isCross ? ['SF1', 'SF2'] : ['Winner Q1', 'Winner Q2'],
     };
     const stageLabel = KNOCKOUT_LABELS[tie.round] || null;
     const koPh = KO_PLACEHOLDERS[tie.round];
@@ -1499,17 +1504,29 @@ const LeagueDashboardScreen: React.FC = () => {
         qualifyTop: 0,
       }));
     } else if (standingsSubTab === 'group') {
-      const sortedGroups = [...groups].sort((a, b) => a.displayOrder - b.displayOrder);
-      for (let i = 0; i + 1 < sortedGroups.length; i += 2) {
-        const g1 = sortedGroups[i];
-        const g2 = sortedGroups[i + 1];
-        const g1Letter = g1.name.replace(/pool\s*/i, '').trim();
-        const g2Letter = g2.name.replace(/pool\s*/i, '').trim();
-        const label = `Group ${g1Letter}${g2Letter}`;
-        const rows = standings
-          .filter((s) => s.groupId === g1.id || s.groupId === g2.id)
-          .sort(rankCompare);
-        sections.push({ label, rows, qualifyTop: 4 });
+      if ((season as any)?.format === 'cross_5game') {
+        // Each group is its own table; top 2 of each advance.
+        const sortedGroups = [...groups].sort((a, b) => a.displayOrder - b.displayOrder);
+        sections = sortedGroups
+          .map((g) => ({
+            label: g.name,
+            rows: standings.filter((s) => s.groupId === g.id).sort(rankCompare),
+            qualifyTop: 2,
+          }))
+          .filter((s) => s.rows.length > 0);
+      } else {
+        const sortedGroups = [...groups].sort((a, b) => a.displayOrder - b.displayOrder);
+        for (let i = 0; i + 1 < sortedGroups.length; i += 2) {
+          const g1 = sortedGroups[i];
+          const g2 = sortedGroups[i + 1];
+          const g1Letter = g1.name.replace(/pool\s*/i, '').trim();
+          const g2Letter = g2.name.replace(/pool\s*/i, '').trim();
+          const label = `Group ${g1Letter}${g2Letter}`;
+          const rows = standings
+            .filter((s) => s.groupId === g1.id || s.groupId === g2.id)
+            .sort(rankCompare);
+          sections.push({ label, rows, qualifyTop: 4 });
+        }
       }
     } else {
       // Overall
@@ -1931,13 +1948,13 @@ const LeagueDashboardScreen: React.FC = () => {
     const seeded = !!(sf1?.homeTeamId && sf2?.homeTeamId);
     const nm = (id?: string | null) => (id ? teamNamePlain(id) : 'TBD');
 
-    const koCard = (tie: Tie | null | undefined, label: string) => {
+    const koCard = (tie: Tie | null | undefined, label: string, ph: [string, string]) => {
       const done = tie?.status === 'completed';
       return (
         <LeagueTieCard
           meta={label}
-          homeName={nm(tie?.homeTeamId)}
-          awayName={nm(tie?.awayTeamId)}
+          homeName={tie?.homeTeamId ? teamNamePlain(tie.homeTeamId) : ph[0]}
+          awayName={tie?.awayTeamId ? teamNamePlain(tie.awayTeamId) : ph[1]}
           homeWon={!!done && tie?.winnerId === tie?.homeTeamId}
           awayWon={!!done && tie?.winnerId === tie?.awayTeamId}
           statusLabel={done ? 'Completed' : 'Scheduled'}
@@ -1970,9 +1987,9 @@ const LeagueDashboardScreen: React.FC = () => {
           </View>
         ) : null}
         <View style={{ marginHorizontal: 14 }}>
-          {koCard(sf1, 'SEMIFINAL 1')}
-          {koCard(sf2, 'SEMIFINAL 2')}
-          {koCard(final, 'FINAL')}
+          {koCard(sf1, 'SEMIFINAL 1', ['A1', 'B2'])}
+          {koCard(sf2, 'SEMIFINAL 2', ['B1', 'A2'])}
+          {koCard(final, 'FINAL', ['SF1', 'SF2'])}
         </View>
       </ScrollView>
     );
