@@ -1011,20 +1011,34 @@ const LeagueDashboardScreen: React.FC = () => {
     if (byGroup.length === 0) return null;
     return (
       <View style={{ marginHorizontal: 20 }}>
-        <YSectionHead eyebrow="LEAGUE" title="Standings" action="View All" onActionPress={() => setActiveTab('STANDINGS')} />
+        {/* Section header — editorial Anton title to match the hero */}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 24, marginBottom: 14 }}>
+          <View>
+            <YEyebrow size={10} color={YColors.ink3} style={{ marginBottom: 2 }}>LEAGUE</YEyebrow>
+            <YDisplay size={26} color={YColors.ink} style={{ lineHeight: 28 }}>Standings</YDisplay>
+          </View>
+          <TouchableOpacity onPress={() => setActiveTab('STANDINGS')}>
+            <YUiText size={12} weight={800} color={YColors.accent}>VIEW ALL</YUiText>
+          </TouchableOpacity>
+        </View>
+
         {byGroup.map(({ group, rows }) => (
-          <View key={group.id} style={{ marginBottom: 18 }}>
-            <YEyebrow size={10} color={YColors.ink3} style={{ marginBottom: 2 }}>{(group.name || 'GROUP').toUpperCase()}</YEyebrow>
+          <View key={group.id} style={{ marginBottom: 16, backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: YColors.line2, overflow: 'hidden' }}>
+            {/* Group header bar */}
+            <View style={{ backgroundColor: YColors.bg2, paddingHorizontal: 16, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: YColors.line2 }}>
+              <YUiText size={13} weight={900} color={YColors.accent} style={{ letterSpacing: 1.2 }}>{(group.name || 'GROUP').toUpperCase()}</YUiText>
+            </View>
             {rows.map((row, idx) => {
               const fr = franchiseMap[row.franchiseId];
               const accent = (fr as any)?.primaryColor || YColors.accent;
+              const qualifies = idx < 2;
               return (
-                <View key={row.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: YColors.line2 }}>
-                  <YDisplay size={26} color={idx < 2 ? YColors.accent : YColors.ink3} style={{ width: 40, lineHeight: 26 }}>{String(idx + 1)}</YDisplay>
-                  <View style={{ width: 4, height: 32, borderRadius: 2, backgroundColor: accent, marginRight: 12 }} />
+                <View key={row.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: idx === 0 ? 0 : 1, borderTopColor: YColors.line2, backgroundColor: qualifies ? '#F0FAF7' : '#fff' }}>
+                  <YDisplay size={24} color={qualifies ? YColors.accent : YColors.ink3} style={{ width: 38, lineHeight: 24 }}>{String(idx + 1)}</YDisplay>
+                  <View style={{ width: 4, height: 30, borderRadius: 2, backgroundColor: accent, marginRight: 12 }} />
                   <YUiText size={16} weight={800} color={YColors.ink} numberOfLines={1} style={{ flex: 1 }}>{teamName(row.franchiseId)}</YUiText>
                   <View style={{ alignItems: 'flex-end' }}>
-                    <YDisplay size={22} color={YColors.ink} style={{ lineHeight: 22 }}>{String(row.standingPoints)}</YDisplay>
+                    <YDisplay size={20} color={YColors.ink} style={{ lineHeight: 20 }}>{String(row.standingPoints)}</YDisplay>
                     <YEyebrow size={8} color={YColors.ink3} style={{ marginTop: 2 }}>{`SP · ${row.tiesPlayed}P ${row.tiesWon}W`}</YEyebrow>
                   </View>
                 </View>
