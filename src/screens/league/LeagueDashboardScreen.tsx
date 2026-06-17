@@ -1548,36 +1548,16 @@ const LeagueDashboardScreen: React.FC = () => {
 
         {/* Sub-tabs */}
         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-          {SUB_TABS.map((t) => {
-            const active = standingsSubTab === t.key;
-            return (
-              <TouchableOpacity
-                key={t.key}
-                style={{
-                  flex: 1,
-                  paddingVertical: 10,
-                  borderRadius: 8,
-                  backgroundColor: active ? NAVY : SURFACE,
-                  alignItems: 'center',
-                  borderWidth: 1,
-                  borderColor: active ? NAVY : BORDER,
-                }}
-                onPress={() => setStandingsSubTab(t.key)}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: '800',
-                    color: active ? WHITE : TEXT_SUB,
-                    letterSpacing: 0.8,
-                  }}
-                >
-                  {t.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+          {SUB_TABS.map((t) => (
+            <YChip
+              key={t.key}
+              active={standingsSubTab === t.key}
+              onPress={() => setStandingsSubTab(t.key)}
+              style={{ flex: 1, alignItems: 'center' }}
+            >
+              {t.label}
+            </YChip>
+          ))}
         </View>
 
         {standingsSubTab === 'qf' && hasQfRanking ? (
