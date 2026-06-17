@@ -71,7 +71,8 @@ import type {
   KnockoutBracketData,
 } from '../../types/league.types';
 
-import { YColors, YTopBar } from '../../components/yoiden';
+import { YColors, YTopBar, YChip, YStatTile, YBadge, YSectionHead, YDisplay, YUiText, YEyebrow, YRadius, YButton } from '../../components/yoiden';
+import { LeagueTieCard } from '../../components/league/LeagueTieCard';
 import { SPPL } from '../../navigation/nav-types';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
@@ -540,24 +541,11 @@ const LeagueDashboardScreen: React.FC = () => {
     const totalTies = ties.length;
     const played = completedTies.length;
     const remaining = totalTies - played;
-    // Find top team
-    const sorted = [...standings].sort((a, b) => b.standingPoints - a.standingPoints);
-    const topTeam = sorted[0] ? teamName(sorted[0].franchiseId) : '—';
-
-    const stats = [
-      { label: 'Franchises', value: String(franchises.length) },
-      { label: 'Ties Played', value: String(played) },
-      { label: 'Remaining', value: String(remaining) },
-    ];
-
     return (
-      <View style={styles.statsRow}>
-        {stats.map((s, i) => (
-          <View key={i} style={styles.statPill}>
-            <Text style={styles.statValue}>{s.value}</Text>
-            <Text style={styles.statLabel}>{s.label}</Text>
-          </View>
-        ))}
+      <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 14, marginTop: 12 }}>
+        <YStatTile label="Franchises" value={franchises.length} accent={YColors.ink} style={{ flex: 1 }} />
+        <YStatTile label="Ties Played" value={played} accent={YColors.accent} style={{ flex: 1 }} />
+        <YStatTile label="Remaining" value={remaining} accent={YColors.ink} style={{ flex: 1 }} />
       </View>
     );
   };
@@ -587,87 +575,56 @@ const LeagueDashboardScreen: React.FC = () => {
     const homeDisplay = tie.homeTeamId ? teamNamePlain(tie.homeTeamId) : (koPh ? koPh[0] : 'TBD');
     const awayDisplay = tie.awayTeamId ? teamNamePlain(tie.awayTeamId) : (koPh ? koPh[1] : 'TBD');
 
+    const timeLabel = tie.scheduledStart
+      ? new Date(tie.scheduledStart).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+      : null;
     return (
       <TouchableOpacity
         key={tie.id}
-        style={[
-          styles.tieCard,
-          isMyAssignedTie && { backgroundColor: '#ECFDF5', borderColor: '#06D6A0', borderWidth: 2 },
-        ]}
-        activeOpacity={0.7}
+        style={{
+          backgroundColor: '#fff',
+          borderRadius: YRadius.xl,
+          borderWidth: isMyAssignedTie ? 2 : 1,
+          borderColor: isMyAssignedTie ? '#06D6A0' : YColors.line2,
+          padding: 16,
+          marginBottom: 10,
+        }}
+        activeOpacity={0.85}
         onPress={() => navigation.navigate('TieDetail', { tieId: tie.id, leagueId })}
       >
-        <View style={styles.tieCardHeader}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            {tie.scheduledStart ? (
-              <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: '#92400E', letterSpacing: 0.3 }}>
-                  {new Date(tie.scheduledStart).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                </Text>
-              </View>
-            ) : null}
-            {(tie as any).courtNumber ? (
-              <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: '#0369A1', letterSpacing: 0.5 }}>
-                  COURT {(tie as any).courtNumber}
-                </Text>
-              </View>
-            ) : null}
-            {tie.notes ? (
-              <View style={{ backgroundColor: '#EDE9FE', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: '#7C3AED', letterSpacing: 0.5 }}>{tie.notes}</Text>
-              </View>
-            ) : null}
-            {isMyAssignedTie ? (
-              <View style={{ backgroundColor: '#06D6A0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>MY TIE</Text>
-              </View>
-            ) : null}
-            {stageLabel ? (
-              <View style={{ backgroundColor: '#DBEAFE', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: '#1D4ED8', letterSpacing: 0.8 }}>{stageLabel}</Text>
-              </View>
-            ) : null}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1 }}>
+            {timeLabel ? <YBadge color="#92400E" bg="#FEF3C7">{timeLabel}</YBadge> : null}
+            {(tie as any).courtNumber ? <YBadge color="#0369A1" bg="#E0F2FE">{`COURT ${(tie as any).courtNumber}`}</YBadge> : null}
+            {tie.notes ? <YBadge color="#7C3AED" bg="#EDE9FE">{tie.notes}</YBadge> : null}
+            {isMyAssignedTie ? <YBadge color="#fff" bg="#06D6A0">MY TIE</YBadge> : null}
+            {stageLabel ? <YBadge color="#1D4ED8" bg="#DBEAFE">{stageLabel}</YBadge> : null}
           </View>
-          <View style={[styles.statusChip, { backgroundColor: chipCfg.bg }]}>
-            <Text style={[styles.statusChipText, { color: chipCfg.color }]}>{chipCfg.label}</Text>
-          </View>
+          <YBadge color={chipCfg.color} bg={chipCfg.bg}>{chipCfg.label}</YBadge>
         </View>
 
-        <View style={styles.tieMatchup}>
-          <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={styles.tieTeamName}>{homeDisplay}</Text>
-          </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <YUiText size={15} weight={700} color={YColors.ink} numberOfLines={1} style={{ flex: 1 }}>{homeDisplay}</YUiText>
           {tie.status === 'completed' ? (
-            <View style={styles.tieScoreBox}>
-              <Text style={styles.tieScoreText}>
-                {tie.homeStandingPoints} - {tie.awayStandingPoints}
-              </Text>
-            </View>
+            <YDisplay size={18} color={YColors.ink} style={{ marginHorizontal: 12 }}>{`${tie.homeStandingPoints} - ${tie.awayStandingPoints}`}</YDisplay>
           ) : (
-            <Text style={styles.tieVsText}>vs</Text>
+            <YUiText size={11} weight={700} color={YColors.ink3} style={{ marginHorizontal: 12 }}>vs</YUiText>
           )}
-          <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={styles.tieTeamName}>{awayDisplay}</Text>
-          </View>
+          <YUiText size={15} weight={700} color={YColors.ink} numberOfLines={1} style={{ flex: 1, textAlign: 'right' }}>{awayDisplay}</YUiText>
         </View>
 
-        {tie.status === 'completed' && (tie.homeBonusPoints > 0 || tie.awayBonusPoints > 0) && (
-          <View style={styles.tieBonusRow}>
-            <Text style={styles.tieBonusText}>+{tie.homeBonusPoints} bonus</Text>
-            <Text style={styles.tieBonusText}>+{tie.awayBonusPoints} bonus</Text>
+        {tie.status === 'completed' && (tie.homeBonusPoints > 0 || tie.awayBonusPoints > 0) ? (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+            <YEyebrow size={9} color={YColors.lime}>+{tie.homeBonusPoints} BONUS</YEyebrow>
+            <YEyebrow size={9} color={YColors.lime}>+{tie.awayBonusPoints} BONUS</YEyebrow>
           </View>
-        )}
+        ) : null}
 
-        {tie.matchDay && (
-          <Text style={styles.tieDateText}>
-            {new Date(tie.matchDay).toLocaleDateString('en-IN', {
-              weekday: 'short',
-              day: 'numeric',
-              month: 'short',
-            })}
-          </Text>
-        )}
+        {tie.matchDay ? (
+          <YEyebrow size={9} color={YColors.ink3} style={{ marginTop: 8 }}>
+            {new Date(tie.matchDay).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
+          </YEyebrow>
+        ) : null}
       </TouchableOpacity>
     );
   };
@@ -1041,41 +998,24 @@ const LeagueDashboardScreen: React.FC = () => {
     const top = sorted.slice(0, 5);
     if (top.length === 0) return null;
     return (
-      <View style={styles.heroStandings}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Standings Snapshot</Text>
-          <TouchableOpacity onPress={() => setActiveTab('STANDINGS')}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: BLUE }}>View All</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.heroTable}>
-          {/* Header */}
-          <View style={styles.heroTableHeader}>
-            <Text style={[styles.heroTableCell, { flex: 0.3 }]}>#</Text>
-            <Text style={[styles.heroTableCell, { flex: 2, textAlign: 'left' }]}>Team</Text>
-            <Text style={styles.heroTableCell}>P</Text>
-            <Text style={styles.heroTableCell}>W</Text>
-            <Text style={[styles.heroTableCell, { fontWeight: '800' }]}>SP</Text>
+      <View style={{ marginHorizontal: 14 }}>
+        <YSectionHead eyebrow="LEAGUE" title="Standings Snapshot" action="View All" onActionPress={() => setActiveTab('STANDINGS')} />
+        <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: YColors.line2, overflow: 'hidden' }}>
+          {/* Header row */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, backgroundColor: YColors.bg2 }}>
+            <YEyebrow size={9} color={YColors.ink3} style={{ width: 26 }}>#</YEyebrow>
+            <YEyebrow size={9} color={YColors.ink3} style={{ flex: 1 }}>TEAM</YEyebrow>
+            <YEyebrow size={9} color={YColors.ink3} style={{ width: 30, textAlign: 'center' }}>P</YEyebrow>
+            <YEyebrow size={9} color={YColors.ink3} style={{ width: 30, textAlign: 'center' }}>W</YEyebrow>
+            <YEyebrow size={9} color={YColors.ink2} style={{ width: 36, textAlign: 'right' }}>SP</YEyebrow>
           </View>
           {top.map((row, idx) => (
-            <View
-              key={row.id}
-              style={[
-                styles.heroTableRow,
-                idx === top.length - 1 && { borderBottomWidth: 0 },
-              ]}
-            >
-              <Text style={[styles.heroTableCellVal, { flex: 0.3, fontWeight: '800', color: idx < 3 ? BLUE : TEXT_SUB }]}>
-                {idx + 1}
-              </Text>
-              <Text style={[styles.heroTableCellVal, { flex: 2, textAlign: 'left', fontWeight: '600' }]} numberOfLines={1}>
-                {teamName(row.franchiseId)}
-              </Text>
-              <Text style={styles.heroTableCellVal}>{row.tiesPlayed}</Text>
-              <Text style={styles.heroTableCellVal}>{row.tiesWon}</Text>
-              <Text style={[styles.heroTableCellVal, { fontWeight: '800', color: NAVY }]}>
-                {row.standingPoints}
-              </Text>
+            <View key={row.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: 1, borderTopColor: YColors.line2 }}>
+              <YUiText size={13} weight={900} color={idx < 4 ? YColors.accent : YColors.ink3} style={{ width: 26 }}>{idx + 1}</YUiText>
+              <YUiText size={14} weight={700} color={YColors.ink} numberOfLines={1} style={{ flex: 1 }}>{teamName(row.franchiseId)}</YUiText>
+              <YUiText size={13} weight={600} color={YColors.ink2} style={{ width: 30, textAlign: 'center' }}>{row.tiesPlayed}</YUiText>
+              <YUiText size={13} weight={600} color={YColors.ink2} style={{ width: 30, textAlign: 'center' }}>{row.tiesWon}</YUiText>
+              <YUiText size={14} weight={900} color={YColors.ink} style={{ width: 36, textAlign: 'right' }}>{row.standingPoints}</YUiText>
             </View>
           ))}
         </View>
@@ -1980,48 +1920,49 @@ const LeagueDashboardScreen: React.FC = () => {
     const seeded = !!(sf1?.homeTeamId && sf2?.homeTeamId);
     const nm = (id?: string | null) => (id ? teamNamePlain(id) : 'TBD');
 
-    const Card = ({ tie, label }: { tie?: Tie | null; label: string }) => (
-      <TouchableOpacity
-        disabled={!tie?.id}
-        activeOpacity={0.7}
-        onPress={() => tie?.id && navigation.navigate('TieDetail', { tieId: tie.id, leagueId })}
-        style={{ backgroundColor: WHITE, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', padding: 16, marginBottom: 12 }}
-      >
-        <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', letterSpacing: 0.5, marginBottom: 8 }}>{label}</Text>
-        <Text style={{ fontSize: 16, fontWeight: '800', color: NAVY }}>{nm(tie?.homeTeamId)}</Text>
-        <Text style={{ fontSize: 12, color: '#94A3B8', marginVertical: 2 }}>vs</Text>
-        <Text style={{ fontSize: 16, fontWeight: '800', color: NAVY }}>{nm(tie?.awayTeamId)}</Text>
-        {tie?.status === 'completed' && tie?.winnerId ? (
-          <Text style={{ fontSize: 12, fontWeight: '800', color: GREEN, marginTop: 8 }}>✓ {nm(tie.winnerId)} won</Text>
-        ) : null}
-      </TouchableOpacity>
-    );
+    const koCard = (tie: Tie | null | undefined, label: string) => {
+      const done = tie?.status === 'completed';
+      return (
+        <LeagueTieCard
+          meta={label}
+          homeName={nm(tie?.homeTeamId)}
+          awayName={nm(tie?.awayTeamId)}
+          homeWon={!!done && tie?.winnerId === tie?.homeTeamId}
+          awayWon={!!done && tie?.winnerId === tie?.awayTeamId}
+          statusLabel={done ? 'Completed' : 'Scheduled'}
+          statusColor={done ? GREEN : YColors.ink2}
+          statusBg={done ? '#ECFDF5' : '#F1F5F9'}
+          onPress={tie?.id ? () => navigation.navigate('TieDetail', { tieId: tie!.id, leagueId, seasonId: resolvedSeasonId }) : undefined}
+        />
+      );
+    };
 
     return (
       <ScrollView contentContainerStyle={styles.tabContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        <Text style={{ fontSize: 18, fontWeight: '900', color: NAVY, marginBottom: 14 }}>KNOCKOUT</Text>
+        <YSectionHead eyebrow="BRACKET" title="Knockout" />
         {!seeded ? (
-          <View style={{ marginBottom: 16 }}>
-            <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 12 }}>
+          <View style={{ marginHorizontal: 14, marginBottom: 16 }}>
+            <YUiText size={13} color={YColors.ink2} style={{ marginBottom: 12 }}>
               Top 2 of each group advance. SF1 = A1 vs B2, SF2 = B1 vs A2.
-            </Text>
-            <TouchableOpacity
-              disabled={actionLoading}
+            </YUiText>
+            <YButton
+              variant="accent"
               onPress={() => xConfirm('Generate Knockout', 'Seed the semifinals from the current group standings?', async () => {
                 setActionLoading(true);
                 try { await generateKnockout(leagueId, resolvedSeasonId); await fetchAll(); }
                 catch (err: any) { xAlert('Error', err?.response?.data?.message || err?.message || 'Failed'); }
                 finally { setActionLoading(false); }
               })}
-              style={{ backgroundColor: BLUE, borderRadius: 10, padding: 16, alignItems: 'center' }}
             >
-              <Text style={{ color: WHITE, fontWeight: '800', fontSize: 14 }}>{actionLoading ? 'WORKING…' : 'GENERATE KNOCKOUT'}</Text>
-            </TouchableOpacity>
+              {actionLoading ? 'WORKING…' : 'GENERATE KNOCKOUT'}
+            </YButton>
           </View>
         ) : null}
-        <Card tie={sf1} label="SEMIFINAL 1" />
-        <Card tie={sf2} label="SEMIFINAL 2" />
-        <Card tie={final} label="FINAL" />
+        <View style={{ marginHorizontal: 14 }}>
+          {koCard(sf1, 'SEMIFINAL 1')}
+          {koCard(sf2, 'SEMIFINAL 2')}
+          {koCard(final, 'FINAL')}
+        </View>
       </ScrollView>
     );
   };
@@ -2792,30 +2733,16 @@ const LeagueDashboardScreen: React.FC = () => {
           scorers, captains, and players. */}
       <View style={[styles.tabBar, { paddingHorizontal: 12, paddingVertical: 10 }]}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-          {TABS.filter((tab) => tab !== 'KNOCKOUT' || isAdmin).map((tab) => {
-            const active = activeTab === tab;
-            return (
-              <TouchableOpacity
-                key={tab}
-                style={[
-                  styles.tabChip,
-                  {
-                    flexGrow: 1,
-                    flexBasis: '31%', // 3 per row → 5 tabs = 3+2 layout
-                    alignItems: 'center',
-                    marginHorizontal: 0,
-                  },
-                  active && styles.tabChipActive,
-                ]}
-                onPress={() => {
-                  setActiveTab(tab);
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>{tab}</Text>
-              </TouchableOpacity>
-            );
-          })}
+          {TABS.filter((tab) => tab !== 'KNOCKOUT' || isAdmin).map((tab) => (
+            <YChip
+              key={tab}
+              active={activeTab === tab}
+              onPress={() => setActiveTab(tab)}
+              style={{ flexGrow: 1, flexBasis: '31%', alignItems: 'center' }}
+            >
+              {tab}
+            </YChip>
+          ))}
         </View>
       </View>
 
