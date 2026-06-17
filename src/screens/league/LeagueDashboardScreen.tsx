@@ -527,11 +527,6 @@ const LeagueDashboardScreen: React.FC = () => {
         <Text style={styles.brandHeroTitle} numberOfLines={2}>{name.toUpperCase()}</Text>
         <View style={styles.brandHeroMetaRow}>
           {dateRange ? <Text style={styles.brandHeroMeta}>{dateRange}</Text> : null}
-          {phase ? (
-            <View style={[styles.brandHeroBadge, { backgroundColor: phase.bg }]}>
-              <Text style={[styles.brandHeroBadgeText, { color: phase.color }]}>{phase.label}</Text>
-            </View>
-          ) : null}
         </View>
       </View>
     );
@@ -1280,8 +1275,6 @@ const LeagueDashboardScreen: React.FC = () => {
       contentContainerStyle={styles.tabContent}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      {renderPhaseBar()}
-
       {/* Champion banner — only after final completes */}
       {renderChampionBanner()}
 
