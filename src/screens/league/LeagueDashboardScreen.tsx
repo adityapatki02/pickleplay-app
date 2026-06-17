@@ -610,14 +610,20 @@ const LeagueDashboardScreen: React.FC = () => {
           <YBadge color={chipCfg.color} bg={chipCfg.bg}>{chipCfg.label}</YBadge>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <YDisplay size={22} color={YColors.ink} numberOfLines={1} style={{ flex: 1, lineHeight: 24 }}>{homeDisplay}</YDisplay>
-          {tie.status === 'completed' ? (
-            <YDisplay size={22} color={YColors.accent} style={{ marginHorizontal: 12, lineHeight: 24 }}>{`${tie.homeStandingPoints}–${tie.awayStandingPoints}`}</YDisplay>
-          ) : (
-            <YEyebrow size={11} color={YColors.ink3} style={{ marginHorizontal: 12 }}>VS</YEyebrow>
-          )}
-          <YDisplay size={22} color={YColors.ink} numberOfLines={1} style={{ flex: 1, textAlign: 'right', lineHeight: 24 }}>{awayDisplay}</YDisplay>
+        <View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <YDisplay size={22} color={YColors.ink} numberOfLines={1} style={{ flex: 1, lineHeight: 26, marginRight: 12 }}>{homeDisplay}</YDisplay>
+            {tie.status === 'completed' ? (
+              <YDisplay size={22} color={YColors.accent} style={{ lineHeight: 26 }}>{String(tie.homeStandingPoints)}</YDisplay>
+            ) : null}
+          </View>
+          <YEyebrow size={9} color={YColors.ink3} style={{ marginVertical: 5 }}>VS</YEyebrow>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <YDisplay size={22} color={YColors.ink} numberOfLines={1} style={{ flex: 1, lineHeight: 26, marginRight: 12 }}>{awayDisplay}</YDisplay>
+            {tie.status === 'completed' ? (
+              <YDisplay size={22} color={YColors.accent} style={{ lineHeight: 26 }}>{String(tie.awayStandingPoints)}</YDisplay>
+            ) : null}
+          </View>
         </View>
 
         {tie.status === 'completed' && (tie.homeBonusPoints > 0 || tie.awayBonusPoints > 0) ? (
