@@ -2694,18 +2694,7 @@ const LeagueDashboardScreen: React.FC = () => {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => {
-            if (activeTab !== 'OVERVIEW') {
-              setActiveTab('OVERVIEW');
-            } else {
-              navigation.goBack();
-            }
-          }}
-          style={styles.backBtn}
-        >
-          <Text style={styles.backBtnText}>{'<'}</Text>
-        </TouchableOpacity>
+        <View style={{ width: 40 }} />
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle} numberOfLines={1}>
             {store.currentLeague?.name || 'League'}
