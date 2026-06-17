@@ -71,7 +71,7 @@ import type {
   KnockoutBracketData,
 } from '../../types/league.types';
 
-import { YColors, YTopBar, YChip, YStatTile, YBadge, YSectionHead, YDisplay, YUiText, YEyebrow, YRadius, YButton } from '../../components/yoiden';
+import { YColors, YTopBar, YChip, YBadge, YSectionHead, YDisplay, YUiText, YEyebrow, YRadius, YButton } from '../../components/yoiden';
 import { LeagueTieCard } from '../../components/league/LeagueTieCard';
 import { SPPL } from '../../navigation/nav-types';
 
@@ -538,14 +538,21 @@ const LeagueDashboardScreen: React.FC = () => {
   };
 
   const renderQuickStats = () => {
-    const totalTies = ties.length;
     const played = completedTies.length;
-    const remaining = totalTies - played;
+    const remaining = ties.length - played;
+    const items = [
+      { label: 'FRANCHISES', value: franchises.length, color: YColors.ink },
+      { label: 'TIES PLAYED', value: played, color: YColors.accent },
+      { label: 'REMAINING', value: remaining, color: YColors.ink },
+    ];
     return (
-      <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 14, marginTop: 12 }}>
-        <YStatTile label="Franchises" value={franchises.length} accent={YColors.ink} style={{ flex: 1 }} />
-        <YStatTile label="Ties Played" value={played} accent={YColors.accent} style={{ flex: 1 }} />
-        <YStatTile label="Remaining" value={remaining} accent={YColors.ink} style={{ flex: 1 }} />
+      <View style={{ flexDirection: 'row', paddingHorizontal: 20, marginTop: 20, marginBottom: 6 }}>
+        {items.map((it, i) => (
+          <View key={it.label} style={{ flex: 1, paddingRight: i < 2 ? 14 : 0 }}>
+            <YDisplay size={54} color={it.color} style={{ lineHeight: 54 }}>{String(it.value)}</YDisplay>
+            <YEyebrow size={10} color={YColors.ink3} style={{ marginTop: 4 }}>{it.label}</YEyebrow>
+          </View>
+        ))}
       </View>
     );
   };
@@ -998,27 +1005,23 @@ const LeagueDashboardScreen: React.FC = () => {
     const top = sorted.slice(0, 5);
     if (top.length === 0) return null;
     return (
-      <View style={{ marginHorizontal: 14 }}>
-        <YSectionHead eyebrow="LEAGUE" title="Standings Snapshot" action="View All" onActionPress={() => setActiveTab('STANDINGS')} />
-        <View style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: YColors.line2, overflow: 'hidden' }}>
-          {/* Header row */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, backgroundColor: YColors.bg2 }}>
-            <YEyebrow size={9} color={YColors.ink3} style={{ width: 26 }}>#</YEyebrow>
-            <YEyebrow size={9} color={YColors.ink3} style={{ flex: 1 }}>TEAM</YEyebrow>
-            <YEyebrow size={9} color={YColors.ink3} style={{ width: 30, textAlign: 'center' }}>P</YEyebrow>
-            <YEyebrow size={9} color={YColors.ink3} style={{ width: 30, textAlign: 'center' }}>W</YEyebrow>
-            <YEyebrow size={9} color={YColors.ink2} style={{ width: 36, textAlign: 'right' }}>SP</YEyebrow>
-          </View>
-          {top.map((row, idx) => (
-            <View key={row.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: 1, borderTopColor: YColors.line2 }}>
-              <YUiText size={13} weight={900} color={idx < 4 ? YColors.accent : YColors.ink3} style={{ width: 26 }}>{idx + 1}</YUiText>
-              <YUiText size={14} weight={700} color={YColors.ink} numberOfLines={1} style={{ flex: 1 }}>{teamName(row.franchiseId)}</YUiText>
-              <YUiText size={13} weight={600} color={YColors.ink2} style={{ width: 30, textAlign: 'center' }}>{row.tiesPlayed}</YUiText>
-              <YUiText size={13} weight={600} color={YColors.ink2} style={{ width: 30, textAlign: 'center' }}>{row.tiesWon}</YUiText>
-              <YUiText size={14} weight={900} color={YColors.ink} style={{ width: 36, textAlign: 'right' }}>{row.standingPoints}</YUiText>
+      <View style={{ marginHorizontal: 20 }}>
+        <YSectionHead eyebrow="LEAGUE" title="Standings" action="View All" onActionPress={() => setActiveTab('STANDINGS')} />
+        {top.map((row, idx) => {
+          const fr = franchiseMap[row.franchiseId];
+          const accent = (fr as any)?.primaryColor || YColors.accent;
+          return (
+            <View key={row.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: YColors.line2 }}>
+              <YDisplay size={30} color={idx < 4 ? YColors.accent : YColors.ink3} style={{ width: 46, lineHeight: 30 }}>{String(idx + 1)}</YDisplay>
+              <View style={{ width: 4, height: 38, borderRadius: 2, backgroundColor: accent, marginRight: 14 }} />
+              <YUiText size={17} weight={800} color={YColors.ink} numberOfLines={1} style={{ flex: 1 }}>{teamName(row.franchiseId)}</YUiText>
+              <View style={{ alignItems: 'flex-end' }}>
+                <YDisplay size={24} color={YColors.ink} style={{ lineHeight: 24 }}>{String(row.standingPoints)}</YDisplay>
+                <YEyebrow size={8} color={YColors.ink3} style={{ marginTop: 2 }}>{`SP · ${row.tiesPlayed}P ${row.tiesWon}W`}</YEyebrow>
+              </View>
             </View>
-          ))}
-        </View>
+          );
+        })}
       </View>
     );
   };
