@@ -263,8 +263,21 @@ export default function VenueDetailScreen() {
         }
 
         if (!paymentConfirmed) {
-          // Cancel the pending booking so slots free up immediately
-          try { await bookingsApi.cancel(booking.id); } catch (_) {}
+          // Try to cancel the pending booking so slots free up.
+          // If backend says PAYMENT_ALREADY_CAPTURED the webhook got there first —
+          // the booking IS confirmed and paid, so navigate to MyBookings instead.
+          try {
+            await bookingsApi.cancel(booking.id);
+          } catch (cancelErr: any) {
+            const msg = cancelErr?.response?.data?.message ?? cancelErr?.message ?? '';
+            if (msg === 'PAYMENT_ALREADY_CAPTURED') {
+              // Webhook confirmed the booking — go show it to the user
+              await loadAvailability();
+              setSelected([]);
+              nav.navigate('MyBookings', undefined);
+              return;
+            }
+          }
           await loadAvailability();
           setSelected([]);
           Alert.alert(
