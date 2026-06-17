@@ -619,7 +619,7 @@ const LeagueDashboardScreen: React.FC = () => {
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <YUiText size={16} weight={800} color={YColors.ink} numberOfLines={1} style={{ flex: 1, textAlign: 'right' }}>{homeDisplay}</YUiText>
           {tie.status === 'completed' ? (
-            <YDisplay size={20} color={YColors.accent} style={{ marginHorizontal: 14, lineHeight: 22 }}>{`${tie.homeStandingPoints}–${tie.awayStandingPoints}`}</YDisplay>
+            <YUiText size={18} weight={900} color={YColors.accent} style={{ marginHorizontal: 14 }}>{`${tie.homeStandingPoints}–${tie.awayStandingPoints}`}</YUiText>
           ) : (
             <YEyebrow size={10} color={YColors.ink3} style={{ marginHorizontal: 14 }}>VS</YEyebrow>
           )}
