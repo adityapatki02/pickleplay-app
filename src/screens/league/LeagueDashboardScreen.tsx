@@ -617,17 +617,13 @@ const LeagueDashboardScreen: React.FC = () => {
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{ flex: 1, alignItems: 'flex-end' }}>
-            <YDisplay size={17} color={YColors.ink} numberOfLines={1} style={{ lineHeight: 21, paddingRight: 4 }}>{firstWordItalic(homeDisplay)}</YDisplay>
-          </View>
+          <YUiText size={16} weight={800} color={YColors.ink} numberOfLines={1} style={{ flex: 1, textAlign: 'right' }}>{homeDisplay}</YUiText>
           {tie.status === 'completed' ? (
-            <YDisplay size={20} color={YColors.accent} style={{ marginHorizontal: 10, lineHeight: 22 }}>{`${tie.homeStandingPoints}–${tie.awayStandingPoints}`}</YDisplay>
+            <YDisplay size={20} color={YColors.accent} style={{ marginHorizontal: 14, lineHeight: 22 }}>{`${tie.homeStandingPoints}–${tie.awayStandingPoints}`}</YDisplay>
           ) : (
-            <YEyebrow size={10} color={YColors.ink3} style={{ marginHorizontal: 10 }}>VS</YEyebrow>
+            <YEyebrow size={10} color={YColors.ink3} style={{ marginHorizontal: 14 }}>VS</YEyebrow>
           )}
-          <View style={{ flex: 1, alignItems: 'flex-start' }}>
-            <YDisplay size={17} color={YColors.ink} numberOfLines={1} style={{ lineHeight: 21, paddingRight: 6 }}>{firstWordItalic(awayDisplay)}</YDisplay>
-          </View>
+          <YUiText size={16} weight={800} color={YColors.ink} numberOfLines={1} style={{ flex: 1, textAlign: 'left' }}>{awayDisplay}</YUiText>
         </View>
 
         {tie.status === 'completed' && (tie.homeBonusPoints > 0 || tie.awayBonusPoints > 0) ? (
