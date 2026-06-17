@@ -4588,11 +4588,13 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
   },
   groupHeader: {
-    backgroundColor: NAVY,
+    backgroundColor: YColors.bg2,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: YColors.line2,
   },
-  groupHeaderText: { color: WHITE, fontSize: 14, fontWeight: '800', letterSpacing: 0.5 },
+  groupHeaderText: { color: YColors.accent, fontSize: 13, fontWeight: '900', letterSpacing: 1.2 },
   tableHeaderRow: {
     flexDirection: 'row',
     backgroundColor: SURFACE,
