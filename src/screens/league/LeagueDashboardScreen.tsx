@@ -383,6 +383,12 @@ const LeagueDashboardScreen: React.FC = () => {
 
   const teamNamePlain = (id: string) => franchiseMap[id]?.name || franchiseMap[id]?.shortName || '—';
   const teamName = (id: string) => teamNamePlain(id); // plain for non-JSX usage
+  // Render an Anton team name with the first word italic, the rest upright.
+  const firstWordItalic = (n: string): React.ReactNode => {
+    const i = n.indexOf(' ');
+    if (i === -1) return n;
+    return (<>{n.slice(0, i)}<Text style={{ fontStyle: 'normal' }}>{n.slice(i)}</Text></>);
+  };
   const teamPoolTag = (id: string) => poolTagMap[id] || '';
 
   const completedTies = ties.filter((t) => t.status === 'completed');
@@ -612,7 +618,7 @@ const LeagueDashboardScreen: React.FC = () => {
 
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ flex: 1, alignItems: 'flex-end' }}>
-            <YDisplay size={17} color={YColors.ink} numberOfLines={1} style={{ lineHeight: 21, paddingRight: 4 }}>{homeDisplay}</YDisplay>
+            <YDisplay size={17} color={YColors.ink} numberOfLines={1} style={{ lineHeight: 21, paddingRight: 4 }}>{firstWordItalic(homeDisplay)}</YDisplay>
           </View>
           {tie.status === 'completed' ? (
             <YDisplay size={20} color={YColors.accent} style={{ marginHorizontal: 10, lineHeight: 22 }}>{`${tie.homeStandingPoints}–${tie.awayStandingPoints}`}</YDisplay>
@@ -620,7 +626,7 @@ const LeagueDashboardScreen: React.FC = () => {
             <YEyebrow size={10} color={YColors.ink3} style={{ marginHorizontal: 10 }}>VS</YEyebrow>
           )}
           <View style={{ flex: 1, alignItems: 'flex-start' }}>
-            <YDisplay size={17} color={YColors.ink} numberOfLines={1} style={{ lineHeight: 21, paddingRight: 6 }}>{awayDisplay}</YDisplay>
+            <YDisplay size={17} color={YColors.ink} numberOfLines={1} style={{ lineHeight: 21, paddingRight: 6 }}>{firstWordItalic(awayDisplay)}</YDisplay>
           </View>
         </View>
 
