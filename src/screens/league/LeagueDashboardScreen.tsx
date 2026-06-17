@@ -1948,6 +1948,11 @@ const LeagueDashboardScreen: React.FC = () => {
     const sf2 = knockoutData?.sf2;
     const final = knockoutData?.final;
     const seeded = !!(sf1?.homeTeamId && sf2?.homeTeamId);
+    // Knockout can only be generated once the whole group stage is done —
+    // otherwise the semis would seed off incomplete standings.
+    const groupTies = ties.filter((t) => (t.round || '').startsWith('league_week_'));
+    const groupDone = groupTies.filter((t) => t.status === 'completed').length;
+    const allGroupDone = groupTies.length > 0 && groupDone === groupTies.length;
     const nm = (id?: string | null) => (id ? teamNamePlain(id) : 'TBD');
 
     const koCard = (tie: Tie | null | undefined, label: string, ph: [string, string]) => {
@@ -1975,17 +1980,24 @@ const LeagueDashboardScreen: React.FC = () => {
             <YUiText size={13} color={YColors.ink2} style={{ marginBottom: 12 }}>
               Top 2 of each group advance. SF1 = A1 vs B2, SF2 = B1 vs A2.
             </YUiText>
-            <YButton
-              variant="accent"
-              onPress={() => xConfirm('Generate Knockout', 'Seed the semifinals from the current group standings?', async () => {
-                setActionLoading(true);
-                try { await generateKnockout(leagueId, resolvedSeasonId); await fetchAll(); }
-                catch (err: any) { xAlert('Error', err?.response?.data?.message || err?.message || 'Failed'); }
-                finally { setActionLoading(false); }
-              })}
-            >
-              {actionLoading ? 'WORKING…' : 'GENERATE KNOCKOUT'}
-            </YButton>
+            {allGroupDone ? (
+              <YButton
+                variant="accent"
+                onPress={() => xConfirm('Generate Knockout', 'Seed the semifinals from the final group standings?', async () => {
+                  setActionLoading(true);
+                  try { await generateKnockout(leagueId, resolvedSeasonId); await fetchAll(); }
+                  catch (err: any) { xAlert('Error', err?.response?.data?.message || err?.message || 'Failed'); }
+                  finally { setActionLoading(false); }
+                })}
+              >
+                {actionLoading ? 'WORKING…' : 'GENERATE KNOCKOUT'}
+              </YButton>
+            ) : (
+              <View style={{ backgroundColor: '#FEF3C7', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#FDE68A' }}>
+                <YUiText size={13} weight={800} color="#92400E">Finish the group stage first</YUiText>
+                <YUiText size={12} color="#92400E" style={{ marginTop: 2 }}>{`${groupDone} of ${groupTies.length} group ties completed. The knockout seeds from the final standings.`}</YUiText>
+              </View>
+            )}
           </View>
         ) : null}
         <View style={{ marginHorizontal: 14 }}>
