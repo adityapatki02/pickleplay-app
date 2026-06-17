@@ -1152,37 +1152,6 @@ const TieDetailScreen: React.FC = () => {
         </TouchableOpacity>
       )}
 
-      {/* Demo: open the mock scorer interface — available to anyone viewing
-          the tie. Keeps the SPPL scoring story visible during pitches without
-          requiring real scorer credentials. */}
-      <TouchableOpacity
-        style={{
-          marginTop: 10,
-          backgroundColor: YColors.lime,
-          paddingVertical: 14,
-          paddingHorizontal: 14,
-          borderRadius: 10,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-        }}
-        onPress={() =>
-          navigation.navigate('ScorerDemo', {
-            homeName,
-            awayName,
-            slotLabel: 'GAME 1 · MEN 1',
-            matchNo: tie?.round ? `${tie.round.toUpperCase()}` : 'MATCH',
-            court: tie?.courtNumber ? `COURT ${tie.courtNumber}` : 'COURT 1',
-          })
-        }
-        activeOpacity={0.85}
-      >
-        <Text style={{ color: YColors.ink, fontWeight: '900', fontSize: 13, letterSpacing: 1.5 }}>
-          ▶  OPEN SCORER (DEMO)
-        </Text>
-      </TouchableOpacity>
-
       {/* Admin: Submit lineup on behalf of captain */}
       {(tie.status === 'scheduled' || tie.status === 'lineup_submitted') && (
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
