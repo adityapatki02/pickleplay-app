@@ -57,6 +57,8 @@ import {
 import { setFantasyFrozen, recalculateFantasy } from '../../api/fantasy.api';
 import { useLeagueStore } from '../../store/leagueStore';
 import { useAuthStore } from '../../store/authStore';
+import { IS_LEAGUE_KIOSK } from '../../config/appMode';
+import { useLeagueAdminAccess } from '../../hooks/useLeagueAdminAccess';
 import { xAlert, xConfirm, xPrompt } from '../../utils/alert';
 import { API_BASE_URL } from '../../config/constants';
 import DownloadButton from '../../components/DownloadButton';
@@ -71,7 +73,8 @@ import type {
   KnockoutBracketData,
 } from '../../types/league.types';
 
-import { YColors, YTopBar } from '../../components/yoiden';
+import { YColors, YTopBar, YChip, YBadge, YSectionHead, YDisplay, YUiText, YEyebrow, YRadius, YButton } from '../../components/yoiden';
+import { LeagueTieCard } from '../../components/league/LeagueTieCard';
 import { SPPL } from '../../navigation/nav-types';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
@@ -125,8 +128,12 @@ const LeagueDashboardScreen: React.FC = () => {
 
   const store = useLeagueStore();
   const authUser = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const [league, setLeague] = useState(store.currentLeague);
-  const isAdmin = !!authUser?.id && league?.organizerId === authUser.id;
+  const isOwner = !!authUser?.id && league?.organizerId === authUser.id;
+  // Owner OR co-admin (league_admins). Co-admin is resolved via the hook so
+  // backend-granted admins get the management UI, not just the organizer.
+  const isAdmin = useLeagueAdminAccess(league?.id, authUser?.id, isOwner);
 
   // Fetch league by ID so isAdmin check works on direct navigation
   useEffect(() => {
@@ -322,6 +329,45 @@ const LeagueDashboardScreen: React.FC = () => {
     }, []),
   );
 
+  // Web (league-kiosk) back-button guard. On a phone browser the hardware back
+  // key drives browser history, and the BackHandler above never fires — so
+  // without this, pressing back on the kiosk leaves the site instantly, even
+  // from a sub-tab. We keep ONE sentinel entry above the root so every back
+  // press is caught: a sub-tab steps back to Overview; Overview asks before it
+  // actually leaves. We push with the navigator's own history.state so React
+  // Navigation stays in sync. Kiosk + web only — the full app and native are
+  // untouched.
+  React.useEffect(() => {
+    if (!IS_LEAGUE_KIOSK || Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const arm = () => window.history.pushState(window.history.state, '');
+    // Seed one sentinel entry on load so the very first back press lands on an
+    // in-site entry (firing popstate) instead of leaving the site.
+    arm();
+    const onPop = () => {
+      // Always re-trap first — a back press must never leave the site on its own.
+      arm();
+      // A child screen (tie detail, etc.) is open → let it pop normally.
+      if (navigation.canGoBack && navigation.canGoBack()) {
+        navigation.goBack();
+        return;
+      }
+      // On the dashboard: a sub-tab steps back to Overview …
+      if (activeTabRef.current !== 'OVERVIEW') {
+        setActiveTab('OVERVIEW');
+        return;
+      }
+      // … and Overview asks before actually leaving.
+      xConfirm('Close app?', 'Do you want to exit the tournament?', () => {
+        window.removeEventListener('popstate', onPop, true);
+        window.history.go(-2); // pop sentinel + root → leave the site
+      });
+    };
+    // Capture phase so this runs before React Navigation's own popstate handler.
+    window.addEventListener('popstate', onPop, true);
+    return () => window.removeEventListener('popstate', onPop, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchAll();
@@ -380,8 +426,14 @@ const LeagueDashboardScreen: React.FC = () => {
     return m;
   }, [groups, ties]);
 
-  const teamNamePlain = (id: string) => franchiseMap[id]?.shortName || franchiseMap[id]?.name || '—';
+  const teamNamePlain = (id: string) => franchiseMap[id]?.name || franchiseMap[id]?.shortName || '—';
   const teamName = (id: string) => teamNamePlain(id); // plain for non-JSX usage
+  // Render an Anton team name with the first word italic, the rest upright.
+  const firstWordItalic = (n: string): React.ReactNode => {
+    const i = n.indexOf(' ');
+    if (i === -1) return n;
+    return (<>{n.slice(0, i)}<Text style={{ fontStyle: 'normal' }}>{n.slice(i)}</Text></>);
+  };
   const teamPoolTag = (id: string) => poolTagMap[id] || '';
 
   const completedTies = ties.filter((t) => t.status === 'completed');
@@ -526,36 +578,25 @@ const LeagueDashboardScreen: React.FC = () => {
         <Text style={styles.brandHeroTitle} numberOfLines={2}>{name.toUpperCase()}</Text>
         <View style={styles.brandHeroMetaRow}>
           {dateRange ? <Text style={styles.brandHeroMeta}>{dateRange}</Text> : null}
-          {phase ? (
-            <View style={[styles.brandHeroBadge, { backgroundColor: phase.bg }]}>
-              <Text style={[styles.brandHeroBadgeText, { color: phase.color }]}>{phase.label}</Text>
-            </View>
-          ) : null}
         </View>
       </View>
     );
   };
 
   const renderQuickStats = () => {
-    const totalTies = ties.length;
     const played = completedTies.length;
-    const remaining = totalTies - played;
-    // Find top team
-    const sorted = [...standings].sort((a, b) => b.standingPoints - a.standingPoints);
-    const topTeam = sorted[0] ? teamName(sorted[0].franchiseId) : '—';
-
-    const stats = [
-      { label: 'Franchises', value: String(franchises.length) },
-      { label: 'Ties Played', value: String(played) },
-      { label: 'Remaining', value: String(remaining) },
+    const remaining = ties.length - played;
+    const items = [
+      { label: 'FRANCHISES', value: franchises.length, color: YColors.ink },
+      { label: 'TIES PLAYED', value: played, color: YColors.accent },
+      { label: 'REMAINING', value: remaining, color: YColors.ink },
     ];
-
     return (
-      <View style={styles.statsRow}>
-        {stats.map((s, i) => (
-          <View key={i} style={styles.statPill}>
-            <Text style={styles.statValue}>{s.value}</Text>
-            <Text style={styles.statLabel}>{s.label}</Text>
+      <View style={{ flexDirection: 'row', paddingHorizontal: 20, marginTop: 20, marginBottom: 6 }}>
+        {items.map((it, i) => (
+          <View key={it.label} style={{ flex: 1, paddingRight: i < 2 ? 14 : 0 }}>
+            <YDisplay size={54} color={it.color} style={{ lineHeight: 54 }}>{String(it.value)}</YDisplay>
+            <YEyebrow size={10} color={YColors.ink3} style={{ marginTop: 4 }}>{it.label}</YEyebrow>
           </View>
         ))}
       </View>
@@ -567,10 +608,12 @@ const LeagueDashboardScreen: React.FC = () => {
     const isMyAssignedTie = !!authUser?.id && (tie as any).scorerId === authUser.id;
 
     // Human-readable knockout stage label + placeholder names before teams are seeded
+    const isCross = (season as any)?.format === 'cross_5game';
     const KNOCKOUT_LABELS: Record<string, string> = {
       knockout_qf1: 'QF 1', knockout_qf2: 'QF 2', knockout_qf3: 'QF 3', knockout_qf4: 'QF 4',
       knockout_q1: 'QUALIFIER 1', knockout_eliminator: 'ELIMINATOR',
       knockout_q2: 'QUALIFIER 2', knockout_final: 'FINAL',
+      knockout_sf1: 'SEMIFINAL 1', knockout_sf2: 'SEMIFINAL 2',
     };
     const KO_PLACEHOLDERS: Record<string, [string, string]> = {
       knockout_qf1: ['AB1', 'CD4'],
@@ -580,94 +623,66 @@ const LeagueDashboardScreen: React.FC = () => {
       knockout_q1: ['H1', 'H2'],
       knockout_eliminator: ['H3', 'H4'],
       knockout_q2: ['Loser Q1', 'Winner Elim'],
-      knockout_final: ['Winner Q1', 'Winner Q2'],
+      // cross_5game seeding: SF1 = A1·B2, SF2 = B1·A2, Final = SF1·SF2
+      knockout_sf1: ['A1', 'B2'],
+      knockout_sf2: ['B1', 'A2'],
+      knockout_final: isCross ? ['SF1', 'SF2'] : ['Winner Q1', 'Winner Q2'],
     };
     const stageLabel = KNOCKOUT_LABELS[tie.round] || null;
     const koPh = KO_PLACEHOLDERS[tie.round];
     const homeDisplay = tie.homeTeamId ? teamNamePlain(tie.homeTeamId) : (koPh ? koPh[0] : 'TBD');
     const awayDisplay = tie.awayTeamId ? teamNamePlain(tie.awayTeamId) : (koPh ? koPh[1] : 'TBD');
 
+    const timeLabel = tie.scheduledStart
+      ? new Date(tie.scheduledStart).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+      : null;
     return (
       <TouchableOpacity
         key={tie.id}
-        style={[
-          styles.tieCard,
-          isMyAssignedTie && { backgroundColor: '#ECFDF5', borderColor: '#06D6A0', borderWidth: 2 },
-        ]}
-        activeOpacity={0.7}
+        style={{
+          backgroundColor: '#fff',
+          borderRadius: YRadius.xl,
+          borderWidth: isMyAssignedTie ? 2 : 1,
+          borderColor: isMyAssignedTie ? '#06D6A0' : YColors.line2,
+          padding: 16,
+          marginBottom: 10,
+        }}
+        activeOpacity={0.85}
         onPress={() => navigation.navigate('TieDetail', { tieId: tie.id, leagueId })}
       >
-        <View style={styles.tieCardHeader}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            {tie.scheduledStart ? (
-              <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: '#92400E', letterSpacing: 0.3 }}>
-                  {new Date(tie.scheduledStart).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                </Text>
-              </View>
-            ) : null}
-            {(tie as any).courtNumber ? (
-              <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: '#0369A1', letterSpacing: 0.5 }}>
-                  COURT {(tie as any).courtNumber}
-                </Text>
-              </View>
-            ) : null}
-            {tie.notes ? (
-              <View style={{ backgroundColor: '#EDE9FE', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: '#7C3AED', letterSpacing: 0.5 }}>{tie.notes}</Text>
-              </View>
-            ) : null}
-            {isMyAssignedTie ? (
-              <View style={{ backgroundColor: '#06D6A0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>MY TIE</Text>
-              </View>
-            ) : null}
-            {stageLabel ? (
-              <View style={{ backgroundColor: '#DBEAFE', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: '#1D4ED8', letterSpacing: 0.8 }}>{stageLabel}</Text>
-              </View>
-            ) : null}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1 }}>
+            {timeLabel ? <YBadge color="#92400E" bg="#FEF3C7">{timeLabel}</YBadge> : null}
+            {(tie as any).courtNumber ? <YBadge color="#0369A1" bg="#E0F2FE">{`COURT ${(tie as any).courtNumber}`}</YBadge> : null}
+            {tie.notes ? <YBadge color="#7C3AED" bg="#EDE9FE">{tie.notes}</YBadge> : null}
+            {isMyAssignedTie ? <YBadge color="#fff" bg="#06D6A0">MY TIE</YBadge> : null}
+            {stageLabel ? <YBadge color="#1D4ED8" bg="#DBEAFE">{stageLabel}</YBadge> : null}
           </View>
-          <View style={[styles.statusChip, { backgroundColor: chipCfg.bg }]}>
-            <Text style={[styles.statusChipText, { color: chipCfg.color }]}>{chipCfg.label}</Text>
-          </View>
+          <YBadge color={chipCfg.color} bg={chipCfg.bg}>{chipCfg.label}</YBadge>
         </View>
 
-        <View style={styles.tieMatchup}>
-          <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={styles.tieTeamName}>{homeDisplay}</Text>
-          </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <YUiText size={16} weight={800} color={YColors.ink} numberOfLines={1} style={{ flex: 1, textAlign: 'right' }}>{homeDisplay}</YUiText>
           {tie.status === 'completed' ? (
-            <View style={styles.tieScoreBox}>
-              <Text style={styles.tieScoreText}>
-                {tie.homeStandingPoints} - {tie.awayStandingPoints}
-              </Text>
-            </View>
+            <YUiText size={18} weight={900} color={YColors.accent} style={{ marginHorizontal: 14 }}>{`${tie.homeStandingPoints}–${tie.awayStandingPoints}`}</YUiText>
           ) : (
-            <Text style={styles.tieVsText}>vs</Text>
+            <YEyebrow size={10} color={YColors.ink3} style={{ marginHorizontal: 14 }}>VS</YEyebrow>
           )}
-          <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={styles.tieTeamName}>{awayDisplay}</Text>
-          </View>
+          <YUiText size={16} weight={800} color={YColors.ink} numberOfLines={1} style={{ flex: 1, textAlign: 'left' }}>{awayDisplay}</YUiText>
         </View>
 
-        {tie.status === 'completed' && (tie.homeBonusPoints > 0 || tie.awayBonusPoints > 0) && (
-          <View style={styles.tieBonusRow}>
-            <Text style={styles.tieBonusText}>+{tie.homeBonusPoints} bonus</Text>
-            <Text style={styles.tieBonusText}>+{tie.awayBonusPoints} bonus</Text>
+        {tie.status === 'completed' && (tie.homeBonusPoints > 0 || tie.awayBonusPoints > 0) ? (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+            <YEyebrow size={9} color={YColors.accent}>+{tie.homeBonusPoints} BONUS</YEyebrow>
+            <YEyebrow size={9} color={YColors.accent}>+{tie.awayBonusPoints} BONUS</YEyebrow>
           </View>
-        )}
+        ) : null}
 
-        {tie.matchDay && (
-          <Text style={styles.tieDateText}>
-            {new Date(tie.matchDay).toLocaleDateString('en-IN', {
-              weekday: 'short',
-              day: 'numeric',
-              month: 'short',
-            })}
-          </Text>
-        )}
+        {tie.matchDay ? (
+          <YEyebrow size={9} color={YColors.ink3} style={{ marginTop: 8 }}>
+            {new Date(tie.matchDay).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
+          </YEyebrow>
+        ) : null}
       </TouchableOpacity>
     );
   };
@@ -1036,49 +1051,52 @@ const LeagueDashboardScreen: React.FC = () => {
       );
     }
 
-    // League-phase fallback — pre-QF standings sorted by SP, top 5.
-    const sorted = [...standings].sort((a, b) => b.standingPoints - a.standingPoints);
-    const top = sorted.slice(0, 5);
-    if (top.length === 0) return null;
+    // League-phase: per-group standings (every team in each group).
+    const byGroup = [...groups]
+      .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+      .map((g) => ({
+        group: g,
+        rows: standings.filter((s) => s.groupId === g.id).sort((a, b) => b.standingPoints - a.standingPoints),
+      }))
+      .filter((x) => x.rows.length > 0);
+    if (byGroup.length === 0) return null;
     return (
-      <View style={styles.heroStandings}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Standings Snapshot</Text>
+      <View style={{ marginHorizontal: 20 }}>
+        {/* Section header — editorial Anton title to match the hero */}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 24, marginBottom: 14 }}>
+          <View>
+            <YEyebrow size={10} color={YColors.ink3} style={{ marginBottom: 2 }}>LEAGUE</YEyebrow>
+            <YDisplay size={26} color={YColors.ink} style={{ lineHeight: 28 }}>Standings</YDisplay>
+          </View>
           <TouchableOpacity onPress={() => setActiveTab('STANDINGS')}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: BLUE }}>View All</Text>
+            <YUiText size={12} weight={800} color={YColors.accent}>VIEW ALL</YUiText>
           </TouchableOpacity>
         </View>
-        <View style={styles.heroTable}>
-          {/* Header */}
-          <View style={styles.heroTableHeader}>
-            <Text style={[styles.heroTableCell, { flex: 0.3 }]}>#</Text>
-            <Text style={[styles.heroTableCell, { flex: 2, textAlign: 'left' }]}>Team</Text>
-            <Text style={styles.heroTableCell}>P</Text>
-            <Text style={styles.heroTableCell}>W</Text>
-            <Text style={[styles.heroTableCell, { fontWeight: '800' }]}>SP</Text>
-          </View>
-          {top.map((row, idx) => (
-            <View
-              key={row.id}
-              style={[
-                styles.heroTableRow,
-                idx === top.length - 1 && { borderBottomWidth: 0 },
-              ]}
-            >
-              <Text style={[styles.heroTableCellVal, { flex: 0.3, fontWeight: '800', color: idx < 3 ? BLUE : TEXT_SUB }]}>
-                {idx + 1}
-              </Text>
-              <Text style={[styles.heroTableCellVal, { flex: 2, textAlign: 'left', fontWeight: '600' }]} numberOfLines={1}>
-                {teamName(row.franchiseId)}
-              </Text>
-              <Text style={styles.heroTableCellVal}>{row.tiesPlayed}</Text>
-              <Text style={styles.heroTableCellVal}>{row.tiesWon}</Text>
-              <Text style={[styles.heroTableCellVal, { fontWeight: '800', color: NAVY }]}>
-                {row.standingPoints}
-              </Text>
+
+        {byGroup.map(({ group, rows }) => (
+          <View key={group.id} style={{ marginBottom: 16, backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: YColors.line2, overflow: 'hidden' }}>
+            {/* Group header bar */}
+            <View style={{ backgroundColor: YColors.bg2, paddingHorizontal: 16, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: YColors.line2 }}>
+              <YUiText size={13} weight={900} color={YColors.accent} style={{ letterSpacing: 1.2 }}>{(group.name || 'GROUP').toUpperCase()}</YUiText>
             </View>
-          ))}
-        </View>
+            {rows.map((row, idx) => {
+              const fr = franchiseMap[row.franchiseId];
+              const accent = (fr as any)?.primaryColor || YColors.accent;
+              const qualifies = idx < 2;
+              return (
+                <View key={row.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: idx === 0 ? 0 : 1, borderTopColor: YColors.line2, backgroundColor: qualifies ? '#F0FAF7' : '#fff' }}>
+                  <YDisplay size={24} color={qualifies ? YColors.accent : YColors.ink3} style={{ width: 38, lineHeight: 24 }}>{String(idx + 1)}</YDisplay>
+                  <View style={{ width: 4, height: 30, borderRadius: 2, backgroundColor: accent, marginRight: 12 }} />
+                  <YUiText size={16} weight={800} color={YColors.ink} numberOfLines={1} style={{ flex: 1 }}>{teamName(row.franchiseId)}</YUiText>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <YDisplay size={20} color={YColors.ink} style={{ lineHeight: 20 }}>{String(row.standingPoints)}</YDisplay>
+                    <YEyebrow size={8} color={YColors.ink3} style={{ marginTop: 2 }}>{`SP · ${row.tiesPlayed}P ${row.tiesWon}W`}</YEyebrow>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ))}
       </View>
     );
   };
@@ -1309,8 +1327,6 @@ const LeagueDashboardScreen: React.FC = () => {
       contentContainerStyle={styles.tabContent}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      {renderPhaseBar()}
-
       {/* Champion banner — only after final completes */}
       {renderChampionBanner()}
 
@@ -1535,17 +1551,29 @@ const LeagueDashboardScreen: React.FC = () => {
         qualifyTop: 0,
       }));
     } else if (standingsSubTab === 'group') {
-      const sortedGroups = [...groups].sort((a, b) => a.displayOrder - b.displayOrder);
-      for (let i = 0; i + 1 < sortedGroups.length; i += 2) {
-        const g1 = sortedGroups[i];
-        const g2 = sortedGroups[i + 1];
-        const g1Letter = g1.name.replace(/pool\s*/i, '').trim();
-        const g2Letter = g2.name.replace(/pool\s*/i, '').trim();
-        const label = `Group ${g1Letter}${g2Letter}`;
-        const rows = standings
-          .filter((s) => s.groupId === g1.id || s.groupId === g2.id)
-          .sort(rankCompare);
-        sections.push({ label, rows, qualifyTop: 4 });
+      if ((season as any)?.format === 'cross_5game') {
+        // Each group is its own table; top 2 of each advance.
+        const sortedGroups = [...groups].sort((a, b) => a.displayOrder - b.displayOrder);
+        sections = sortedGroups
+          .map((g) => ({
+            label: g.name,
+            rows: standings.filter((s) => s.groupId === g.id).sort(rankCompare),
+            qualifyTop: 2,
+          }))
+          .filter((s) => s.rows.length > 0);
+      } else {
+        const sortedGroups = [...groups].sort((a, b) => a.displayOrder - b.displayOrder);
+        for (let i = 0; i + 1 < sortedGroups.length; i += 2) {
+          const g1 = sortedGroups[i];
+          const g2 = sortedGroups[i + 1];
+          const g1Letter = g1.name.replace(/pool\s*/i, '').trim();
+          const g2Letter = g2.name.replace(/pool\s*/i, '').trim();
+          const label = `Group ${g1Letter}${g2Letter}`;
+          const rows = standings
+            .filter((s) => s.groupId === g1.id || s.groupId === g2.id)
+            .sort(rankCompare);
+          sections.push({ label, rows, qualifyTop: 4 });
+        }
       }
     } else {
       // Overall
@@ -1613,28 +1641,15 @@ const LeagueDashboardScreen: React.FC = () => {
             return (
               <TouchableOpacity
                 key={t.key}
-                style={{
-                  flex: 1,
-                  paddingVertical: 10,
-                  borderRadius: 8,
-                  backgroundColor: active ? NAVY : SURFACE,
-                  alignItems: 'center',
-                  borderWidth: 1,
-                  borderColor: active ? NAVY : BORDER,
-                }}
                 onPress={() => setStandingsSubTab(t.key)}
-                activeOpacity={0.7}
+                activeOpacity={0.8}
+                style={{
+                  flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 20, borderWidth: 1,
+                  backgroundColor: active ? YColors.lime : YColors.bg2,
+                  borderColor: active ? YColors.lime : YColors.line2,
+                }}
               >
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: '800',
-                    color: active ? WHITE : TEXT_SUB,
-                    letterSpacing: 0.8,
-                  }}
-                >
-                  {t.label}
-                </Text>
+                <YUiText size={12} weight={800} color={active ? YColors.ink : YColors.ink2}>{t.label}</YUiText>
               </TouchableOpacity>
             );
           })}
@@ -1978,50 +1993,63 @@ const LeagueDashboardScreen: React.FC = () => {
     const sf2 = knockoutData?.sf2;
     const final = knockoutData?.final;
     const seeded = !!(sf1?.homeTeamId && sf2?.homeTeamId);
+    // Knockout can only be generated once the whole group stage is done —
+    // otherwise the semis would seed off incomplete standings.
+    const groupTies = ties.filter((t) => (t.round || '').startsWith('league_week_'));
+    const groupDone = groupTies.filter((t) => t.status === 'completed').length;
+    const allGroupDone = groupTies.length > 0 && groupDone === groupTies.length;
     const nm = (id?: string | null) => (id ? teamNamePlain(id) : 'TBD');
 
-    const Card = ({ tie, label }: { tie?: Tie | null; label: string }) => (
-      <TouchableOpacity
-        disabled={!tie?.id}
-        activeOpacity={0.7}
-        onPress={() => tie?.id && navigation.navigate('TieDetail', { tieId: tie.id, leagueId })}
-        style={{ backgroundColor: WHITE, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', padding: 16, marginBottom: 12 }}
-      >
-        <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', letterSpacing: 0.5, marginBottom: 8 }}>{label}</Text>
-        <Text style={{ fontSize: 16, fontWeight: '800', color: NAVY }}>{nm(tie?.homeTeamId)}</Text>
-        <Text style={{ fontSize: 12, color: '#94A3B8', marginVertical: 2 }}>vs</Text>
-        <Text style={{ fontSize: 16, fontWeight: '800', color: NAVY }}>{nm(tie?.awayTeamId)}</Text>
-        {tie?.status === 'completed' && tie?.winnerId ? (
-          <Text style={{ fontSize: 12, fontWeight: '800', color: GREEN, marginTop: 8 }}>✓ {nm(tie.winnerId)} won</Text>
-        ) : null}
-      </TouchableOpacity>
-    );
+    const koCard = (tie: Tie | null | undefined, label: string, ph: [string, string]) => {
+      const done = tie?.status === 'completed';
+      return (
+        <LeagueTieCard
+          meta={label}
+          homeName={tie?.homeTeamId ? teamNamePlain(tie.homeTeamId) : ph[0]}
+          awayName={tie?.awayTeamId ? teamNamePlain(tie.awayTeamId) : ph[1]}
+          homeWon={!!done && tie?.winnerId === tie?.homeTeamId}
+          awayWon={!!done && tie?.winnerId === tie?.awayTeamId}
+          statusLabel={done ? 'Completed' : 'Scheduled'}
+          statusColor={done ? GREEN : YColors.ink2}
+          statusBg={done ? '#ECFDF5' : '#F1F5F9'}
+          onPress={tie?.id ? () => navigation.navigate('TieDetail', { tieId: tie!.id, leagueId, seasonId: resolvedSeasonId }) : undefined}
+        />
+      );
+    };
 
     return (
       <ScrollView contentContainerStyle={styles.tabContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        <Text style={{ fontSize: 18, fontWeight: '900', color: NAVY, marginBottom: 14 }}>KNOCKOUT</Text>
+        <YSectionHead eyebrow="BRACKET" title="Knockout" />
         {!seeded ? (
-          <View style={{ marginBottom: 16 }}>
-            <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 12 }}>
+          <View style={{ marginHorizontal: 14, marginBottom: 16 }}>
+            <YUiText size={13} color={YColors.ink2} style={{ marginBottom: 12 }}>
               Top 2 of each group advance. SF1 = A1 vs B2, SF2 = B1 vs A2.
-            </Text>
-            <TouchableOpacity
-              disabled={actionLoading}
-              onPress={() => xConfirm('Generate Knockout', 'Seed the semifinals from the current group standings?', async () => {
-                setActionLoading(true);
-                try { await generateKnockout(leagueId, resolvedSeasonId); await fetchAll(); }
-                catch (err: any) { xAlert('Error', err?.response?.data?.message || err?.message || 'Failed'); }
-                finally { setActionLoading(false); }
-              })}
-              style={{ backgroundColor: BLUE, borderRadius: 10, padding: 16, alignItems: 'center' }}
-            >
-              <Text style={{ color: WHITE, fontWeight: '800', fontSize: 14 }}>{actionLoading ? 'WORKING…' : 'GENERATE KNOCKOUT'}</Text>
-            </TouchableOpacity>
+            </YUiText>
+            {allGroupDone ? (
+              <YButton
+                variant="accent"
+                onPress={() => xConfirm('Generate Knockout', 'Seed the semifinals from the final group standings?', async () => {
+                  setActionLoading(true);
+                  try { await generateKnockout(leagueId, resolvedSeasonId); await fetchAll(); }
+                  catch (err: any) { xAlert('Error', err?.response?.data?.message || err?.message || 'Failed'); }
+                  finally { setActionLoading(false); }
+                })}
+              >
+                {actionLoading ? 'WORKING…' : 'GENERATE KNOCKOUT'}
+              </YButton>
+            ) : (
+              <View style={{ backgroundColor: '#FEF3C7', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#FDE68A' }}>
+                <YUiText size={13} weight={800} color="#92400E">Finish the group stage first</YUiText>
+                <YUiText size={12} color="#92400E" style={{ marginTop: 2 }}>{`${groupDone} of ${groupTies.length} group ties completed. The knockout seeds from the final standings.`}</YUiText>
+              </View>
+            )}
           </View>
         ) : null}
-        <Card tie={sf1} label="SEMIFINAL 1" />
-        <Card tie={sf2} label="SEMIFINAL 2" />
-        <Card tie={final} label="FINAL" />
+        <View style={{ marginHorizontal: 14 }}>
+          {koCard(sf1, 'SEMIFINAL 1', ['A1', 'B2'])}
+          {koCard(sf2, 'SEMIFINAL 2', ['B1', 'A2'])}
+          {koCard(final, 'FINAL', ['SF1', 'SF2'])}
+        </View>
       </ScrollView>
     );
   };
@@ -2746,18 +2774,21 @@ const LeagueDashboardScreen: React.FC = () => {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => {
-            if (activeTab !== 'OVERVIEW') {
-              setActiveTab('OVERVIEW');
-            } else {
-              navigation.goBack();
-            }
-          }}
-          style={styles.backBtn}
-        >
-          <Text style={styles.backBtnText}>{'<'}</Text>
-        </TouchableOpacity>
+        {/* Logout — only on the league-kiosk build, where there's no Me tab to
+            sign out from. Available to any logged-in viewer, not just admins. */}
+        {IS_LEAGUE_KIOSK ? (
+          <TouchableOpacity
+            style={{ width: 40, height: 40, justifyContent: 'center', alignItems: 'center' }}
+            onPress={() => {
+              xConfirm('Log out?', 'You will need to sign in again to view this tournament.', () => logout());
+            }}
+            accessibilityLabel="Log out"
+          >
+            <Text style={{ color: YColors.ink2, fontSize: 20 }}>⏻</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 40 }} />
+        )}
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle} numberOfLines={1}>
             {store.currentLeague?.name || 'League'}
@@ -2797,22 +2828,16 @@ const LeagueDashboardScreen: React.FC = () => {
             return (
               <TouchableOpacity
                 key={tab}
-                style={[
-                  styles.tabChip,
-                  {
-                    flexGrow: 1,
-                    flexBasis: '31%', // 3 per row → 5 tabs = 3+2 layout
-                    alignItems: 'center',
-                    marginHorizontal: 0,
-                  },
-                  active && styles.tabChipActive,
-                ]}
-                onPress={() => {
-                  setActiveTab(tab);
+                onPress={() => setActiveTab(tab)}
+                activeOpacity={0.8}
+                style={{
+                  flexGrow: 1, flexBasis: '31%', alignItems: 'center',
+                  paddingVertical: 10, borderRadius: 22, borderWidth: 1,
+                  backgroundColor: active ? YColors.lime : YColors.bg2,
+                  borderColor: active ? YColors.lime : YColors.line2,
                 }}
-                activeOpacity={0.7}
               >
-                <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>{tab}</Text>
+                <YUiText size={12} weight={800} color={active ? YColors.ink : YColors.ink2} style={{ letterSpacing: 0.5 }}>{tab}</YUiText>
               </TouchableOpacity>
             );
           })}
@@ -4515,11 +4540,11 @@ const styles = StyleSheet.create({
   },
   phaseLabel: { fontSize: 14, fontWeight: '800', letterSpacing: 1 },
   phaseSubtext: { fontSize: 13, fontWeight: '500' },
-  brandHero: { backgroundColor: NAVY, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 18 },
-  brandHeroEyebrow: { color: BLUE, fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 6 },
-  brandHeroTitle: { color: WHITE, fontSize: 28, fontWeight: '900', letterSpacing: 0.5, lineHeight: 30 },
+  brandHero: { backgroundColor: YColors.accent, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20 },
+  brandHeroEyebrow: { color: YColors.lime, fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 6 },
+  brandHeroTitle: { color: WHITE, fontSize: 30, fontWeight: '900', letterSpacing: 0.5, lineHeight: 32 },
   brandHeroMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
-  brandHeroMeta: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  brandHeroMeta: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
   brandHeroBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   brandHeroBadgeText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
 
@@ -4661,11 +4686,13 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
   },
   groupHeader: {
-    backgroundColor: NAVY,
+    backgroundColor: YColors.bg2,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: YColors.line2,
   },
-  groupHeaderText: { color: WHITE, fontSize: 14, fontWeight: '800', letterSpacing: 0.5 },
+  groupHeaderText: { color: YColors.accent, fontSize: 13, fontWeight: '900', letterSpacing: 1.2 },
   tableHeaderRow: {
     flexDirection: 'row',
     backgroundColor: SURFACE,

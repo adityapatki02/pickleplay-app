@@ -14,11 +14,14 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const DIST = path.join(ROOT, 'dist');
+// Output dir is configurable so the league-kiosk build can emit to its own
+// folder (e.g. `node scripts/postbuild-pwa.js dist-mumbai`). Defaults to dist.
+const OUT_DIR = process.argv[2] || 'dist';
+const DIST = path.join(ROOT, OUT_DIR);
 const PWA_SRC = path.join(ROOT, 'assets', 'pwa');
 
 if (!fs.existsSync(DIST)) {
-  console.error('[postbuild-pwa] dist/ not found — run `expo export --platform web` first.');
+  console.error(`[postbuild-pwa] ${OUT_DIR}/ not found — run \`expo export --platform web\` first.`);
   process.exit(1);
 }
 

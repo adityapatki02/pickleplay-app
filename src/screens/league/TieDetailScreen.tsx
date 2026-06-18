@@ -37,6 +37,8 @@ import {
 import { matchesApi } from '../../api/matches.api';
 import { useLeagueStore } from '../../store/leagueStore';
 import { useAuthStore } from '../../store/authStore';
+import { IS_LEAGUE_KIOSK } from '../../config/appMode';
+import { useLeagueAdminAccess } from '../../hooks/useLeagueAdminAccess';
 import { xAlert, xConfirm } from '../../utils/alert';
 import { downloadTieSheet, SPPL_TIE_SHEET_LABELS } from '../../utils/downloadTieSheet';
 import type {
@@ -50,7 +52,7 @@ import type {
 } from '../../types/league.types';
 import { SPPL_MATCH_SLOTS } from '../../types/league.types';
 
-import { YColors, YTopBar } from '../../components/yoiden';
+import { YColors, YTopBar, YDisplay, YUiText, YEyebrow, YBadge } from '../../components/yoiden';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
 const NAVY: string = YColors.ink;
@@ -109,7 +111,10 @@ const TieDetailScreen: React.FC = () => {
   const store = useLeagueStore();
   const authUser = useAuthStore((s) => s.user);
   const [league, setLeague] = useState(store.currentLeague);
-  const isAdmin = !!authUser?.id && league?.organizerId === authUser.id;
+  const isOwner = !!authUser?.id && league?.organizerId === authUser.id;
+  // Owner OR co-admin (league_admins) — resolved via the shared hook so
+  // backend-granted admins get score/management access, not just the organizer.
+  const isAdmin = useLeagueAdminAccess(league?.id, authUser?.id, isOwner);
   const [isScorer, setIsScorer] = useState(false);
   const [scorersList, setScorersList] = useState<Array<{ id: string; userId: string; name: string; phone: string }>>([]);
   const [tie, setTie] = useState<Tie | null>(null);
@@ -321,12 +326,18 @@ const TieDetailScreen: React.FC = () => {
     });
   };
 
-  const handleStartTie = () => {
-    // Open the court-confirmation modal. Pre-select any existing court assignment.
-    setStartCourtModal({
-      visible: true,
-      courtNumber: (tie as any)?.courtNumber ?? null,
-    });
+  const handleStartTie = async () => {
+    // OBS overlay isn't used for this league, so skip the court-confirmation
+    // step and start the tie directly.
+    setActionLoading(true);
+    try {
+      await startTie(tieId);
+      await fetchData();
+    } catch (err: any) {
+      xAlert('Error', err?.response?.data?.message || err?.message || 'Failed to start tie');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   /** Called when the user confirms a court from the start-tie modal. */
@@ -723,22 +734,14 @@ const TieDetailScreen: React.FC = () => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backBtnText}>{'<'}</Text>
         </TouchableOpacity>
-        <View style={[styles.statusChip, { backgroundColor: chipCfg.bg }]}>
-          <Text style={[styles.statusChipText, { color: chipCfg.color }]}>{chipCfg.label}</Text>
-        </View>
+        <YBadge color={chipCfg.color} bg={chipCfg.bg}>{chipCfg.label}</YBadge>
       </View>
 
       {/* Standing Points — hero */}
       <View style={{ alignItems: 'center', marginTop: 2, marginBottom: 12 }}>
-        <Text style={{ fontSize: 10, fontWeight: '800', color: YColors.ink2, letterSpacing: 1.5 }}>
-          STANDING POINTS
-        </Text>
-        <Text style={{ fontSize: 40, fontWeight: '900', color: YColors.ink, letterSpacing: 2, marginTop: 4 }}>
-          {liveScores.homeSP}  –  {liveScores.awaySP}
-        </Text>
-        <Text style={{ fontSize: 11, color: YColors.ink3, marginTop: 4, fontWeight: '600' }}>
-          {liveScores.completed} of {liveScores.total} matches played
-        </Text>
+        <YEyebrow size={10} color={YColors.ink2}>STANDING POINTS</YEyebrow>
+        <YDisplay size={48} color={YColors.ink} style={{ marginTop: 4, lineHeight: 50 }}>{`${liveScores.homeSP} – ${liveScores.awaySP}`}</YDisplay>
+        <YUiText size={11} weight={600} color={YColors.ink3} style={{ marginTop: 4 }}>{`${liveScores.completed} of ${liveScores.total} matches played`}</YUiText>
       </View>
 
       {/* Teams + breakdown */}
@@ -1160,37 +1163,6 @@ const TieDetailScreen: React.FC = () => {
         </TouchableOpacity>
       )}
 
-      {/* Demo: open the mock scorer interface — available to anyone viewing
-          the tie. Keeps the SPPL scoring story visible during pitches without
-          requiring real scorer credentials. */}
-      <TouchableOpacity
-        style={{
-          marginTop: 10,
-          backgroundColor: YColors.lime,
-          paddingVertical: 14,
-          paddingHorizontal: 14,
-          borderRadius: 10,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 8,
-        }}
-        onPress={() =>
-          navigation.navigate('ScorerDemo', {
-            homeName,
-            awayName,
-            slotLabel: 'GAME 1 · MEN 1',
-            matchNo: tie?.round ? `${tie.round.toUpperCase()}` : 'MATCH',
-            court: tie?.courtNumber ? `COURT ${tie.courtNumber}` : 'COURT 1',
-          })
-        }
-        activeOpacity={0.85}
-      >
-        <Text style={{ color: YColors.ink, fontWeight: '900', fontSize: 13, letterSpacing: 1.5 }}>
-          ▶  OPEN SCORER (DEMO)
-        </Text>
-      </TouchableOpacity>
-
       {/* Admin: Submit lineup on behalf of captain */}
       {(tie.status === 'scheduled' || tie.status === 'lineup_submitted') && (
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
@@ -1403,11 +1375,9 @@ const TieDetailScreen: React.FC = () => {
           </View>
           <View style={styles.matchScoreCenter}>
             {scores ? (
-              <Text style={[styles.matchScoreText, isCompleted && { color: NAVY }]}>
-                {scores.teamAScore} - {scores.teamBScore}
-              </Text>
+              <YDisplay size={26} color={isCompleted ? YColors.accent : YColors.ink} style={{ lineHeight: 28 }}>{`${scores.teamAScore}–${scores.teamBScore}`}</YDisplay>
             ) : (
-              <Text style={styles.matchScorePending}>--</Text>
+              <YDisplay size={22} color={YColors.ink4} style={{ lineHeight: 24 }}>–</YDisplay>
             )}
           </View>
           <View style={styles.matchPlayerSide}>
@@ -1963,7 +1933,10 @@ const TieDetailScreen: React.FC = () => {
             state — lineup_submitted, lineup_locked, in_progress, completed —
             so organizers can wipe a tie mid-flight for pre-tournament
             rehearsals. Rescores standings, player stats, and fantasy after wipe. */}
-        {isAdmin && (tie.round || '').startsWith('league_week_') && tie.status !== 'scheduled' && (
+        {/* Reset-the-game button is hidden on the league-kiosk build (live
+            event) to avoid accidental wipes; it stays available in the full
+            app for the owner. */}
+        {!IS_LEAGUE_KIOSK && isAdmin && (tie.round || '').startsWith('league_week_') && tie.status !== 'scheduled' && (
           <View style={{ paddingHorizontal: 14, marginTop: 20 }}>
             <TouchableOpacity
               style={{

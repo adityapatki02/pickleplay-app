@@ -4,6 +4,7 @@ import Svg, { Path, Circle } from 'react-native-svg';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YColors } from '../../config/yoiden';
+import { IS_LEAGUE_KIOSK } from '../../config/appMode';
 import { YMono } from './YText';
 
 type TabId = 'home' | 'play' | 'book' | 'fantasy' | 'me';
@@ -69,13 +70,17 @@ const TabIcon: React.FC<{ id: TabId; color: string; active: boolean; size?: numb
   );
 };
 
-const TAB_META: { id: TabId; label: string }[] = [
+// Full app surfaces all five tabs. The league-kiosk build shows only HOME —
+// the other stacks stay registered so any existing navigate() calls still
+// resolve, they're just not shown as tabs on that single-tournament site.
+const ALL_TABS: { id: TabId; label: string }[] = [
   { id: 'home',    label: 'HOME' },
   { id: 'play',    label: 'PLAY' },
   { id: 'book',    label: 'BOOK' },
   { id: 'fantasy', label: 'FANTASY' },
   { id: 'me',      label: 'ME' },
 ];
+const TAB_META = IS_LEAGUE_KIOSK ? ALL_TABS.filter((t) => t.id === 'home') : ALL_TABS;
 
 const routeToTab = (route: string): TabId => {
   const lower = route.toLowerCase();
@@ -96,9 +101,11 @@ export const YTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
     if (target) navigation.navigate(target.name);
   };
 
+  // Single-tournament kiosk shows one tab, so the bar is slimmed down.
+  const compact = IS_LEAGUE_KIOSK;
   return (
-    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-      <View style={styles.row}>
+    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, compact ? 4 : 12) }]}>
+      <View style={[styles.row, compact && { height: 46 }]}>
         {TAB_META.map((t) => {
           const isActive = t.id === active;
           return (
@@ -115,10 +122,11 @@ export const YTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
                   { backgroundColor: isActive ? YColors.accent : 'transparent' },
                 ]}
               />
-              <View style={styles.tabInner}>
+              <View style={[styles.tabInner, compact && { paddingTop: 1 }]}>
                 <View
                   style={[
                     styles.iconWrap,
+                    compact && { width: 34, height: 22 },
                     isActive && {
                       backgroundColor: 'rgba(24,88,214,0.10)',
                     },
@@ -128,14 +136,14 @@ export const YTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
                     id={t.id}
                     color={isActive ? YColors.accent : YColors.ink2}
                     active={isActive}
-                    size={22}
+                    size={compact ? 18 : 22}
                   />
                 </View>
                 <YMono
-                  size={9}
+                  size={compact ? 8 : 9}
                   bold={isActive}
                   color={isActive ? YColors.accent : YColors.ink2}
-                  style={{ letterSpacing: 1.2, marginTop: 4 }}
+                  style={{ letterSpacing: 1.2, marginTop: compact ? 1 : 4 }}
                 >
                   {t.label}
                 </YMono>
