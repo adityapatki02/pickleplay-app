@@ -39,6 +39,7 @@ yarn-error.*
 /ios
 /android
 dist/
+dist-*/
 
 # Superpowers brainstorm artifacts
 .superpowers/

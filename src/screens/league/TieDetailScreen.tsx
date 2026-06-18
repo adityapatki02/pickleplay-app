@@ -37,6 +37,8 @@ import {
 import { matchesApi } from '../../api/matches.api';
 import { useLeagueStore } from '../../store/leagueStore';
 import { useAuthStore } from '../../store/authStore';
+import { IS_LEAGUE_KIOSK } from '../../config/appMode';
+import { useLeagueAdminAccess } from '../../hooks/useLeagueAdminAccess';
 import { xAlert, xConfirm } from '../../utils/alert';
 import { downloadTieSheet, SPPL_TIE_SHEET_LABELS } from '../../utils/downloadTieSheet';
 import type {
@@ -109,7 +111,10 @@ const TieDetailScreen: React.FC = () => {
   const store = useLeagueStore();
   const authUser = useAuthStore((s) => s.user);
   const [league, setLeague] = useState(store.currentLeague);
-  const isAdmin = !!authUser?.id && league?.organizerId === authUser.id;
+  const isOwner = !!authUser?.id && league?.organizerId === authUser.id;
+  // Owner OR co-admin (league_admins) — resolved via the shared hook so
+  // backend-granted admins get score/management access, not just the organizer.
+  const isAdmin = useLeagueAdminAccess(league?.id, authUser?.id, isOwner);
   const [isScorer, setIsScorer] = useState(false);
   const [scorersList, setScorersList] = useState<Array<{ id: string; userId: string; name: string; phone: string }>>([]);
   const [tie, setTie] = useState<Tie | null>(null);
@@ -1928,7 +1933,10 @@ const TieDetailScreen: React.FC = () => {
             state — lineup_submitted, lineup_locked, in_progress, completed —
             so organizers can wipe a tie mid-flight for pre-tournament
             rehearsals. Rescores standings, player stats, and fantasy after wipe. */}
-        {isAdmin && (tie.round || '').startsWith('league_week_') && tie.status !== 'scheduled' && (
+        {/* Reset-the-game button is hidden on the league-kiosk build (live
+            event) to avoid accidental wipes; it stays available in the full
+            app for the owner. */}
+        {!IS_LEAGUE_KIOSK && isAdmin && (tie.round || '').startsWith('league_week_') && tie.status !== 'scheduled' && (
           <View style={{ paddingHorizontal: 14, marginTop: 20 }}>
             <TouchableOpacity
               style={{

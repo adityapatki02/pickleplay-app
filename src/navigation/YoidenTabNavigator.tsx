@@ -58,6 +58,8 @@ import ScorerDemoScreen from '../screens/league/ScorerDemoScreen';
 // Location picker — reused from onboarding, now opened as a modal from the Home header
 import { CityPickerScreen } from '../screens/auth/CityPickerScreen';
 
+import { IS_LEAGUE_KIOSK, LEAGUE_KIOSK_ID } from '../config/appMode';
+
 // ─── Shared screen registration helper ──────────────────────────
 function registerDetailAndManageScreens<T extends DetailAndManageRoutes>(
   Stack: ReturnType<typeof createNativeStackNavigator<T>>,
@@ -79,8 +81,15 @@ function registerDetailAndManageScreens<T extends DetailAndManageRoutes>(
       <S name="ScoreLogger" component={ScoreLoggerScreen} />
       <S name="TournamentStandings" component={StandingsScreen} />
       <S name="TournamentRankings" component={RankingsScreen} />
-      {/* SPPL league */}
-      <S name="LeagueDashboard" component={LeagueDashboardScreen} />
+      {/* SPPL league. In the league-kiosk build the dashboard is the Home
+          stack's root, so it needs the leagueId baked in as initialParams —
+          this is what a tab-press popToTop falls back to. In the full app the
+          screen is always navigated to with explicit params, which override. */}
+      <S
+        name="LeagueDashboard"
+        component={LeagueDashboardScreen}
+        initialParams={IS_LEAGUE_KIOSK ? { leagueId: LEAGUE_KIOSK_ID } : undefined}
+      />
       <S name="Standings" component={LeagueStandingsScreen} />
       <S name="LeagueStats" component={LeagueStatsScreen} />
       <S name="TieDetail" component={LeagueTieDetailScreen} />
@@ -94,7 +103,10 @@ function registerDetailAndManageScreens<T extends DetailAndManageRoutes>(
 // ─── Per-tab stacks ──────────────────────────────────────────────
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
 const HomeStackNavigator = () => (
-  <HomeStack.Navigator screenOptions={{ headerShown: false }}>
+  <HomeStack.Navigator
+    screenOptions={{ headerShown: false }}
+    initialRouteName={IS_LEAGUE_KIOSK ? 'LeagueDashboard' : 'Home'}
+  >
     <HomeStack.Screen name="Home" component={HomeScreen} />
     {registerDetailAndManageScreens(HomeStack)}
   </HomeStack.Navigator>

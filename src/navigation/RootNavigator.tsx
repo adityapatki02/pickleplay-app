@@ -8,8 +8,23 @@ import { YoidenTabNavigator } from './YoidenTabNavigator';
 import { useAuthStore } from '../store/authStore';
 import PlayerRecapScreen from '../screens/yoiden/PlayerRecapScreen';
 import { ProfileSetupScreen } from '../screens/auth/ProfileSetupScreen';
+import { IS_LEAGUE_KIOSK, LEAGUE_KIOSK_ID } from '../config/appMode';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+
+// League-kiosk build (mumbaiopen.yoiden.com etc.): on a bare visit to "/",
+// rewrite the URL to the league's dashboard route before NavigationContainer
+// reads the initial URL. replaceState avoids a reload and keeps the address
+// bar clean while linking resolves the event screen.
+function applyKioskRoute(): void {
+  if (!IS_LEAGUE_KIOSK) return;
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  const path = window.location.pathname || '/';
+  if (path === '/' || path === '') {
+    window.history.replaceState(null, '', `/event/${LEAGUE_KIOSK_ID}${window.location.search || ''}`);
+  }
+}
+applyKioskRoute();
 
 // Public routes that bypass auth — anyone with the URL can view.
 // Used for daily-recap WhatsApp links so recipients don't have to log in.

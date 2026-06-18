@@ -57,6 +57,8 @@ import {
 import { setFantasyFrozen, recalculateFantasy } from '../../api/fantasy.api';
 import { useLeagueStore } from '../../store/leagueStore';
 import { useAuthStore } from '../../store/authStore';
+import { IS_LEAGUE_KIOSK } from '../../config/appMode';
+import { useLeagueAdminAccess } from '../../hooks/useLeagueAdminAccess';
 import { xAlert, xConfirm, xPrompt } from '../../utils/alert';
 import { API_BASE_URL } from '../../config/constants';
 import DownloadButton from '../../components/DownloadButton';
@@ -126,8 +128,12 @@ const LeagueDashboardScreen: React.FC = () => {
 
   const store = useLeagueStore();
   const authUser = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const [league, setLeague] = useState(store.currentLeague);
-  const isAdmin = !!authUser?.id && league?.organizerId === authUser.id;
+  const isOwner = !!authUser?.id && league?.organizerId === authUser.id;
+  // Owner OR co-admin (league_admins). Co-admin is resolved via the hook so
+  // backend-granted admins get the management UI, not just the organizer.
+  const isAdmin = useLeagueAdminAccess(league?.id, authUser?.id, isOwner);
 
   // Fetch league by ID so isAdmin check works on direct navigation
   useEffect(() => {
@@ -322,6 +328,45 @@ const LeagueDashboardScreen: React.FC = () => {
       return () => sub.remove();
     }, []),
   );
+
+  // Web (league-kiosk) back-button guard. On a phone browser the hardware back
+  // key drives browser history, and the BackHandler above never fires — so
+  // without this, pressing back on the kiosk leaves the site instantly, even
+  // from a sub-tab. We keep ONE sentinel entry above the root so every back
+  // press is caught: a sub-tab steps back to Overview; Overview asks before it
+  // actually leaves. We push with the navigator's own history.state so React
+  // Navigation stays in sync. Kiosk + web only — the full app and native are
+  // untouched.
+  React.useEffect(() => {
+    if (!IS_LEAGUE_KIOSK || Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const arm = () => window.history.pushState(window.history.state, '');
+    // Seed one sentinel entry on load so the very first back press lands on an
+    // in-site entry (firing popstate) instead of leaving the site.
+    arm();
+    const onPop = () => {
+      // Always re-trap first — a back press must never leave the site on its own.
+      arm();
+      // A child screen (tie detail, etc.) is open → let it pop normally.
+      if (navigation.canGoBack && navigation.canGoBack()) {
+        navigation.goBack();
+        return;
+      }
+      // On the dashboard: a sub-tab steps back to Overview …
+      if (activeTabRef.current !== 'OVERVIEW') {
+        setActiveTab('OVERVIEW');
+        return;
+      }
+      // … and Overview asks before actually leaving.
+      xConfirm('Close app?', 'Do you want to exit the tournament?', () => {
+        window.removeEventListener('popstate', onPop, true);
+        window.history.go(-2); // pop sentinel + root → leave the site
+      });
+    };
+    // Capture phase so this runs before React Navigation's own popstate handler.
+    window.addEventListener('popstate', onPop, true);
+    return () => window.removeEventListener('popstate', onPop, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -2729,7 +2774,21 @@ const LeagueDashboardScreen: React.FC = () => {
 
       {/* Header */}
       <View style={styles.header}>
-        <View style={{ width: 40 }} />
+        {/* Logout — only on the league-kiosk build, where there's no Me tab to
+            sign out from. Available to any logged-in viewer, not just admins. */}
+        {IS_LEAGUE_KIOSK ? (
+          <TouchableOpacity
+            style={{ width: 40, height: 40, justifyContent: 'center', alignItems: 'center' }}
+            onPress={() => {
+              xConfirm('Log out?', 'You will need to sign in again to view this tournament.', () => logout());
+            }}
+            accessibilityLabel="Log out"
+          >
+            <Text style={{ color: YColors.ink2, fontSize: 20 }}>⏻</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 40 }} />
+        )}
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle} numberOfLines={1}>
             {store.currentLeague?.name || 'League'}
