@@ -21,14 +21,12 @@ import { authApi } from '../../api/auth.api';
 import { openMsg91Widget } from '../../config/msg91';
 import { YColors, YFonts } from '../../config/yoiden';
 
+
 type Props = NativeStackScreenProps<AuthStackParamList, 'PhoneInput'>;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const OTP_LENGTH = 6;
 const IS_WEB = Platform.OS === 'web';
-const WIDGET_ID = '36647a666e76303436353733';
-const TOKEN_AUTH = '490820TQQzDyoB1w5f69edad97P1';
-
 type Mode = 'login' | 'register';
 // register flow: form → (web: widget inline) | (native: otp step) → done
 type RegisterStep = 'form' | 'otp';
@@ -58,18 +56,6 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
     Animated.timing(fadeIn, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   }, [fadeIn]);
 
-  // Initialize MSG91 SDK on native
-  useEffect(() => {
-    if (!IS_WEB) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { OTPWidget } = require('@msg91comm/sendotp-react-native');
-        OTPWidget.initializeWidget(WIDGET_ID, TOKEN_AUTH);
-      } catch (e) {
-        console.warn('MSG91 SDK init failed:', e);
-      }
-    }
-  }, []);
 
   // Resend countdown
   useEffect(() => {
@@ -103,7 +89,7 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
 
   // ─── Register: create account (called after OTP verified) ────────────────
 
-  const createAccount = async (accessToken: string) => {
+  const createAccount = async (token: { accessToken: string } | { verificationToken: string }) => {
     setError('');
     setLoading(true);
     try {
@@ -112,13 +98,12 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
         pin,
         name: name.trim(),
         role: 'player',
-        accessToken,
+        ...token,
       });
       login(res.data.data.user, res.data.data.accessToken);
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? 'Could not create account. Please try again.';
       setError(Array.isArray(msg) ? msg[0] : msg);
-      // If phone mismatch / verification error, go back to form
       if (err?.response?.status === 400 || err?.response?.status === 401) {
         setRegStep('form');
       }
@@ -135,30 +120,28 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
     setLoading(true);
     try {
       const token = await openMsg91Widget(fullPhone);
-      // Widget verified — create account immediately
-      await createAccount(token);
+      await createAccount({ accessToken: token });
     } catch (err: any) {
       setError(err?.message ?? 'Verification cancelled. Please try again.');
       setLoading(false);
     }
   };
 
-  // ─── Register: native step 1 — send OTP via SDK ───────────────────────────
+  // ─── Register: native — send OTP via backend ──────────────────────────────
 
   const handleSendOtp = async () => {
     if (!formOk || loading) return;
     setError('');
     setLoading(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { OTPWidget } = require('@msg91comm/sendotp-react-native');
-      await OTPWidget.sendOTP({ identifier: fullPhone });
+      await authApi.sendPhoneOtp({ phone: fullPhone });
       setOtpDigits(Array(OTP_LENGTH).fill(''));
       setRegStep('otp');
       setResendTimer(30);
       setTimeout(() => otpRefs.current[0]?.focus(), 300);
     } catch (err: any) {
-      setError(err?.message ?? 'Could not send OTP. Please try again.');
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Could not send OTP. Please try again.';
+      setError(Array.isArray(msg) ? msg[0] : msg);
     } finally {
       setLoading(false);
     }
@@ -169,20 +152,18 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
     setError('');
     setLoading(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { OTPWidget } = require('@msg91comm/sendotp-react-native');
-      await OTPWidget.sendOTP({ identifier: fullPhone });
+      await authApi.sendPhoneOtp({ phone: fullPhone });
       setOtpDigits(Array(OTP_LENGTH).fill(''));
       setResendTimer(30);
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
     } catch (err: any) {
-      setError(err?.message ?? 'Could not resend OTP.');
+      setError(err?.response?.data?.message ?? err?.message ?? 'Could not resend OTP.');
     } finally {
       setLoading(false);
     }
   };
 
-  // ─── Register: native step 2 — verify OTP, then create account ───────────
+  // ─── Register: native — verify OTP, then create account ──────────────────
 
   const otp = otpDigits.join('');
   const otpComplete = otp.length === OTP_LENGTH;
@@ -207,15 +188,11 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
     setError('');
     setLoading(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { OTPWidget } = require('@msg91comm/sendotp-react-native');
-      const res = await OTPWidget.verifyOTP({ otp });
-      const token: string | undefined =
-        res?.message ?? res?.data?.message ?? res?.accessToken;
-      if (!token) throw new Error('Verification failed. Please try again.');
-      await createAccount(token);
+      const res = await authApi.verifyPhoneOtp({ phone: fullPhone, otp });
+      await createAccount({ verificationToken: res.data.data.verificationToken });
     } catch (err: any) {
-      setError(err?.message ?? 'Invalid OTP. Please try again.');
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Invalid OTP. Please try again.';
+      setError(Array.isArray(msg) ? msg[0] : msg);
       setOtpDigits(Array(OTP_LENGTH).fill(''));
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
       setLoading(false);

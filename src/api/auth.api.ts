@@ -34,8 +34,14 @@ export const authApi = {
   phoneLogin: (data: { phone: string; pin: string }) =>
     apiClient.post<ApiResponse<{ user: User; accessToken: string }>>('/auth/phone/login', data),
 
-  phoneRegister: (data: { phone: string; pin: string; name: string; role?: string; accessToken?: string }) =>
+  phoneRegister: (data: { phone: string; pin: string; name: string; role?: string; accessToken?: string; verificationToken?: string }) =>
     apiClient.post<ApiResponse<{ user: User; accessToken: string }>>('/auth/phone/register', data),
+
+  sendPhoneOtp: (data: { phone: string }) =>
+    apiClient.post<ApiResponse<void>>('/auth/phone/send-otp', data),
+
+  verifyPhoneOtp: (data: { phone: string; otp: string }) =>
+    apiClient.post<ApiResponse<{ verificationToken: string }>>('/auth/phone/verify-otp', data),
 
   verifyOtp: (data: VerifyOtpRequest) =>
     apiClient.post<ApiResponse<VerifyOtpResponse>>('/auth/verify-otp', data),
