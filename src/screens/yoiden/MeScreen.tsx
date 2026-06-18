@@ -152,77 +152,20 @@ export default function MeScreen() {
           </View>
         </View>
 
-        {/* MY GAME — player profile tile (demo data) */}
-        <YSectionHead eyebrow="STATS · PICKLEBALL" title="MY GAME" />
-        <View style={styles.gameCard}>
-          {/* Top row: Rating + Rank */}
-          <View style={styles.gameTopRow}>
-            <View>
-              <YEyebrow color={YColors.ink3}>RATING</YEyebrow>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 6 }}>
-                <YDisplay size={44} color={YColors.ink}>1842</YDisplay>
-                <YUiText size={12} weight={800} color="#0E8F66" style={{ marginLeft: 10, letterSpacing: 0.5 }}>
-                  +24
-                </YUiText>
-              </View>
-              <YUiText size={11} color={YColors.ink2} weight={600} style={{ marginTop: 2 }}>
-                Up 24 from last month
-              </YUiText>
-            </View>
-            <View style={styles.rankPill}>
-              <YEyebrow color="rgba(255,255,255,0.65)" size={9}>RANK</YEyebrow>
-              <YDisplay size={28} color="#fff" italic={false} style={{ marginTop: 2 }}>B+</YDisplay>
-            </View>
+        {/* DUPR Rating — coming soon */}
+        <YSectionHead eyebrow="RATING" title="MY GAME" />
+        <View style={styles.duprCard}>
+          <View style={styles.duprLogo}>
+            <YDisplay size={18} color={YColors.accent} style={{ letterSpacing: 1 }}>DUPR</YDisplay>
           </View>
-
-          {/* W/L/Win% row */}
-          <View style={styles.gameStatsRow}>
-            <View style={styles.gameStatBox}>
-              <YMono size={20} bold color={YColors.ink}>38</YMono>
-              <YEyebrow color={YColors.ink3} size={9} style={{ marginTop: 4 }}>WINS</YEyebrow>
-            </View>
-            <View style={styles.gameStatDivider} />
-            <View style={styles.gameStatBox}>
-              <YMono size={20} bold color={YColors.ink}>14</YMono>
-              <YEyebrow color={YColors.ink3} size={9} style={{ marginTop: 4 }}>LOSSES</YEyebrow>
-            </View>
-            <View style={styles.gameStatDivider} />
-            <View style={styles.gameStatBox}>
-              <YMono size={20} bold color={YColors.accent}>73%</YMono>
-              <YEyebrow color={YColors.ink3} size={9} style={{ marginTop: 4 }}>WIN RATE</YEyebrow>
-            </View>
-            <View style={styles.gameStatDivider} />
-            <View style={styles.gameStatBox}>
-              <YMono size={20} bold color="#0E8F66">4</YMono>
-              <YEyebrow color={YColors.ink3} size={9} style={{ marginTop: 4 }}>STREAK</YEyebrow>
-            </View>
-          </View>
-
-          {/* Form pills (last 5 matches) */}
-          <View style={styles.formRow}>
-            <YEyebrow color={YColors.ink3}>FORM · LAST 5</YEyebrow>
-            <View style={styles.formPills}>
-              {['W', 'W', 'L', 'W', 'W'].map((r, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.formPill,
-                    r === 'W' ? styles.formPillWin : styles.formPillLoss,
-                  ]}
-                >
-                  <YUiText size={11} weight={900} color={r === 'W' ? '#0E8F66' : YColors.live}>
-                    {r}
-                  </YUiText>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* Badges */}
-          <View style={styles.badgeRow}>
-            <YBadge color="#000" bg={YColors.lime}>100 MATCHES</YBadge>
-            <YBadge color="#fff" bg={YColors.accent}>COMEBACK KID</YBadge>
-            <YBadge color="#fff" bg={YColors.ink}>POOL CRUSHER</YBadge>
+          <YDisplay size={13} color={YColors.ink} style={{ marginTop: 14, letterSpacing: 0.5 }}>
+            DUPR RATING
+          </YDisplay>
+          <YUiText size={12} color={YColors.ink3} style={{ marginTop: 6, textAlign: 'center', lineHeight: 18 }}>
+            Your official DUPR rating will appear here once integration is live.
+          </YUiText>
+          <View style={styles.duprPill}>
+            <YEyebrow color={YColors.accent} size={10}>COMING SOON</YEyebrow>
           </View>
         </View>
 
@@ -442,78 +385,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // ── MY GAME card ────────────────────────────────────────────────
-  gameCard: {
+  // ── DUPR coming soon card ────────────────────────────────────────
+  duprCard: {
     marginHorizontal: 16,
     backgroundColor: YColors.bg2,
     borderWidth: 1,
     borderColor: YColors.line2,
     borderRadius: 14,
-    padding: 18,
-    overflow: 'hidden',
+    padding: 24,
+    alignItems: 'center',
   },
-  gameTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 18,
-  },
-  rankPill: {
-    backgroundColor: YColors.ink,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+  duprLogo: {
+    borderWidth: 1.5,
+    borderColor: YColors.accent,
     borderRadius: 10,
-    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
   },
-  gameStatsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderTopWidth: 1,
-    borderTopColor: YColors.line,
-    borderBottomWidth: 1,
-    borderBottomColor: YColors.line,
-  },
-  gameStatBox: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  gameStatDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: YColors.line,
-  },
-  formRow: {
-    marginTop: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  formPills: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  formPill: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  formPillWin: {
-    backgroundColor: 'rgba(6,214,160,0.15)',
-    borderColor: 'rgba(6,214,160,0.4)',
-  },
-  formPillLoss: {
-    backgroundColor: 'rgba(255,61,92,0.10)',
-    borderColor: 'rgba(255,61,92,0.35)',
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
+  duprPill: {
     marginTop: 16,
+    backgroundColor: 'rgba(24,88,214,0.08)',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
   },
 
   // ── Next match card ─────────────────────────────────────────────

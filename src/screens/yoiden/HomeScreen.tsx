@@ -35,8 +35,9 @@ import { useAuthStore } from '../../store/authStore';
 import { tournamentsApi } from '../../api/tournaments.api';
 import { registrationsApi } from '../../api/registrations.api';
 import { venuesApi } from '../../api/venues.api';
+import { bookingsApi } from '../../api/bookings.api';
 import type { Tournament } from '../../types/tournament.types';
-import type { Venue as ApiVenue } from '../../types/booking.types';
+import type { Venue as ApiVenue, Booking } from '../../types/booking.types';
 import { SPPL, type YoidenTabParamList } from '../../navigation/nav-types';
 
 type Nav = BottomTabNavigationProp<YoidenTabParamList, 'HomeTab'>;
@@ -85,6 +86,7 @@ export default function HomeScreen() {
   const [myHosted, setMyHosted] = useState<Tournament[]>([]);
   const [nearby, setNearby] = useState<Tournament[]>([]);
   const [apiVenues, setApiVenues] = useState<ApiVenue[]>([]);
+  const [nextBooking, setNextBooking] = useState<Booking | null>(null);
   const [activeSport, setActiveSport] = useState<string | null>(null);
   // Fetched once on mount — null means not yet resolved, undefined means denied/unavailable
   const userCoords = useRef<{ lat: number; lng: number } | null>(null);
@@ -106,10 +108,11 @@ export default function HomeScreen() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [regsRes, hostedRes, discoverRes] = await Promise.allSettled([
+      const [regsRes, hostedRes, discoverRes, bookingsRes] = await Promise.allSettled([
         registrationsApi.getMyRegistrations(),
         tournamentsApi.getMyTournaments(),
         tournamentsApi.discover({ limit: 5 }),
+        bookingsApi.myBookings(),
       ]);
 
       if (regsRes.status === 'fulfilled') {
@@ -123,6 +126,19 @@ export default function HomeScreen() {
       if (discoverRes.status === 'fulfilled') {
         const data = unwrap<Tournament[]>(discoverRes.value);
         setNearby(Array.isArray(data) ? data : []);
+      }
+      if (bookingsRes.status === 'fulfilled') {
+        const data = unwrap<Booking[]>(bookingsRes.value);
+        const all = Array.isArray(data) ? data : [];
+        const now = new Date().toISOString().slice(0, 10);
+        const upcoming = all
+          .filter(b => b.status === 'confirmed' && b.bookingDate >= now)
+          .sort((a, b) =>
+            a.bookingDate !== b.bookingDate
+              ? a.bookingDate.localeCompare(b.bookingDate)
+              : a.startTime.localeCompare(b.startTime),
+          );
+        setNextBooking(upcoming[0] ?? null);
       }
       await loadVenues(null);
     } finally {
@@ -330,6 +346,45 @@ export default function HomeScreen() {
               </YUiText>
             </View>
           )}
+
+          {/* Upcoming booking card — nearest confirmed booking */}
+          {nextBooking && (() => {
+            const b = nextBooking;
+            const dateLabel = new Date(`${b.bookingDate}T00:00:00`).toLocaleDateString('en-IN', {
+              weekday: 'short', day: 'numeric', month: 'short',
+            });
+            const to12 = (t: string) => {
+              const [h, m] = t.split(':').map(Number);
+              return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+            };
+            const venueName = b.venue?.name ?? 'Your booking';
+            const courtName = b.court?.name ?? b.courtLabel ?? '';
+            return (
+              <Pressable
+                style={styles.upcomingCard}
+                onPress={() => nav.navigate('BookTab', { screen: 'MyBookings' })}
+              >
+                <View style={styles.upcomingCardInner}>
+                  <View style={{ flex: 1 }}>
+                    <YEyebrow color={YColors.accent} style={{ marginBottom: 4 }}>
+                      UPCOMING BOOKING
+                    </YEyebrow>
+                    <YDisplay size={15} color={YColors.ink} numberOfLines={1}>
+                      {venueName}
+                    </YDisplay>
+                    <YUiText size={12} color={YColors.ink2} style={{ marginTop: 3 }}>
+                      {dateLabel} · {to12(b.startTime)}–{to12(b.endTime)}{courtName ? ` · ${courtName}` : ''}
+                    </YUiText>
+                  </View>
+                  <View style={styles.upcomingArrow}>
+                    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                      <Path d="M9 18l6-6-6-6" stroke={YColors.ink3} strokeWidth={2} strokeLinecap="round" />
+                    </Svg>
+                  </View>
+                </View>
+              </Pressable>
+            );
+          })()}
 
           {/* Search bar — marks the bottom of the blue zone */}
           <View style={styles.searchWrap}>
@@ -605,6 +660,28 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
     position: 'relative',
+  },
+  upcomingCard: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  upcomingCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  upcomingArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 999,
+    backgroundColor: YColors.bg2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
   },
   searchWrap: {
     paddingHorizontal: 16,
