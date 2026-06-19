@@ -45,7 +45,6 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
   // OTP (native register only)
   const [otpDigits, setOtpDigits]   = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [resendTimer, setResendTimer] = useState(0);
-  const [otpReqId, setOtpReqId]     = useState<string>('');
   const otpRefs = useRef<(TextInput | null)[]>([]);
 
   const [loading, setLoading] = useState(false);
@@ -57,17 +56,6 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
     Animated.timing(fadeIn, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   }, [fadeIn]);
 
-  useEffect(() => {
-    if (!IS_WEB) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { OTPWidget } = require('@msg91comm/sendotp-react-native');
-        OTPWidget.initializeWidget('36647a666e76303436353733', '490820TQQzDyoB1w5f69edad97P1');
-      } catch (e) {
-        console.warn('MSG91 SDK init failed:', e);
-      }
-    }
-  }, []);
 
   // Resend countdown
   useEffect(() => {
@@ -139,26 +127,21 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  // ─── Register: native — send OTP via MSG91 SDK ───────────────────────────
-  // MSG91 identifier format: country code + number, no leading +  (e.g. 919876543210)
-
-  const sdkPhone = `91${phone}`;
+  // ─── Register: native — send OTP via backend ─────────────────────────────
 
   const handleSendOtp = async () => {
     if (!formOk || loading) return;
     setError('');
     setLoading(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { OTPWidget } = require('@msg91comm/sendotp-react-native');
-      const res = await OTPWidget.sendOTP({ identifier: sdkPhone });
-      setOtpReqId(res?.reqId ?? res?.data?.reqId ?? '');
+      await authApi.sendPhoneOtp({ phone: fullPhone });
       setOtpDigits(Array(OTP_LENGTH).fill(''));
       setRegStep('otp');
       setResendTimer(30);
       setTimeout(() => otpRefs.current[0]?.focus(), 300);
     } catch (err: any) {
-      setError(err?.message ?? 'Could not send OTP. Please try again.');
+      const msg = err?.response?.data?.message ?? 'Could not send OTP. Please try again.';
+      setError(Array.isArray(msg) ? msg[0] : msg);
     } finally {
       setLoading(false);
     }
@@ -169,17 +152,13 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
     setError('');
     setLoading(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { OTPWidget } = require('@msg91comm/sendotp-react-native');
-      const res = await OTPWidget.retryOTP({ reqId: otpReqId });
-      if (res?.reqId ?? res?.data?.reqId) {
-        setOtpReqId(res?.reqId ?? res?.data?.reqId);
-      }
+      await authApi.sendPhoneOtp({ phone: fullPhone });
       setOtpDigits(Array(OTP_LENGTH).fill(''));
       setResendTimer(30);
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
     } catch (err: any) {
-      setError(err?.message ?? 'Could not resend OTP.');
+      const msg = err?.response?.data?.message ?? 'Could not resend OTP.';
+      setError(Array.isArray(msg) ? msg[0] : msg);
     } finally {
       setLoading(false);
     }
@@ -210,15 +189,12 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
     setError('');
     setLoading(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { OTPWidget } = require('@msg91comm/sendotp-react-native');
-      const res = await OTPWidget.verifyOTP({ reqId: otpReqId, otp });
-      const token: string | undefined =
-        res?.message ?? res?.data?.message ?? res?.data?.accessToken ?? res?.accessToken;
-      if (!token) throw new Error('Verification failed. Please try again.');
-      await createAccount({ accessToken: token });
+      const res = await authApi.verifyPhoneOtp({ phone: fullPhone, otp });
+      const verificationToken = res.data.data.verificationToken;
+      await createAccount({ verificationToken });
     } catch (err: any) {
-      setError(err?.message ?? 'Invalid OTP. Please try again.');
+      const msg = err?.response?.data?.message ?? 'Invalid OTP. Please try again.';
+      setError(Array.isArray(msg) ? msg[0] : msg);
       setOtpDigits(Array(OTP_LENGTH).fill(''));
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
       setLoading(false);
