@@ -26,14 +26,13 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'ForgotPin'>;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const OTP_LENGTH = 6;
 const IS_WEB = Platform.OS === 'web';
-const WIDGET_ID = '36647a666e76303436353733';
-const TOKEN_AUTH = '490820TQQzDyoB1w5f69edad97P1';
 
 export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
   const { login } = useAuthStore();
 
   // Shared state
   const [accessToken, setAccessToken] = useState('');
+  const [resetToken, setResetToken]   = useState('');
   const [newPin, setNewPin]           = useState('');
   const [confirmPin, setConfirmPin]   = useState('');
   const [loading, setLoading]         = useState(false);
@@ -51,19 +50,6 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
   useEffect(() => {
     Animated.timing(fadeIn, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   }, [fadeIn]);
-
-  // Initialize MSG91 SDK on native
-  useEffect(() => {
-    if (!IS_WEB) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { OTPWidget } = require('@msg91comm/sendotp-react-native');
-        OTPWidget.initializeWidget(WIDGET_ID, TOKEN_AUTH);
-      } catch (e) {
-        console.warn('MSG91 SDK init failed:', e);
-      }
-    }
-  }, []);
 
   // Resend countdown (native only)
   useEffect(() => {
@@ -101,15 +87,13 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
     setError('');
     setLoading(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { OTPWidget } = require('@msg91comm/sendotp-react-native');
-      await OTPWidget.sendOTP({ identifier: normalizedPhone });
+      await authApi.sendForgotPinOtp({ phone: normalizedPhone });
       setOtpDigits(Array(OTP_LENGTH).fill(''));
       setStep(2);
       setResendTimer(30);
       setTimeout(() => otpRefs.current[0]?.focus(), 300);
     } catch (err: any) {
-      setError(err?.message ?? 'Could not send OTP. Please try again.');
+      setError(err?.response?.data?.message ?? 'Could not send OTP. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -120,14 +104,12 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
     setError('');
     setLoading(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { OTPWidget } = require('@msg91comm/sendotp-react-native');
-      await OTPWidget.sendOTP({ identifier: normalizedPhone });
+      await authApi.sendForgotPinOtp({ phone: normalizedPhone });
       setOtpDigits(Array(OTP_LENGTH).fill(''));
       setResendTimer(30);
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
     } catch (err: any) {
-      setError(err?.message ?? 'Could not resend OTP.');
+      setError(err?.response?.data?.message ?? 'Could not resend OTP.');
     } finally {
       setLoading(false);
     }
@@ -158,17 +140,13 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
     setError('');
     setLoading(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { OTPWidget } = require('@msg91comm/sendotp-react-native');
-      const res = await OTPWidget.verifyOTP({ otp });
-      // SDK returns token in res.message (same shape as web widget)
-      const token: string | undefined =
-        res?.message ?? res?.data?.message ?? res?.accessToken;
+      const res = await authApi.checkForgotPinOtp({ phone: normalizedPhone, otp });
+      const token = res.data.data?.resetToken;
       if (!token) throw new Error('Verification failed. Please try again.');
-      setAccessToken(token);
+      setResetToken(token);
       setStep(3);
     } catch (err: any) {
-      setError(err?.message ?? 'Invalid OTP. Please try again.');
+      setError(err?.response?.data?.message ?? 'Invalid OTP. Please try again.');
       setOtpDigits(Array(OTP_LENGTH).fill(''));
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
     } finally {
@@ -180,7 +158,8 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const pinOk    = newPin.length === 6 && /^[0-9]+$/.test(newPin);
   const confirmOk = confirmPin === newPin && confirmPin.length === 6;
-  const canReset  = !!accessToken && pinOk && confirmOk && !loading;
+  const hasToken  = IS_WEB ? !!accessToken : !!resetToken;
+  const canReset  = hasToken && pinOk && confirmOk && !loading;
 
   // On web: show PIN form once we have the access token
   // On native: PIN form is step 3
@@ -191,16 +170,20 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
     setError('');
     setLoading(true);
     try {
-      const res = await authApi.resetPin({ accessToken, newPin });
+      let res;
+      if (IS_WEB) {
+        res = await authApi.resetPin({ accessToken, newPin });
+      } else {
+        res = await authApi.resetPinWithToken({ resetToken, newPin });
+      }
       login(res.data.data.user, res.data.data.accessToken);
     } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ?? 'Could not reset PIN. Please try again.';
+      const msg = err?.response?.data?.message ?? 'Could not reset PIN. Please try again.';
       setError(Array.isArray(msg) ? msg[0] : msg);
       if (err?.response?.status === 401) {
-        // Token expired — restart
+        setResetToken('');
         setAccessToken('');
-        if (!IS_WEB) setStep(IS_WEB ? 1 : 2);
+        if (!IS_WEB) setStep(1);
       }
     } finally {
       setLoading(false);
