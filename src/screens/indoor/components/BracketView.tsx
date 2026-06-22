@@ -8,9 +8,10 @@ const label = (round: number, total: number) => {
   const left = total - 1 - round;
   return left === 0 ? 'FINAL' : left === 1 ? 'SEMIFINAL' : left === 2 ? 'QUARTERFINAL' : `ROUND ${round + 1}`;
 };
-export function BracketView({ matches, entrants, scorer, onPick }: {
+export function BracketView({ matches, entrants, scorer, onPick, onClear }: {
   matches: IndoorMatch[]; entrants: IndoorEntrant[]; scorer: boolean;
   onPick: (matchId: string, entrantId: string) => void;
+  onClear: (matchId: string) => void;
 }) {
   const by = new Map(entrants.map(e => [e.id, e]));
   const total = matches.reduce((mx, m) => Math.max(mx, m.round), 0) + 1;
@@ -21,7 +22,7 @@ export function BracketView({ matches, entrants, scorer, onPick }: {
       {rounds.map((rd, r) => (
         <View key={r} style={st.col}>
           <Text style={st.rh}>{label(r, total)}</Text>
-          {rd.map(m => <MatchCard key={m.id} m={m} by={by} scorer={scorer} onPick={onPick} />)}
+          {rd.map(m => <MatchCard key={m.id} m={m} by={by} scorer={scorer} onPick={onPick} onClear={onClear} />)}
         </View>
       ))}
     </ScrollView>

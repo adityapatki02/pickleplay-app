@@ -3,9 +3,10 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { T } from '../indoorTheme';
 import { IndoorMatch, IndoorEntrant } from '../../../api/indoor.api';
 
-export function MatchCard({ m, by, scorer, onPick }: {
+export function MatchCard({ m, by, scorer, onPick, onClear }: {
   m: IndoorMatch; by: Map<string, IndoorEntrant>; scorer: boolean;
   onPick: (matchId: string, entrantId: string) => void;
+  onClear: (matchId: string) => void;
 }) {
   const slot = (id: string | null, side: 'A' | 'B') => {
     const e = id ? by.get(id) : null;
@@ -28,6 +29,11 @@ export function MatchCard({ m, by, scorer, onPick }: {
       {m.round === 0 && m.board ? <Text style={st.board}>B{m.board}</Text> : null}
       {slot(m.entrantAId, 'A')}
       {slot(m.entrantBId, 'B')}
+      {scorer && !!m.winnerEntrantId ? (
+        <Pressable onPress={() => onClear(m.id)} style={st.undo}>
+          <Text style={st.undoT}>{'↺ Undo'}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -41,4 +47,6 @@ const st = StyleSheet.create({
   nmWin: { color: '#5eead4' }, faint: { color: T.faint, fontStyle: 'italic' },
   dp: { color: T.faint, fontSize: 10 },
   tick: { color: T.win, fontWeight: '800', fontSize: 12, marginLeft: 6 },
+  undo: { borderTopColor: T.line, borderTopWidth: 1, alignItems: 'center', paddingVertical: 5 },
+  undoT: { color: T.faint, fontSize: 10, textAlign: 'center' },
 });

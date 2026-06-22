@@ -22,6 +22,12 @@ export default function IndoorEventScreen({ route }: any) {
     if (!p) return;
     await indoorApi.submit(matchId, entrantId, p); await load();
   };
+  const onClear = async (matchId: string) => {
+    let p = pass;
+    if (!p && Platform.OS === 'web') { p = (globalThis as any).prompt('Scorer passcode') || ''; setPass(p); }
+    if (!p) return;
+    await indoorApi.clear(matchId, p); await load();
+  };
   return (
     <ScrollView style={{ backgroundColor: T.bg }} contentContainerStyle={{ padding: 20 }}>
       <View style={st.head}>
@@ -42,7 +48,7 @@ export default function IndoorEventScreen({ route }: any) {
           ))}
         </View>
       ) : null}
-      <BracketView matches={groupMatches} entrants={data.entrants} scorer={scorer} onPick={onPick} />
+      <BracketView matches={groupMatches} entrants={data.entrants} scorer={scorer} onPick={onPick} onClear={onClear} />
     </ScrollView>
   );
 }
