@@ -27,8 +27,12 @@ import {
 import { useAuthStore } from '../../store/authStore';
 import { tournamentsApi } from '../../api/tournaments.api';
 import { registrationsApi } from '../../api/registrations.api';
+import { venuesApi } from '../../api/venues.api';
 import type { Tournament } from '../../types/tournament.types';
+import type { Venue } from '../../types/booking.types';
 import type { YoidenTabParamList } from '../../navigation/YoidenTabNavigator';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { MeStackParamList } from '../../navigation/nav-types';
 
 type Nav = BottomTabNavigationProp<YoidenTabParamList, 'MeTab'>;
 
@@ -57,12 +61,14 @@ export default function MeScreen() {
   const [loading, setLoading] = useState(true);
   const [myRegs, setMyRegs] = useState<Registration[]>([]);
   const [myHosted, setMyHosted] = useState<Tournament[]>([]);
+  const [myVenues, setMyVenues] = useState<Venue[]>([]);
 
   const fetchAll = useCallback(async () => {
     try {
-      const [regsRes, hostedRes] = await Promise.allSettled([
+      const [regsRes, hostedRes, venueRes] = await Promise.allSettled([
         registrationsApi.getMyRegistrations(),
         tournamentsApi.getMyTournaments(),
+        venuesApi.getMyVenues(),
       ]);
       if (regsRes.status === 'fulfilled') {
         const data = unwrap<Registration[]>(regsRes.value);
@@ -71,6 +77,11 @@ export default function MeScreen() {
       if (hostedRes.status === 'fulfilled') {
         const data = unwrap<Tournament[]>(hostedRes.value);
         setMyHosted(Array.isArray(data) ? data : []);
+      }
+      if (venueRes.status === 'fulfilled') {
+        const res = venueRes.value as any;
+        const data = res?.data?.data ?? res?.data ?? [];
+        setMyVenues(Array.isArray(data) ? data : []);
       }
     } finally {
       setLoading(false);
@@ -257,6 +268,49 @@ export default function MeScreen() {
           </View>
         ) : null}
 
+        {/* Venue admin card — only visible to venue owners */}
+        {myVenues.length > 0 ? (
+          <>
+            <YSectionHead
+              eyebrow="VENUE OWNER"
+              title={myVenues.length > 1 ? `MY VENUES (${myVenues.length})` : 'MY VENUE'}
+            />
+            <Pressable
+              style={styles.venueCard}
+              onPress={() =>
+                nav.navigate('MeTab', { screen: 'VenueAdmin', params: { venueId: myVenues[0].id } })
+              }
+            >
+              <View style={styles.venueCardIcon}>
+                <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+                    stroke={YColors.lime}
+                    strokeWidth={1.8}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <Path d="M9 22V12h6v10" stroke={YColors.lime} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </View>
+              <View style={{ flex: 1 }}>
+                <YUiText size={13} weight={800} color={YColors.ink} style={{ letterSpacing: 0.5 }}>
+                  {myVenues.length > 1 ? `${myVenues.length} VENUES` : (myVenues[0].name?.toUpperCase() ?? 'MY VENUE')}
+                </YUiText>
+                <YUiText size={12} color={YColors.ink3} style={{ marginTop: 2 }}>
+                  {myVenues.length > 1
+                    ? myVenues.map(v => v.name).join(' · ')
+                    : (myVenues[0].city?.toUpperCase() ?? 'MANAGE COURTS & BOOKINGS')}
+                </YUiText>
+              </View>
+              <YBadge color="#000" bg={YColors.lime}>ADMIN</YBadge>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ marginLeft: 8 }}>
+                <Path d="M9 6l6 6-6 6" stroke={YColors.ink3} strokeWidth={2} strokeLinecap="round" />
+              </Svg>
+            </Pressable>
+          </>
+        ) : null}
+
         {/* Actions */}
         <YSectionHead eyebrow="ACCOUNT" title="SETTINGS" />
         <View style={styles.actionsWrap}>
@@ -362,6 +416,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: YColors.line,
+  },
+
+  // ── My Venue admin card ─────────────────────────────────────────
+  venueCard: {
+    marginHorizontal: 16,
+    backgroundColor: YColors.bg2,
+    borderWidth: 1,
+    borderColor: YColors.lime,
+    borderRadius: 14,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  venueCardIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(188,255,0,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // ── My Bookings card ────────────────────────────────────────────
