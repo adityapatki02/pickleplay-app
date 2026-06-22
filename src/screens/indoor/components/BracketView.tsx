@@ -8,10 +8,9 @@ const label = (round: number, total: number) => {
   const left = total - 1 - round;
   return left === 0 ? 'FINAL' : left === 1 ? 'SEMIFINAL' : left === 2 ? 'QUARTERFINAL' : `ROUND ${round + 1}`;
 };
-export function BracketView({ matches, entrants, scorer, onPick, onClear }: {
+export function BracketView({ matches, entrants, scorer, onScore, onClear }: {
   matches: IndoorMatch[]; entrants: IndoorEntrant[]; scorer: boolean;
-  onPick: (matchId: string, entrantId: string) => void;
-  onClear: (matchId: string) => void;
+  onScore: (m: IndoorMatch) => void; onClear: (matchId: string) => void;
 }) {
   const by = new Map(entrants.map(e => [e.id, e]));
   const total = matches.reduce((mx, m) => Math.max(mx, m.round), 0) + 1;
@@ -22,13 +21,13 @@ export function BracketView({ matches, entrants, scorer, onPick, onClear }: {
       {rounds.map((rd, r) => (
         <View key={r} style={st.col}>
           <Text style={st.rh}>{label(r, total)}</Text>
-          {rd.map(m => <MatchCard key={m.id} m={m} by={by} scorer={scorer} onPick={onPick} onClear={onClear} />)}
+          {rd.map(m => <MatchCard key={m.id} m={m} by={by} scorer={scorer} onScore={onScore} onClear={onClear} />)}
         </View>
       ))}
     </ScrollView>
   );
 }
 const st = StyleSheet.create({
-  col: { minWidth: 240, justifyContent: 'space-around' },
-  rh: { color: T.blue2, fontFamily: T.head, fontSize: 10.5, fontWeight: '700', letterSpacing: 1.4, textAlign: 'center', marginBottom: 6 },
+  col: { minWidth: 248, justifyContent: 'space-around' },
+  rh: { color: T.blue, fontFamily: T.head, fontSize: 10.5, fontWeight: '800', letterSpacing: 1.4, textAlign: 'center', marginBottom: 8 },
 });

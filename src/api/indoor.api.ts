@@ -4,6 +4,7 @@ export interface IndoorEntrant { id: string; name: string; dept: string; isDraft
 export interface IndoorMatch {
   id: string; groupId: string; round: number; idx: number; board: number | null;
   entrantAId: string | null; entrantBId: string | null; winnerEntrantId: string | null; status: string;
+  scoreA: number | null; scoreB: number | null;
 }
 export interface IndoorGroup { id: string; label: string; size: number; entrantCount: number; }
 export interface IndoorCompetition {
@@ -18,8 +19,8 @@ export const indoorApi = {
     apiClient.get(`/indoor/competitions/${competitionId}`).then(r => r.data.data) as Promise<{
       competition: IndoorCompetition; groups: IndoorGroup[]; entrants: IndoorEntrant[]; matches: IndoorMatch[];
     }>,
-  submit: (matchId: string, winnerEntrantId: string, passcode: string) =>
-    apiClient.post(`/indoor/matches/${matchId}/result`, { winnerEntrantId, passcode },
+  submit: (matchId: string, winnerEntrantId: string, passcode: string, scoreA?: number, scoreB?: number) =>
+    apiClient.post(`/indoor/matches/${matchId}/result`, { winnerEntrantId, scoreA, scoreB, passcode },
       { headers: { 'x-scorer-pass': passcode } }).then(r => r.data.data),
   clear: (matchId: string, passcode: string) =>
     apiClient.post(`/indoor/matches/${matchId}/clear`, { passcode },
