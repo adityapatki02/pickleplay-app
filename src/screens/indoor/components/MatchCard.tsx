@@ -3,37 +3,46 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { T } from '../indoorTheme';
 import { IndoorMatch, IndoorEntrant } from '../../../api/indoor.api';
 
-export function MatchCard({ m, by, scorer, onScore, onClear }: {
-  m: IndoorMatch; by: Map<string, IndoorEntrant>; scorer: boolean;
+export function MatchCard({ m, by, mode, pendingSwap, onScore, onClear, onPlayerTap }: {
+  m: IndoorMatch; by: Map<string, IndoorEntrant>; mode: 'view' | 'score' | 'edit';
+  pendingSwap: { matchId: string; slot: 'A' | 'B' } | null;
   onScore: (m: IndoorMatch) => void; onClear: (matchId: string) => void;
+  onPlayerTap: (matchId: string, slot: 'A' | 'B', entrantId: string | null) => void;
 }) {
   const completed = m.status === 'completed';
   const bothPresent = !!m.entrantAId && !!m.entrantBId;
-  const tappable = scorer && bothPresent && !completed;
+  const matchTappable = mode === 'score' && bothPresent && !completed;
   const slot = (id: string | null, side: 'A' | 'B', score: number | null) => {
     const e = id ? by.get(id) : null;
     const win = !!m.winnerEntrantId && m.winnerEntrantId === id;
-    return (
-      <View style={[s.slot, win && s.win, side === 'A' && s.border]}>
+    const isPending = !!pendingSwap && pendingSwap.matchId === m.id && pendingSwap.slot === side;
+    const slotTappable = mode === 'edit' && !!id;
+    const inner = (
+      <>
         <View style={{ flex: 1 }}>
           <Text style={[s.nm, win && s.nmWin, !e && s.faint]} numberOfLines={1}>{e ? e.name : '—'}</Text>
           {e?.dept ? <Text style={s.dp} numberOfLines={1}>{e.dept}</Text> : null}
         </View>
         {score != null ? <Text style={[s.score, win && s.scoreWin]}>{score}</Text> : null}
         {win ? <Text style={s.tick}>{'✓'}</Text> : null}
-      </View>
+      </>
     );
+    const st = [s.slot, win && s.win, side === 'A' && s.border, isPending && s.pending];
+    return slotTappable
+      ? <Pressable onPress={() => onPlayerTap(m.id, side, id)} style={st}>{inner}</Pressable>
+      : <View style={st}>{inner}</View>;
   };
+  const Wrapper: any = matchTappable ? Pressable : View;
   return (
-    <Pressable disabled={!tappable} onPress={() => tappable && onScore(m)} style={[s.match, tappable && s.tappable]}>
+    <Wrapper {...(matchTappable ? { onPress: () => onScore(m) } : {})} style={[s.match, matchTappable && s.tappable]}>
       {m.round === 0 && m.board ? <Text style={s.board}>B{m.board}</Text> : null}
       {slot(m.entrantAId, 'A', m.scoreA)}
       {slot(m.entrantBId, 'B', m.scoreB)}
-      {scorer && completed ? (
+      {(mode === 'score' || mode === 'edit') && completed ? (
         <Pressable onPress={() => onClear(m.id)} style={s.undo}><Text style={s.undoT}>{'↺ Undo'}</Text></Pressable>
       ) : null}
-      {tappable ? <Text style={s.tapHint}>Tap to enter score</Text> : null}
-    </Pressable>
+      {matchTappable ? <Text style={s.tapHint}>Tap to enter score</Text> : null}
+    </Wrapper>
   );
 }
 const s = StyleSheet.create({
@@ -43,6 +52,7 @@ const s = StyleSheet.create({
   slot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 11, paddingVertical: 9 },
   border: { borderBottomColor: T.line, borderBottomWidth: 1 },
   win: { backgroundColor: T.winBg },
+  pending: { backgroundColor: 'rgba(33,150,243,0.14)' },
   nm: { color: T.ink, fontSize: 13, fontWeight: '600' },
   nmWin: { color: T.navy, fontWeight: '800' },
   faint: { color: T.faint, fontStyle: 'italic', fontWeight: '500' },

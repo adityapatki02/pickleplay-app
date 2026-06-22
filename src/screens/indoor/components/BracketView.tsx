@@ -8,9 +8,11 @@ const label = (round: number, total: number) => {
   const left = total - 1 - round;
   return left === 0 ? 'FINAL' : left === 1 ? 'SEMIFINAL' : left === 2 ? 'QUARTERFINAL' : `ROUND ${round + 1}`;
 };
-export function BracketView({ matches, entrants, scorer, onScore, onClear }: {
-  matches: IndoorMatch[]; entrants: IndoorEntrant[]; scorer: boolean;
+export function BracketView({ matches, entrants, mode, pendingSwap, onScore, onClear, onPlayerTap }: {
+  matches: IndoorMatch[]; entrants: IndoorEntrant[]; mode: 'view' | 'score' | 'edit';
+  pendingSwap: { matchId: string; slot: 'A' | 'B' } | null;
   onScore: (m: IndoorMatch) => void; onClear: (matchId: string) => void;
+  onPlayerTap: (matchId: string, slot: 'A' | 'B', entrantId: string | null) => void;
 }) {
   const by = new Map(entrants.map(e => [e.id, e]));
   const total = matches.reduce((mx, m) => Math.max(mx, m.round), 0) + 1;
@@ -21,7 +23,7 @@ export function BracketView({ matches, entrants, scorer, onScore, onClear }: {
       {rounds.map((rd, r) => (
         <View key={r} style={st.col}>
           <Text style={st.rh}>{label(r, total)}</Text>
-          {rd.map(m => <MatchCard key={m.id} m={m} by={by} scorer={scorer} onScore={onScore} onClear={onClear} />)}
+          {rd.map(m => <MatchCard key={m.id} m={m} by={by} mode={mode} pendingSwap={pendingSwap} onScore={onScore} onClear={onClear} onPlayerTap={onPlayerTap} />)}
         </View>
       ))}
     </ScrollView>

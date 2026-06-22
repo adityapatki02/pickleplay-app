@@ -10,6 +10,7 @@ import PlayerRecapScreen from '../screens/yoiden/PlayerRecapScreen';
 import { ProfileSetupScreen } from '../screens/auth/ProfileSetupScreen';
 import { IS_INDOOR_KIOSK, IS_LEAGUE_KIOSK, LEAGUE_KIOSK_ID } from '../config/appMode';
 import { IndoorNavigator } from './IndoorNavigator';
+import { ManageProvider } from '../screens/indoor/manageContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -43,10 +44,17 @@ export const RootNavigator: React.FC = () => {
   // Textually it precedes the hook, which trips react-hooks/rules-of-hooks —
   // safe to suppress because the rule doesn't apply to build-constant branches.
   if (IS_INDOOR_KIOSK) {
+    const origin = (Platform.OS === 'web' && typeof window !== 'undefined') ? window.location.origin : '';
+    const indoorLinking = {
+      prefixes: [origin],
+      config: { screens: { IndoorOverview: '', IndoorEvent: 'event/:competitionId', IndoorManage: 'manage' } },
+    };
     return (
-      <NavigationContainer>
-        <IndoorNavigator />
-      </NavigationContainer>
+      <ManageProvider>
+        <NavigationContainer linking={indoorLinking as any}>
+          <IndoorNavigator />
+        </NavigationContainer>
+      </ManageProvider>
     );
   }
 

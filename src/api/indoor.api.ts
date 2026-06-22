@@ -25,4 +25,12 @@ export const indoorApi = {
   clear: (matchId: string, passcode: string) =>
     apiClient.post(`/indoor/matches/${matchId}/clear`, { passcode },
       { headers: { 'x-scorer-pass': passcode } }).then(r => r.data.data),
+  login: (passcode: string) =>
+    apiClient.post('/indoor/login', { passcode }).then(r => r.data.data) as Promise<{ role: 'admin' | 'scorer' }>,
+  rename: (entrantId: string, name: string, passcode: string) =>
+    apiClient.patch(`/indoor/entrants/${entrantId}`, { name, passcode }, { headers: { 'x-scorer-pass': passcode } }).then(r => r.data.data),
+  swap: (body: { aMatchId: string; aSlot: 'A' | 'B'; bMatchId: string; bSlot: 'A' | 'B' }, passcode: string) =>
+    apiClient.post('/indoor/matches/swap', { ...body, passcode }, { headers: { 'x-scorer-pass': passcode } }).then(r => r.data.data),
+  redraw: (competitionId: string, passcode: string) =>
+    apiClient.post(`/indoor/competitions/${competitionId}/redraw`, { passcode }, { headers: { 'x-scorer-pass': passcode } }).then(r => r.data.data),
 };

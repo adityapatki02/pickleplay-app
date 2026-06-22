@@ -13,7 +13,7 @@ export default function IndoorOverviewScreen({ navigation }: any) {
   const entries = data.competitions.reduce((a, c) => a + c.entrantCount, 0);
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
-      <IndoorHeader />
+      <IndoorHeader right={<Pressable onPress={() => navigation.navigate('IndoorManage')} style={{ borderWidth: 1, borderColor: T.line, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}><Text style={{ color: T.muted, fontWeight: '700', fontSize: 12.5 }}>Manage</Text></Pressable>} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ alignItems: 'center', padding: 18 }}>
         <View style={{ width: '100%', maxWidth: 1040 }}>
         <Text style={s.h1}>{data.event.name}</Text>
