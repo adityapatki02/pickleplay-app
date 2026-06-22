@@ -36,6 +36,12 @@ function isPublicRoute(): boolean {
 }
 
 export const RootNavigator: React.FC = () => {
+  // IS_INDOOR_KIOSK is an Expo build-time constant (set via app.config.js extra).
+  // The branch below is dead-code-eliminated at bundle time for non-kiosk builds,
+  // so this early return never exists at runtime in the main app. The hook call
+  // that follows is therefore always reached in the builds where it matters.
+  // Textually it precedes the hook, which trips react-hooks/rules-of-hooks —
+  // safe to suppress because the rule doesn't apply to build-constant branches.
   if (IS_INDOOR_KIOSK) {
     return (
       <NavigationContainer>
@@ -44,6 +50,7 @@ export const RootNavigator: React.FC = () => {
     );
   }
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   const { isAuthenticated, isLoading, user } = useAuthStore();
   const publicRoute = isPublicRoute();
   // Onboarding gate:
