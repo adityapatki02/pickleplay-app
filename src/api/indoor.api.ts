@@ -19,18 +19,20 @@ export const indoorApi = {
     apiClient.get(`/indoor/competitions/${competitionId}`).then(r => r.data.data) as Promise<{
       competition: IndoorCompetition; groups: IndoorGroup[]; entrants: IndoorEntrant[]; matches: IndoorMatch[];
     }>,
+  // NOTE: passcode goes in the BODY only — the backend guards read req.body.passcode.
+  // We deliberately do NOT send an 'x-scorer-pass' request header, because the API's
+  // CORS allow-list doesn't include that custom header, which made the browser block
+  // every authenticated call (net::ERR_FAILED) after a passing preflight.
   submit: (matchId: string, winnerEntrantId: string, passcode: string, scoreA?: number, scoreB?: number) =>
-    apiClient.post(`/indoor/matches/${matchId}/result`, { winnerEntrantId, scoreA, scoreB, passcode },
-      { headers: { 'x-scorer-pass': passcode } }).then(r => r.data.data),
+    apiClient.post(`/indoor/matches/${matchId}/result`, { winnerEntrantId, scoreA, scoreB, passcode }).then(r => r.data.data),
   clear: (matchId: string, passcode: string) =>
-    apiClient.post(`/indoor/matches/${matchId}/clear`, { passcode },
-      { headers: { 'x-scorer-pass': passcode } }).then(r => r.data.data),
+    apiClient.post(`/indoor/matches/${matchId}/clear`, { passcode }).then(r => r.data.data),
   login: (passcode: string) =>
     apiClient.post('/indoor/login', { passcode }).then(r => r.data.data) as Promise<{ role: 'admin' | 'scorer' }>,
   rename: (entrantId: string, name: string, passcode: string) =>
-    apiClient.patch(`/indoor/entrants/${entrantId}`, { name, passcode }, { headers: { 'x-scorer-pass': passcode } }).then(r => r.data.data),
+    apiClient.patch(`/indoor/entrants/${entrantId}`, { name, passcode }).then(r => r.data.data),
   swap: (body: { aMatchId: string; aSlot: 'A' | 'B'; bMatchId: string; bSlot: 'A' | 'B' }, passcode: string) =>
-    apiClient.post('/indoor/matches/swap', { ...body, passcode }, { headers: { 'x-scorer-pass': passcode } }).then(r => r.data.data),
+    apiClient.post('/indoor/matches/swap', { ...body, passcode }).then(r => r.data.data),
   redraw: (competitionId: string, passcode: string) =>
-    apiClient.post(`/indoor/competitions/${competitionId}/redraw`, { passcode }, { headers: { 'x-scorer-pass': passcode } }).then(r => r.data.data),
+    apiClient.post(`/indoor/competitions/${competitionId}/redraw`, { passcode }).then(r => r.data.data),
 };
