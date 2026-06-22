@@ -45,7 +45,7 @@ export function MatchCard({ m, by, mode, onScore, onClear, onPlayerTap }: {
   );
 }
 const s = StyleSheet.create({
-  match: { backgroundColor: T.card, borderColor: T.line, borderWidth: 1, borderRadius: 12, marginBottom: 12, position: 'relative', shadowColor: '#001E40', shadowOpacity: 0.06, shadowRadius: 7, shadowOffset: { width: 0, height: 2 } },
+  match: { backgroundColor: T.card, borderColor: T.line, borderWidth: 1, borderRadius: 12, marginBottom: 0, position: 'relative', shadowColor: '#001E40', shadowOpacity: 0.06, shadowRadius: 7, shadowOffset: { width: 0, height: 2 } },
   tappable: { borderColor: T.blue },
   done: { borderColor: '#BBE9D4' },
   board: { position: 'absolute', top: -8, left: 10, backgroundColor: T.navy, color: '#fff', fontSize: 9, fontWeight: '800', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, zIndex: 2, overflow: 'hidden' },

@@ -1,76 +1,64 @@
-import React, { useState } from 'react';
-import { ScrollView, View, Text, StyleSheet, LayoutRectangle } from 'react-native';
+import React from 'react';
+import { ScrollView, View, Text, StyleSheet } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { MatchCard } from './MatchCard';
 import { T } from '../indoorTheme';
 import { IndoorMatch, IndoorEntrant } from '../../../api/indoor.api';
 
-const label = (round: number, total: number) => {
-  const left = total - 1 - round;
-  return left === 0 ? 'FINAL' : left === 1 ? 'SEMIFINAL' : left === 2 ? 'QUARTERFINAL' : `ROUND ${round + 1}`;
-};
+const COL_W = 240, COL_GAP = 52, ROW_H = 74, V_GAP = 20, LABEL_H = 34;
+const UNIT = ROW_H + V_GAP;
 
-export function BracketView({ matches, entrants, mode, onScore, onClear, onPlayerTap }: {
+export function BracketView({ matches, entrants, mode, labelMap, onScore, onClear, onPlayerTap }: {
   matches: IndoorMatch[]; entrants: IndoorEntrant[]; mode: 'view' | 'score' | 'edit';
+  labelMap: Record<number, string>;
   onScore: (m: IndoorMatch) => void; onClear: (matchId: string) => void;
   onPlayerTap: (matchId: string, slot: 'A' | 'B', entrantId: string | null) => void;
 }) {
   const by = new Map(entrants.map(e => [e.id, e]));
-  const total = matches.reduce((mx, m) => Math.max(mx, m.round), 0) + 1;
-  const rounds = Array.from({ length: total }, (_, r) =>
-    matches.filter(m => m.round === r).sort((a, b) => a.idx - b.idx));
+  const present = [...new Set(matches.map(m => m.round))].sort((a, b) => a - b);
+  const byRound = present.map(r => matches.filter(m => m.round === r).sort((a, b) => a.idx - b.idx));
+  const byKey = new Map(matches.map(m => [`${m.round}-${m.idx}`, m]));
+  const baseCount = byRound[0]?.length || 1;
+  const height = LABEL_H + UNIT * baseCount;
+  const width = present.length * (COL_W + COL_GAP);
+  const centerY = (lr: number, p: number) => LABEL_H + UNIT * Math.pow(2, lr) * (p + 0.5);
 
-  const [size, setSize] = useState({ w: 0, h: 0 });
-  const [cols, setCols] = useState<Record<number, { x: number; w: number }>>({});
-  const [boxes, setBoxes] = useState<Record<string, { y: number; h: number }>>({});
-
-  // Build connector paths once we have measurements. A match (round r, idx i) connects
-  // to its parent (round r+1, idx floor(i/2)).
-  const idAt = (r: number, i: number) => rounds[r] && rounds[r][i] ? rounds[r][i].id : null;
   const paths: string[] = [];
-  for (const m of matches) {
-    if (m.round >= total - 1) continue;             // final has no parent
-    const parentId = idAt(m.round + 1, Math.floor(m.idx / 2));
-    if (!parentId) continue;
-    const col = cols[m.round], pcol = cols[m.round + 1];
-    const box = boxes[m.id], pbox = boxes[parentId];
-    if (!col || !pcol || !box || !pbox) continue;
-    const rx = col.x + col.w;                        // child right edge
-    const cy = box.y + box.h / 2;                    // child center y
-    const plx = pcol.x;                              // parent left edge
-    const pcy = pbox.y + pbox.h / 2;                 // parent center y
-    const midx = (rx + plx) / 2;
-    paths.push(`M ${rx} ${cy} H ${midx} V ${pcy} H ${plx}`);
-  }
-
-  const setCol = (r: number, l: LayoutRectangle) => setCols(p => (p[r] && p[r].x === l.x && p[r].w === l.width ? p : { ...p, [r]: { x: l.x, w: l.width } }));
-  const setBox = (id: string, l: LayoutRectangle) => setBoxes(p => (p[id] && p[id].y === l.y && p[id].h === l.height ? p : { ...p, [id]: { y: l.y, h: l.height } }));
+  present.forEach((r, lr) => {
+    byRound[lr].forEach((m, p) => {
+      const parent = byKey.get(`${r + 1}-${Math.floor(m.idx / 2)}`);
+      if (!parent) return;
+      const plr = present.indexOf(r + 1); if (plr < 0) return;
+      const pp = byRound[plr].indexOf(parent); if (pp < 0) return;
+      const rx = lr * (COL_W + COL_GAP) + COL_W, cy = centerY(lr, p);
+      const plx = plr * (COL_W + COL_GAP), pcy = centerY(plr, pp);
+      const midx = (rx + plx) / 2;
+      paths.push(`M ${rx} ${cy} H ${midx} V ${pcy} H ${plx}`);
+    });
+  });
 
   return (
-    <ScrollView horizontal contentContainerStyle={{ paddingBottom: 20 }} showsHorizontalScrollIndicator={false}>
-      <View style={{ position: 'relative' }} onLayout={e => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
-        {size.w > 0 ? (
-          <Svg style={{ position: 'absolute', left: 0, top: 0 }} width={size.w} height={size.h} pointerEvents="none">
-            {paths.map((d, i) => <Path key={i} d={d} stroke={T.line} strokeWidth={2} fill="none" />)}
-          </Svg>
-        ) : null}
-        <View style={{ flexDirection: 'row', gap: 40 }}>
-          {rounds.map((rd, r) => (
-            <View key={r} style={st.col} onLayout={e => setCol(r, e.nativeEvent.layout)}>
-              <Text style={st.rh}>{label(r, total)}</Text>
-              {rd.map(m => (
-                <View key={m.id} onLayout={e => setBox(m.id, e.nativeEvent.layout)}>
-                  <MatchCard m={m} by={by} mode={mode} onScore={onScore} onClear={onClear} onPlayerTap={onPlayerTap} />
-                </View>
-              ))}
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+      <View style={{ width, height }}>
+        <Svg style={{ position: 'absolute', left: 0, top: 0 }} width={width} height={height} pointerEvents="none">
+          {paths.map((d, i) => <Path key={i} d={d} stroke={T.line} strokeWidth={2} fill="none" />)}
+        </Svg>
+        {present.map((r, lr) => (
+          <View key={r}>
+            <View style={{ position: 'absolute', top: 0, left: lr * (COL_W + COL_GAP), width: COL_W, alignItems: 'center' }}>
+              <Text style={st.rh}>{labelMap[r] || ''}</Text>
             </View>
-          ))}
-        </View>
+            {byRound[lr].map((m, p) => (
+              <View key={m.id} style={{ position: 'absolute', left: lr * (COL_W + COL_GAP), top: centerY(lr, p) - ROW_H / 2, width: COL_W }}>
+                <MatchCard m={m} by={by} mode={mode} onScore={onScore} onClear={onClear} onPlayerTap={onPlayerTap} />
+              </View>
+            ))}
+          </View>
+        ))}
       </View>
     </ScrollView>
   );
 }
 const st = StyleSheet.create({
-  col: { minWidth: 248, justifyContent: 'space-around' },
-  rh: { color: '#fff', backgroundColor: T.navy, fontFamily: T.head, fontSize: 10, fontWeight: '800', letterSpacing: 1, textAlign: 'center', marginBottom: 10, alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, overflow: 'hidden' },
+  rh: { color: '#fff', backgroundColor: T.navy, fontFamily: T.head, fontSize: 10, fontWeight: '800', letterSpacing: 1, textAlign: 'center', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, overflow: 'hidden' },
 });

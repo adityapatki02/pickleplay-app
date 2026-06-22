@@ -27,18 +27,56 @@ export default function IndoorEventScreen({ route, navigation }: any) {
   useEffect(() => { if (mode !== 'view') return; const t = setInterval(load, 8000); return () => clearInterval(t); }, [mode, load]);
 
   if (!data) return <View style={{ flex: 1, backgroundColor: T.bg }}><IndoorHeader onBack={() => navigation.goBack()} title="Loading…" /></View>;
-  const groups = data.groups; const g = groups[Math.min(tab, groups.length - 1)];
-  const groupMatches = data.matches.filter((m: any) => m.groupId === g.id);
+
+  const comp = data.competition;
+  const sectionCount: number = comp.sectionCount || 1;
+  const sectionSize: number = comp.sectionSize || 32;
+  const sectionRounds = Math.round(Math.log2(sectionSize));
+  const totalRounds = Math.round(Math.log2(sectionCount * sectionSize));
+  // Build tabs: one per section (if >1) + a Finals tab; for a single section just one bracket.
+  type Tab = { key: string; label: string; matches: any[]; labelMap: Record<number, string> };
+  const allMatches: any[] = data.matches;
+  const groupRoundLabel = (r: number) => {
+    const left = sectionRounds - 1 - r;
+    return left === 0 ? 'GROUP FINAL' : left === 1 ? 'SEMIFINAL' : left === 2 ? 'QUARTERFINAL' : `ROUND ${r + 1}`;
+  };
+  const finalsRoundLabel = (r: number) => {
+    const finalsRounds = totalRounds - sectionRounds;
+    const lr = r - sectionRounds; const left = finalsRounds - 1 - lr;
+    return left === 0 ? 'FINAL' : left === 1 ? 'SEMIFINAL' : left === 2 ? 'QUARTERFINAL' : `ROUND ${lr + 1}`;
+  };
+  const tabs: Tab[] = [];
+  if (sectionCount === 1) {
+    const lm: Record<number, string> = {};
+    for (let r = 0; r < totalRounds; r++) { const left = totalRounds - 1 - r; lm[r] = left === 0 ? 'FINAL' : left === 1 ? 'SEMIFINAL' : left === 2 ? 'QUARTERFINAL' : `ROUND ${r + 1}`; }
+    tabs.push({ key: 'main', label: 'Draw', matches: allMatches, labelMap: lm });
+  } else {
+    for (let s = 0; s < sectionCount; s++) {
+      const lm: Record<number, string> = {};
+      const secMatches = allMatches.filter((m: any) => {
+        if (m.round >= sectionRounds) return false;
+        const perSec = sectionSize / 2 ** (m.round + 1);
+        return m.idx >= s * perSec && m.idx < (s + 1) * perSec;
+      });
+      for (let r = 0; r < sectionRounds; r++) lm[r] = groupRoundLabel(r);
+      tabs.push({ key: `g${s}`, label: `Group ${String.fromCharCode(65 + s)}`, matches: secMatches, labelMap: lm });
+    }
+    const lm: Record<number, string> = {};
+    const finalsMatches = allMatches.filter((m: any) => m.round >= sectionRounds);
+    for (let r = sectionRounds; r < totalRounds; r++) lm[r] = finalsRoundLabel(r);
+    tabs.push({ key: 'finals', label: 'Finals', matches: finalsMatches, labelMap: lm });
+  }
+  const activeTab = tabs[Math.min(tab, tabs.length - 1)];
+
   const byName = new Map<string, any>(data.entrants.map((e: any) => [e.id, e]));
   const nameOf = (id: string | null) => (id && byName.get(id) ? byName.get(id).name : '—');
 
-  const drawSlots = data.groups.flatMap((gg: any) =>
-    data.matches.filter((mm: any) => mm.groupId === gg.id && mm.round === 0).flatMap((mm: any) => {
-      const out: any[] = [];
-      if (mm.entrantAId) out.push({ entrantId: mm.entrantAId, matchId: mm.id, slot: 'A', group: gg.label });
-      if (mm.entrantBId) out.push({ entrantId: mm.entrantBId, matchId: mm.id, slot: 'B', group: gg.label });
-      return out;
-    }));
+  const drawSlots = data.matches.filter((m: any) => m.round === 0).flatMap((mm: any) => {
+    const out: any[] = [];
+    if (mm.entrantAId) out.push({ entrantId: mm.entrantAId, matchId: mm.id, slot: 'A' });
+    if (mm.entrantBId) out.push({ entrantId: mm.entrantBId, matchId: mm.id, slot: 'B' });
+    return out;
+  });
 
   const openScore = (m: any) => {
     setEditing(m);
@@ -94,13 +132,13 @@ export default function IndoorEventScreen({ route, navigation }: any) {
           {data.competition.isDraft ? <Text style={s.draft}>{'⚠️'}  Draft draw — doubles auto-paired; admin can rename pairs.</Text> : null}
           {mode === 'score' ? <Text style={s.hint}>Tap a match to enter its score.</Text> : null}
           {mode === 'edit' ? <Text style={s.hintEdit}>Tap a first-round player to rename or swap.</Text> : null}
-          {groups.length > 1 ? (
-            <View style={s.tabs}>{groups.map((gr: any, i: number) => (
-              <Pressable key={gr.id} onPress={() => setTab(i)} style={[s.tab, i === tab && s.tabOn]}><Text style={[s.tabT, i === tab && { color: '#fff' }]}>Group {gr.label}</Text></Pressable>
+          {tabs.length > 1 ? (
+            <View style={s.tabs}>{tabs.map((t: Tab, i: number) => (
+              <Pressable key={t.key} onPress={() => setTab(i)} style={[s.tab, i === tab && s.tabOn]}><Text style={[s.tabT, i === tab && { color: '#fff' }]}>{t.label}</Text></Pressable>
             ))}</View>
           ) : null}
-          <BracketView matches={groupMatches} entrants={data.entrants} mode={mode}
-            onScore={openScore} onClear={onClear} onPlayerTap={onPlayerTap} />
+          <BracketView matches={activeTab.matches} entrants={data.entrants} mode={mode}
+            labelMap={activeTab.labelMap} onScore={openScore} onClear={onClear} onPlayerTap={onPlayerTap} />
         </View>
       </ScrollView>
 
@@ -144,7 +182,7 @@ export default function IndoorEventScreen({ route, navigation }: any) {
               .map((d: any) => (
                 <Pressable key={d.matchId + d.slot} onPress={() => swapWith(d)} style={s.swapRow}>
                   <Text style={s.swapName} numberOfLines={1}>{nameOf(d.entrantId)}</Text>
-                  <Text style={s.swapGrp}>{data.groups.length > 1 ? `Grp ${d.group}` : ''}</Text>
+                  <Text style={s.swapGrp}>{''}</Text>
                 </Pressable>
               ))}
           </ScrollView>
