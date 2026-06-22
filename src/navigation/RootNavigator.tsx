@@ -8,7 +8,8 @@ import { YoidenTabNavigator } from './YoidenTabNavigator';
 import { useAuthStore } from '../store/authStore';
 import PlayerRecapScreen from '../screens/yoiden/PlayerRecapScreen';
 import { ProfileSetupScreen } from '../screens/auth/ProfileSetupScreen';
-import { IS_LEAGUE_KIOSK, LEAGUE_KIOSK_ID } from '../config/appMode';
+import { IS_INDOOR_KIOSK, IS_LEAGUE_KIOSK, LEAGUE_KIOSK_ID } from '../config/appMode';
+import { IndoorNavigator } from './IndoorNavigator';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -35,6 +36,14 @@ function isPublicRoute(): boolean {
 }
 
 export const RootNavigator: React.FC = () => {
+  if (IS_INDOOR_KIOSK) {
+    return (
+      <NavigationContainer>
+        <IndoorNavigator />
+      </NavigationContainer>
+    );
+  }
+
   const { isAuthenticated, isLoading, user } = useAuthStore();
   const publicRoute = isPublicRoute();
   // Onboarding gate:
