@@ -3,9 +3,8 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { T } from '../indoorTheme';
 import { IndoorMatch, IndoorEntrant } from '../../../api/indoor.api';
 
-export function MatchCard({ m, by, mode, pendingSwap, onScore, onClear, onPlayerTap }: {
+export function MatchCard({ m, by, mode, onScore, onClear, onPlayerTap }: {
   m: IndoorMatch; by: Map<string, IndoorEntrant>; mode: 'view' | 'score' | 'edit';
-  pendingSwap: { matchId: string; slot: 'A' | 'B' } | null;
   onScore: (m: IndoorMatch) => void; onClear: (matchId: string) => void;
   onPlayerTap: (matchId: string, slot: 'A' | 'B', entrantId: string | null) => void;
 }) {
@@ -15,8 +14,7 @@ export function MatchCard({ m, by, mode, pendingSwap, onScore, onClear, onPlayer
   const slot = (id: string | null, side: 'A' | 'B', score: number | null) => {
     const e = id ? by.get(id) : null;
     const win = !!m.winnerEntrantId && m.winnerEntrantId === id;
-    const isPending = !!pendingSwap && pendingSwap.matchId === m.id && pendingSwap.slot === side;
-    const slotTappable = mode === 'edit' && !!id;
+    const slotTappable = mode === 'edit' && !!id && m.round === 0;
     const inner = (
       <>
         <View style={{ flex: 1 }}>
@@ -27,7 +25,7 @@ export function MatchCard({ m, by, mode, pendingSwap, onScore, onClear, onPlayer
         {win ? <Text style={s.tick}>{'✓'}</Text> : null}
       </>
     );
-    const st = [s.slot, win && s.win, side === 'A' && s.border, isPending && s.pending];
+    const st = [s.slot, win && s.win, side === 'A' && s.border, slotTappable && s.editable];
     return slotTappable
       ? <Pressable onPress={() => onPlayerTap(m.id, side, id)} style={st}>{inner}</Pressable>
       : <View style={st}>{inner}</View>;
@@ -51,8 +49,8 @@ const s = StyleSheet.create({
   board: { position: 'absolute', top: -8, left: 10, backgroundColor: T.navy, color: '#fff', fontSize: 9, fontWeight: '800', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, zIndex: 1, overflow: 'hidden' },
   slot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 11, paddingVertical: 9 },
   border: { borderBottomColor: T.line, borderBottomWidth: 1 },
+  editable: { backgroundColor: 'rgba(33,150,243,0.06)' },
   win: { backgroundColor: T.winBg },
-  pending: { backgroundColor: 'rgba(33,150,243,0.14)' },
   nm: { color: T.ink, fontSize: 13, fontWeight: '600' },
   nmWin: { color: T.navy, fontWeight: '800' },
   faint: { color: T.faint, fontStyle: 'italic', fontWeight: '500' },

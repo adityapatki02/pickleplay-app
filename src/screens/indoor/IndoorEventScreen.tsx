@@ -18,7 +18,7 @@ export default function IndoorEventScreen({ route, navigation }: any) {
   const [sa, setSa] = useState(''); const [sb, setSb] = useState('');
   const [player, setPlayer] = useState<any | null>(null);
   const [rename, setRename] = useState('');
-  const [pendingSwap, setPendingSwap] = useState<{ matchId: string; slot: 'A' | 'B' } | null>(null);
+  const [swapFilter, setSwapFilter] = useState('');
   const load = useCallback(() => indoorApi.competition(competitionId).then(setData), [competitionId]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setMode(canScore ? 'score' : 'view'); }, [canScore]);
@@ -30,6 +30,14 @@ export default function IndoorEventScreen({ route, navigation }: any) {
   const byName = new Map<string, any>(data.entrants.map((e: any) => [e.id, e]));
   const nameOf = (id: string | null) => (id && byName.get(id) ? byName.get(id).name : '—');
 
+  const drawSlots = data.groups.flatMap((gg: any) =>
+    data.matches.filter((mm: any) => mm.groupId === gg.id && mm.round === 0).flatMap((mm: any) => {
+      const out: any[] = [];
+      if (mm.entrantAId) out.push({ entrantId: mm.entrantAId, matchId: mm.id, slot: 'A', group: gg.label });
+      if (mm.entrantBId) out.push({ entrantId: mm.entrantBId, matchId: mm.id, slot: 'B', group: gg.label });
+      return out;
+    }));
+
   const openScore = (m: any) => { setEditing(m); setSa(m.scoreA != null ? String(m.scoreA) : ''); setSb(m.scoreB != null ? String(m.scoreB) : ''); };
   const saveScore = async () => {
     const a = parseInt(sa, 10), b = parseInt(sb, 10);
@@ -40,17 +48,15 @@ export default function IndoorEventScreen({ route, navigation }: any) {
     setEditing(null); await load();
   };
   const onClear = async (matchId: string) => { await indoorApi.clear(matchId, pass); await load(); };
-  const onPlayerTap = async (matchId: string, slot: 'A' | 'B', entrantId: string | null) => {
+  const onPlayerTap = (matchId: string, slot: 'A' | 'B', entrantId: string | null) => {
     if (!entrantId) return;
-    if (pendingSwap) {
-      if (pendingSwap.matchId === matchId && pendingSwap.slot === slot) { setPendingSwap(null); return; }
-      await indoorApi.swap({ aMatchId: pendingSwap.matchId, aSlot: pendingSwap.slot, bMatchId: matchId, bSlot: slot }, pass);
-      setPendingSwap(null); await load(); return;
-    }
-    setPlayer({ matchId, slot, entrantId }); setRename(nameOf(entrantId));
+    setPlayer({ matchId, slot, entrantId }); setRename(nameOf(entrantId)); setSwapFilter('');
   };
   const doRename = async () => { if (rename.trim()) await indoorApi.rename(player.entrantId, rename.trim(), pass); setPlayer(null); await load(); };
-  const startSwap = () => { setPendingSwap({ matchId: player.matchId, slot: player.slot }); setPlayer(null); };
+  const swapWith = async (t: { matchId: string; slot: 'A' | 'B' }) => {
+    await indoorApi.swap({ aMatchId: player.matchId, aSlot: player.slot, bMatchId: t.matchId, bSlot: t.slot }, pass);
+    setPlayer(null); await load();
+  };
   const doRedraw = async () => {
     const ok = Platform.OS !== 'web' || (globalThis as any).confirm?.('Re-draw this entire event? All current results will be cleared.');
     if (!ok) return;
@@ -60,7 +66,7 @@ export default function IndoorEventScreen({ route, navigation }: any) {
   const headerRight = isAdmin ? (
     <View style={s.adminBar}>
       <Pressable onPress={() => setMode('score')} style={[s.chip, mode === 'score' && s.chipOn]}><Text style={[s.chipT, mode === 'score' && s.chipTOn]}>Score</Text></Pressable>
-      <Pressable onPress={() => { setMode('edit'); setPendingSwap(null); }} style={[s.chip, mode === 'edit' && s.chipOn]}><Text style={[s.chipT, mode === 'edit' && s.chipTOn]}>Edit</Text></Pressable>
+      <Pressable onPress={() => setMode('edit')} style={[s.chip, mode === 'edit' && s.chipOn]}><Text style={[s.chipT, mode === 'edit' && s.chipTOn]}>Edit</Text></Pressable>
       <Pressable onPress={doRedraw} style={s.redraw}><Text style={s.redrawT}>Re-draw</Text></Pressable>
     </View>
   ) : canScore ? (
@@ -74,13 +80,13 @@ export default function IndoorEventScreen({ route, navigation }: any) {
         <View style={{ width: '100%', maxWidth: 1200 }}>
           {data.competition.isDraft ? <Text style={s.draft}>{'⚠️'}  Draft draw — doubles auto-paired; admin can rename pairs.</Text> : null}
           {mode === 'score' ? <Text style={s.hint}>Tap a match to enter its score.</Text> : null}
-          {mode === 'edit' ? <Text style={s.hintEdit}>{pendingSwap ? 'Now tap another player to swap them.' : 'Tap a player to rename or move.'}</Text> : null}
+          {mode === 'edit' ? <Text style={s.hintEdit}>Tap a first-round player to rename or swap.</Text> : null}
           {groups.length > 1 ? (
             <View style={s.tabs}>{groups.map((gr: any, i: number) => (
               <Pressable key={gr.id} onPress={() => setTab(i)} style={[s.tab, i === tab && s.tabOn]}><Text style={[s.tabT, i === tab && { color: '#fff' }]}>Group {gr.label}</Text></Pressable>
             ))}</View>
           ) : null}
-          <BracketView matches={groupMatches} entrants={data.entrants} mode={mode} pendingSwap={pendingSwap}
+          <BracketView matches={groupMatches} entrants={data.entrants} mode={mode}
             onScore={openScore} onClear={onClear} onPlayerTap={onPlayerTap} />
         </View>
       </ScrollView>
@@ -99,10 +105,21 @@ export default function IndoorEventScreen({ route, navigation }: any) {
       <Modal visible={!!player} transparent animationType="fade" onRequestClose={() => setPlayer(null)}>
         <View style={s.overlay}><View style={s.modal}>
           <Text style={s.modalTitle}>EDIT PLAYER</Text>
-          <TextInput value={rename} onChangeText={setRename} style={[s.input, { width: '100%', textAlign: 'left', marginBottom: 12 }]} placeholder="Player / pair name" placeholderTextColor={T.faint} />
-          <Pressable onPress={doRename} style={[s.mBtn, s.mSave, { marginBottom: 8 }]}><Text style={s.mSaveT}>Save name</Text></Pressable>
-          <Pressable onPress={startSwap} style={[s.mBtn, s.mEdit, { marginBottom: 8 }]}><Text style={s.mEditT}>Move / swap with another player</Text></Pressable>
-          <Pressable onPress={() => setPlayer(null)} style={[s.mBtn, s.mCancel]}><Text style={s.mCancelT}>Cancel</Text></Pressable>
+          <TextInput value={rename} onChangeText={setRename} style={[s.input, { width: '100%', textAlign: 'left', marginBottom: 10 }]} placeholder="Player / pair name" placeholderTextColor={T.faint} />
+          <Pressable onPress={doRename} style={[s.mBtn, s.mSave, { marginBottom: 14 }]}><Text style={s.mSaveT}>Save name</Text></Pressable>
+          <Text style={s.swapHdr}>SWAP POSITION WITH</Text>
+          <TextInput value={swapFilter} onChangeText={setSwapFilter} style={[s.input, { width: '100%', textAlign: 'left', marginBottom: 8 }]} placeholder="Search player…" placeholderTextColor={T.faint} autoCapitalize="none" />
+          <ScrollView style={{ maxHeight: 220 }} keyboardShouldPersistTaps="handled">
+            {drawSlots
+              .filter((d: any) => d.entrantId !== player?.entrantId && nameOf(d.entrantId).toLowerCase().includes(swapFilter.trim().toLowerCase()))
+              .map((d: any) => (
+                <Pressable key={d.matchId + d.slot} onPress={() => swapWith(d)} style={s.swapRow}>
+                  <Text style={s.swapName} numberOfLines={1}>{nameOf(d.entrantId)}</Text>
+                  <Text style={s.swapGrp}>{data.groups.length > 1 ? `Grp ${d.group}` : ''}</Text>
+                </Pressable>
+              ))}
+          </ScrollView>
+          <Pressable onPress={() => setPlayer(null)} style={[s.mBtn, s.mCancel, { marginTop: 12 }]}><Text style={s.mCancelT}>Cancel</Text></Pressable>
         </View></View>
       </Modal>
     </View>
@@ -134,5 +151,8 @@ const s = StyleSheet.create({
   mBtn: { flex: 1, borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
   mCancel: { backgroundColor: T.bgSoft }, mCancelT: { color: T.muted, fontWeight: '700' },
   mSave: { backgroundColor: T.blue }, mSaveT: { color: '#fff', fontWeight: '700' },
-  mEdit: { backgroundColor: T.bgSoft, borderColor: T.navy, borderWidth: 1 }, mEditT: { color: T.navy, fontWeight: '700' },
+  swapHdr: { fontFamily: T.head, color: T.muted, fontSize: 11, fontWeight: '800', letterSpacing: 0.8, marginBottom: 8 },
+  swapRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 10, borderRadius: 8, borderBottomColor: T.line, borderBottomWidth: 1 },
+  swapName: { color: T.ink, fontSize: 13.5, fontWeight: '600', flex: 1 },
+  swapGrp: { color: T.faint, fontSize: 11, fontWeight: '700', marginLeft: 8 },
 });

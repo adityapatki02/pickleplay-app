@@ -10,9 +10,8 @@ const label = (round: number, total: number) => {
   return left === 0 ? 'FINAL' : left === 1 ? 'SEMIFINAL' : left === 2 ? 'QUARTERFINAL' : `ROUND ${round + 1}`;
 };
 
-export function BracketView({ matches, entrants, mode, pendingSwap, onScore, onClear, onPlayerTap }: {
+export function BracketView({ matches, entrants, mode, onScore, onClear, onPlayerTap }: {
   matches: IndoorMatch[]; entrants: IndoorEntrant[]; mode: 'view' | 'score' | 'edit';
-  pendingSwap: { matchId: string; slot: 'A' | 'B' } | null;
   onScore: (m: IndoorMatch) => void; onClear: (matchId: string) => void;
   onPlayerTap: (matchId: string, slot: 'A' | 'B', entrantId: string | null) => void;
 }) {
@@ -61,7 +60,7 @@ export function BracketView({ matches, entrants, mode, pendingSwap, onScore, onC
               <Text style={st.rh}>{label(r, total)}</Text>
               {rd.map(m => (
                 <View key={m.id} onLayout={e => setBox(m.id, e.nativeEvent.layout)}>
-                  <MatchCard m={m} by={by} mode={mode} pendingSwap={pendingSwap} onScore={onScore} onClear={onClear} onPlayerTap={onPlayerTap} />
+                  <MatchCard m={m} by={by} mode={mode} onScore={onScore} onClear={onClear} onPlayerTap={onPlayerTap} />
                 </View>
               ))}
             </View>
