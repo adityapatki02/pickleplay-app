@@ -13,3 +13,8 @@
 // compile-time constant (dead code for the other mode is tree-shaken).
 export const LEAGUE_KIOSK_ID: string = process.env.EXPO_PUBLIC_LEAGUE_ID || '';
 export const IS_LEAGUE_KIOSK: boolean = LEAGUE_KIOSK_ID.length > 0;
+
+// Indoor Games single-event build (ajanta.yoiden.com). When set, boot into the
+// Indoor overview for this event id.
+export const INDOOR_EVENT_ID: string = process.env.EXPO_PUBLIC_INDOOR_EVENT || '';
+export const IS_INDOOR_KIOSK: boolean = INDOOR_EVENT_ID.length > 0;
