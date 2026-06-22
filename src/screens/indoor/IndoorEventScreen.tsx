@@ -46,7 +46,8 @@ export default function IndoorEventScreen({ route, navigation }: any) {
       <IndoorHeader onBack={() => navigation.goBack()} title={data.competition.eventName}
         right={<Pressable onPress={toggleScorer} style={[s.scoreBtn, scorer && s.scoreBtnOn]}>
           <Text style={[s.scoreBtnT, scorer && { color: '#fff' }]}>{scorer ? 'Done' : 'Score'}</Text></Pressable>} />
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ alignItems: 'center', padding: 16 }}>
+        <View style={{ width: '100%', maxWidth: 1200 }}>
         {data.competition.isDraft ? <Text style={s.draft}>{'⚠️'}  Draft draw — doubles auto-paired; pairings need confirming.</Text> : null}
         {scorer ? <Text style={s.hint}>Scoring on — tap a match to enter its score.</Text> : null}
         {groups.length > 1 ? (
@@ -59,6 +60,7 @@ export default function IndoorEventScreen({ route, navigation }: any) {
           </View>
         ) : null}
         <BracketView matches={groupMatches} entrants={data.entrants} scorer={scorer} onScore={openScore} onClear={onClear} />
+        </View>
       </ScrollView>
 
       <Modal visible={!!editing} transparent animationType="fade" onRequestClose={() => setEditing(null)}>

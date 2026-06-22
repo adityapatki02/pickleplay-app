@@ -14,7 +14,8 @@ export default function IndoorOverviewScreen({ navigation }: any) {
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
       <IndoorHeader />
-      <ScrollView contentContainerStyle={{ padding: 18 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ alignItems: 'center', padding: 18 }}>
+        <View style={{ width: '100%', maxWidth: 1040 }}>
         <Text style={s.h1}>{data.event.name}</Text>
         <Text style={s.subtitle}>Single-elimination · {games.length} games · {data.competitions.length} events</Text>
         <View style={s.stats}>
@@ -37,6 +38,7 @@ export default function IndoorOverviewScreen({ navigation }: any) {
             ))}
           </View>
         ))}
+        </View>
       </ScrollView>
     </View>
   );
