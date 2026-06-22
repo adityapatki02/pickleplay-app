@@ -72,5 +72,5 @@ export function BracketView({ matches, entrants, mode, onScore, onClear, onPlaye
 }
 const st = StyleSheet.create({
   col: { minWidth: 248, justifyContent: 'space-around' },
-  rh: { color: T.blue, fontFamily: T.head, fontSize: 10.5, fontWeight: '800', letterSpacing: 1.4, textAlign: 'center', marginBottom: 8 },
+  rh: { color: '#fff', backgroundColor: T.navy, fontFamily: T.head, fontSize: 10, fontWeight: '800', letterSpacing: 1, textAlign: 'center', marginBottom: 10, alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, overflow: 'hidden' },
 });

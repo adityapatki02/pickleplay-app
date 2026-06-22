@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { indoorApi } from '../../api/indoor.api';
 import { useManage } from './manageContext';
 import { IndoorHeader } from './components/IndoorHeader';
+import { SportyBackground } from './components/SportyBackground';
 import { T } from './indoorTheme';
 
 export default function IndoorManageScreen({ navigation }: any) {
@@ -21,6 +22,7 @@ export default function IndoorManageScreen({ navigation }: any) {
   };
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
+      <SportyBackground />
       <IndoorHeader onBack={() => navigation.navigate('IndoorOverview')} title="Manage" />
       <View style={s.wrap}>
         <View style={s.card}>

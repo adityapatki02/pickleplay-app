@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet, Platform, Modal, TextInp
 import { indoorApi } from '../../api/indoor.api';
 import { BracketView } from './components/BracketView';
 import { IndoorHeader } from './components/IndoorHeader';
+import { SportyBackground } from './components/SportyBackground';
 import { useManage } from './manageContext';
 import { T } from './indoorTheme';
 
@@ -16,6 +17,7 @@ export default function IndoorEventScreen({ route, navigation }: any) {
   const [mode, setMode] = useState<'view' | 'score' | 'edit'>('view');
   const [editing, setEditing] = useState<any | null>(null);
   const [sa, setSa] = useState(''); const [sb, setSb] = useState('');
+  const [winSide, setWinSide] = useState<'A' | 'B' | null>(null);
   const [player, setPlayer] = useState<any | null>(null);
   const [rename, setRename] = useState('');
   const [swapFilter, setSwapFilter] = useState('');
@@ -38,14 +40,24 @@ export default function IndoorEventScreen({ route, navigation }: any) {
       return out;
     }));
 
-  const openScore = (m: any) => { setEditing(m); setSa(m.scoreA != null ? String(m.scoreA) : ''); setSb(m.scoreB != null ? String(m.scoreB) : ''); };
+  const openScore = (m: any) => {
+    setEditing(m);
+    setSa(m.scoreA != null ? String(m.scoreA) : '');
+    setSb(m.scoreB != null ? String(m.scoreB) : '');
+    setWinSide(m.winnerEntrantId ? (m.winnerEntrantId === m.entrantAId ? 'A' : 'B') : null);
+  };
+  const onScoreChange = (side: 'A' | 'B', val: string) => {
+    if (side === 'A') setSa(val); else setSb(val);
+    const a = parseInt(side === 'A' ? val : sa, 10);
+    const b = parseInt(side === 'B' ? val : sb, 10);
+    if (!isNaN(a) && !isNaN(b) && a !== b) setWinSide(a > b ? 'A' : 'B');
+  };
   const saveScore = async () => {
+    if (!winSide || !editing) return;
     const a = parseInt(sa, 10), b = parseInt(sb, 10);
-    if (isNaN(a) || isNaN(b)) return;
-    if (a === b) { (globalThis as any).alert?.('Scores must have a winner.'); return; }
-    const winnerId = a > b ? editing.entrantAId : editing.entrantBId;
-    await indoorApi.submit(editing.id, winnerId, pass, a, b);
-    setEditing(null); await load();
+    const winnerId = winSide === 'A' ? editing.entrantAId : editing.entrantBId;
+    await indoorApi.submit(editing.id, winnerId, pass, isNaN(a) ? undefined : a, isNaN(b) ? undefined : b);
+    setEditing(null); setWinSide(null); await load();
   };
   const onClear = async (matchId: string) => { await indoorApi.clear(matchId, pass); await load(); };
   const onPlayerTap = (matchId: string, slot: 'A' | 'B', entrantId: string | null) => {
@@ -75,6 +87,7 @@ export default function IndoorEventScreen({ route, navigation }: any) {
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
+      <SportyBackground />
       <IndoorHeader onBack={() => navigation.goBack()} title={data.competition.eventName} right={headerRight} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ alignItems: 'center', padding: 16 }}>
         <View style={{ width: '100%', maxWidth: 1200 }}>
@@ -93,12 +106,28 @@ export default function IndoorEventScreen({ route, navigation }: any) {
 
       <Modal visible={!!editing} transparent animationType="fade" onRequestClose={() => setEditing(null)}>
         <View style={s.overlay}><View style={s.modal}>
-          <Text style={s.modalTitle}>ENTER SCORE</Text>
-          {editing ? (<>
-            <View style={s.row}><Text style={s.rowName} numberOfLines={1}>{nameOf(editing.entrantAId)}</Text><TextInput value={sa} onChangeText={setSa} keyboardType="number-pad" placeholder="0" placeholderTextColor={T.faint} style={s.input} /></View>
-            <View style={s.row}><Text style={s.rowName} numberOfLines={1}>{nameOf(editing.entrantBId)}</Text><TextInput value={sb} onChangeText={setSb} keyboardType="number-pad" placeholder="0" placeholderTextColor={T.faint} style={s.input} /></View>
-          </>) : null}
-          <View style={s.mBtns}><Pressable onPress={() => setEditing(null)} style={[s.mBtn, s.mCancel]}><Text style={s.mCancelT}>Cancel</Text></Pressable><Pressable onPress={saveScore} style={[s.mBtn, s.mSave]}><Text style={s.mSaveT}>Save result</Text></Pressable></View>
+          <Text style={s.modalTitle}>ENTER RESULT</Text>
+          <Text style={s.modalSub}>Tap the winner, enter the scores.</Text>
+          {editing ? (['A', 'B'] as const).map((side) => {
+            const id = side === 'A' ? editing.entrantAId : editing.entrantBId;
+            const sel = winSide === side;
+            return (
+              <Pressable key={side} onPress={() => setWinSide(side)} style={[s.resRow, sel && s.resRowWin]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.resName, sel && s.resNameWin]} numberOfLines={1}>{nameOf(id)}</Text>
+                  <Text style={[s.resTag, sel && s.resTagWin]}>{sel ? '🏆 WINNER' : 'tap to set winner'}</Text>
+                </View>
+                <TextInput value={side === 'A' ? sa : sb} onChangeText={(v) => onScoreChange(side, v)}
+                  keyboardType="number-pad" placeholder="0" placeholderTextColor={T.faint} style={s.resScore} />
+              </Pressable>
+            );
+          }) : null}
+          <Pressable onPress={saveScore} disabled={!winSide} style={[s.mBtn, s.mSave, { marginTop: 6 }, !winSide && { opacity: 0.45 }]}>
+            <Text style={s.mSaveT}>Save result</Text>
+          </Pressable>
+          <Pressable onPress={() => { setEditing(null); setWinSide(null); }} style={[s.mBtn, s.mCancel, { marginTop: 8 }]}>
+            <Text style={s.mCancelT}>Cancel</Text>
+          </Pressable>
         </View></View>
       </Modal>
 
@@ -151,6 +180,14 @@ const s = StyleSheet.create({
   mBtn: { flex: 1, borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
   mCancel: { backgroundColor: T.bgSoft }, mCancelT: { color: T.muted, fontWeight: '700' },
   mSave: { backgroundColor: T.blue }, mSaveT: { color: '#fff', fontWeight: '700' },
+  modalSub: { color: T.muted, fontSize: 12.5, marginTop: -8, marginBottom: 16 },
+  resRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5, borderColor: T.line, borderRadius: 12, padding: 12, marginBottom: 10 },
+  resRowWin: { borderColor: T.winStrong, backgroundColor: T.winBg2 },
+  resName: { color: T.ink, fontSize: 15, fontWeight: '700' },
+  resNameWin: { color: '#075E40' },
+  resTag: { color: T.faint, fontSize: 11, fontWeight: '700', marginTop: 2 },
+  resTagWin: { color: T.winStrong },
+  resScore: { width: 64, borderWidth: 1, borderColor: T.line, borderRadius: 10, paddingVertical: 8, textAlign: 'center', fontSize: 20, fontWeight: '800', color: T.ink, backgroundColor: T.bgSoft },
   swapHdr: { fontFamily: T.head, color: T.muted, fontSize: 11, fontWeight: '800', letterSpacing: 0.8, marginBottom: 8 },
   swapRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 10, borderRadius: 8, borderBottomColor: T.line, borderBottomWidth: 1 },
   swapName: { color: T.ink, fontSize: 13.5, fontWeight: '600', flex: 1 },

@@ -3,6 +3,7 @@ import { ScrollView, View, Text, Pressable, ActivityIndicator, StyleSheet } from
 import { indoorApi, IndoorCompetition } from '../../api/indoor.api';
 import { INDOOR_EVENT_ID } from '../../config/appMode';
 import { IndoorHeader } from './components/IndoorHeader';
+import { SportyBackground } from './components/SportyBackground';
 import { T } from './indoorTheme';
 
 export default function IndoorOverviewScreen({ navigation }: any) {
@@ -13,6 +14,7 @@ export default function IndoorOverviewScreen({ navigation }: any) {
   const entries = data.competitions.reduce((a, c) => a + c.entrantCount, 0);
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
+      <SportyBackground />
       <IndoorHeader right={<Pressable onPress={() => navigation.navigate('IndoorManage')} style={{ borderWidth: 1, borderColor: T.line, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 }}><Text style={{ color: T.muted, fontWeight: '700', fontSize: 12.5 }}>Manage</Text></Pressable>} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ alignItems: 'center', padding: 18 }}>
         <View style={{ width: '100%', maxWidth: 1040 }}>
@@ -44,14 +46,18 @@ export default function IndoorOverviewScreen({ navigation }: any) {
   );
 }
 const Stat = ({ n, l }: { n: string; l: string }) => (
-  <View style={s.stat}><Text style={s.statN}>{n}</Text><Text style={s.statL}>{l}</Text></View>
+  <View style={s.stat}>
+    <View style={s.statBar} />
+    <Text style={s.statN}>{n}</Text><Text style={s.statL}>{l}</Text>
+  </View>
 );
 const s = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   h1: { color: T.navy, fontFamily: T.head, fontSize: 22, fontWeight: '800', letterSpacing: 0.2 },
   subtitle: { color: T.muted, fontSize: 13, marginTop: 3, marginBottom: 18 },
   stats: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-  stat: { flex: 1, backgroundColor: T.card, borderColor: T.line, borderWidth: 1, borderRadius: 14, padding: 16, shadowColor: '#001E40', shadowOpacity: 0.05, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  stat: { flex: 1, backgroundColor: T.card, borderColor: T.line, borderWidth: 1, borderRadius: 14, padding: 16, shadowColor: '#001E40', shadowOpacity: 0.05, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, overflow: 'hidden', position: 'relative' },
+  statBar: { position: 'absolute', left: 0, right: 0, top: 0, height: 3, backgroundColor: T.blue, borderTopLeftRadius: 14, borderTopRightRadius: 14 },
   statN: { color: T.blue, fontFamily: T.head, fontSize: 26, fontWeight: '800' },
   statL: { color: T.muted, fontSize: 12, marginTop: 2 },
   gh: { color: T.navy, fontFamily: T.head, fontSize: 13, fontWeight: '800', letterSpacing: 1, marginBottom: 10 },

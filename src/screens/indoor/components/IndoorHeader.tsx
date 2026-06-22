@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { T } from '../indoorTheme';
 
 export function IndoorHeader({ onBack, title, right }: {
@@ -16,11 +17,13 @@ export function IndoorHeader({ onBack, title, right }: {
         {title ? <Text style={s.title} numberOfLines={1}>{title}</Text> : null}
       </View>
       {right ? <View>{right}</View> : null}
+      <LinearGradient colors={[ '#001E40', '#2196F3', '#06D6A0' ]} start={{x:0,y:0}} end={{x:1,y:0}}
+        style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 3 }} />
     </View>
   );
 }
 const s = StyleSheet.create({
-  bar: { height: 56, backgroundColor: T.bg, borderBottomColor: T.line, borderBottomWidth: 1,
+  bar: { height: 56, backgroundColor: T.bg,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
   left: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 },
   logo: { width: 104, height: 28 },

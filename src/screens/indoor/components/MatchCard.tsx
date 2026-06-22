@@ -17,12 +17,13 @@ export function MatchCard({ m, by, mode, onScore, onClear, onPlayerTap }: {
     const slotTappable = mode === 'edit' && !!id && m.round === 0;
     const inner = (
       <>
+        {win ? <View style={s.accent} /> : null}
         <View style={{ flex: 1 }}>
           <Text style={[s.nm, win && s.nmWin, !e && s.faint]} numberOfLines={1}>{e ? e.name : '—'}</Text>
-          {e?.dept ? <Text style={s.dp} numberOfLines={1}>{e.dept}</Text> : null}
+          {e?.dept ? <Text style={[s.dp, win && s.dpWin]} numberOfLines={1}>{e.dept}</Text> : null}
         </View>
         {score != null ? <Text style={[s.score, win && s.scoreWin]}>{score}</Text> : null}
-        {win ? <Text style={s.tick}>{'✓'}</Text> : null}
+        {win ? <Text style={s.trophy}>🏆</Text> : null}
       </>
     );
     const st = [s.slot, win && s.win, side === 'A' && s.border, slotTappable && s.editable];
@@ -32,7 +33,7 @@ export function MatchCard({ m, by, mode, onScore, onClear, onPlayerTap }: {
   };
   const Wrapper: any = matchTappable ? Pressable : View;
   return (
-    <Wrapper {...(matchTappable ? { onPress: () => onScore(m) } : {})} style={[s.match, matchTappable && s.tappable]}>
+    <Wrapper {...(matchTappable ? { onPress: () => onScore(m) } : {})} style={[s.match, matchTappable && s.tappable, completed && s.done]}>
       {m.round === 0 && m.board ? <Text style={s.board}>B{m.board}</Text> : null}
       {slot(m.entrantAId, 'A', m.scoreA)}
       {slot(m.entrantBId, 'B', m.scoreB)}
@@ -44,20 +45,23 @@ export function MatchCard({ m, by, mode, onScore, onClear, onPlayerTap }: {
   );
 }
 const s = StyleSheet.create({
-  match: { backgroundColor: T.card, borderColor: T.line, borderWidth: 1, borderRadius: 12, marginBottom: 12, position: 'relative', shadowColor: '#001E40', shadowOpacity: 0.05, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  match: { backgroundColor: T.card, borderColor: T.line, borderWidth: 1, borderRadius: 12, marginBottom: 12, position: 'relative', shadowColor: '#001E40', shadowOpacity: 0.06, shadowRadius: 7, shadowOffset: { width: 0, height: 2 } },
   tappable: { borderColor: T.blue },
-  board: { position: 'absolute', top: -8, left: 10, backgroundColor: T.navy, color: '#fff', fontSize: 9, fontWeight: '800', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, zIndex: 1, overflow: 'hidden' },
-  slot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 11, paddingVertical: 9 },
+  done: { borderColor: '#BBE9D4' },
+  board: { position: 'absolute', top: -8, left: 10, backgroundColor: T.navy, color: '#fff', fontSize: 9, fontWeight: '800', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, zIndex: 2, overflow: 'hidden' },
+  slot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 11, paddingVertical: 10, position: 'relative', overflow: 'hidden' },
   border: { borderBottomColor: T.line, borderBottomWidth: 1 },
   editable: { backgroundColor: 'rgba(33,150,243,0.06)' },
-  win: { backgroundColor: T.winBg },
+  win: { backgroundColor: T.winBg2 },
+  accent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: T.winStrong },
   nm: { color: T.ink, fontSize: 13, fontWeight: '600' },
-  nmWin: { color: T.navy, fontWeight: '800' },
+  nmWin: { color: '#075E40', fontWeight: '800' },
   faint: { color: T.faint, fontStyle: 'italic', fontWeight: '500' },
   dp: { color: T.faint, fontSize: 10 },
-  score: { color: T.muted, fontWeight: '800', fontSize: 14, marginLeft: 8, minWidth: 18, textAlign: 'right' },
-  scoreWin: { color: T.win },
-  tick: { color: T.win, fontWeight: '800', fontSize: 13, marginLeft: 6 },
+  dpWin: { color: '#0F9D63' },
+  score: { color: T.muted, fontWeight: '800', fontSize: 15, marginLeft: 8, minWidth: 20, textAlign: 'right' },
+  scoreWin: { color: T.winStrong },
+  trophy: { fontSize: 13, marginLeft: 6 },
   undo: { borderTopColor: T.line, borderTopWidth: 1, alignItems: 'center', paddingVertical: 6 },
   undoT: { color: T.faint, fontSize: 11, fontWeight: '600' },
   tapHint: { color: T.blue, fontSize: 10, textAlign: 'center', paddingBottom: 6, fontWeight: '600' },

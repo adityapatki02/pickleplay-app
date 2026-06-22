@@ -6,5 +6,6 @@ export const T = {
   card: '#FFFFFF', line: '#E2E8F0',
   ink: '#1A1D21', muted: '#64748B', faint: '#94A3B8',
   onNavy: '#FFFFFF', win: '#0F9D63', winBg: '#E7F8F1', gold: '#B45309',
+  winStrong: '#0F9D63', winBg2: '#DCFCE7', accentBlue: '#2196F3', navyDeep: '#00132B',
   head: typography.fontFamily.headline, body: typography.fontFamily.body,
 };
