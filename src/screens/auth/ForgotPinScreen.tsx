@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -25,42 +25,26 @@ import { YColors, YFonts } from '../../config/yoiden';
 type Props = NativeStackScreenProps<AuthStackParamList, 'ForgotPin'>;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const OTP_LENGTH = 6;
 const IS_WEB = Platform.OS === 'web';
 
-/**
- * Self-serve PIN reset.
- *
- * Web: opens MSG91's browser widget (`openMsg91Widget`) which collects the
- * phone, sends + verifies the OTP, and returns an access token.
- *
- * Native (iOS/Android): the browser widget can't run, so we drive MSG91's
- * mobile OTP endpoints directly on-device (see config/msg91mobile.ts) — phone
- * → send OTP → enter OTP → verify → access token. This mirrors MSG91's
- * documented mobile flow.
- *
- * Both paths end the same way: we hold the MSG91 access token, the user picks
- * a new PIN, and we POST { accessToken, newPin } to /auth/forgot-pin/reset.
- * The backend verifies the token with MSG91, looks up the user by the verified
- * phone, rotates the PIN, and returns a Yoiden JWT — we log the user in.
- */
 export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
   const { login } = useAuthStore();
 
-  // Native OTP step state.
-  const [phone, setPhone] = useState(route.params?.phone ?? '');
-  const [reqId, setReqId] = useState<string | null>(null);
-  const [otp, setOtp] = useState('');
-  const [sending, setSending] = useState(false);
-  const [resending, setResending] = useState(false);
+  // Shared state
+  const [accessToken, setAccessToken] = useState('');
+  const [resetToken, setResetToken]   = useState('');
+  const [newPin, setNewPin]           = useState('');
+  const [confirmPin, setConfirmPin]   = useState('');
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState('');
 
-  // Shared.
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [newPin, setNewPin] = useState('');
-  const [confirmPin, setConfirmPin] = useState('');
-  const [verifying, setVerifying] = useState(false);
-  const [resetting, setResetting] = useState(false);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  // Native-only state
+  const [step, setStep]             = useState<1 | 2 | 3>(1);
+  const [phone, setPhone]           = useState(route.params?.phone ?? '');
+  const [otpDigits, setOtpDigits]   = useState<string[]>(Array(OTP_LENGTH).fill(''));
+  const [resendTimer, setResendTimer] = useState(0);
+  const otpRefs = useRef<(TextInput | null)[]>([]);
 
   const fadeIn = useRef(new Animated.Value(0)).current;
 
@@ -68,133 +52,168 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
     Animated.timing(fadeIn, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   }, [fadeIn]);
 
-  const phoneOk = /^[0-9]{10}$/.test(phone);
-  const otpOk = /^[0-9]{6}$/.test(otp);
-  const pinOk = newPin.length === 6 && /^[0-9]+$/.test(newPin);
-  const confirmOk = confirmPin === newPin && confirmPin.length === 6;
-  const canReset = !!accessToken && pinOk && confirmOk && !resetting;
+  // Resend countdown (native only)
+  useEffect(() => {
+    if (IS_WEB || step !== 2 || resendTimer <= 0) return;
+    const t = setTimeout(() => setResendTimer(s => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [step, resendTimer]);
 
-  // ── Web: MSG91 browser widget ────────────────────────────────────────────
-  const handleVerifyPhoneWeb = async () => {
-    if (verifying) return;
+  // ─── Web: widget opens → gives us access token ───────────────────────────
+
+  const handleWebVerify = async () => {
+    if (loading) return;
     setError('');
-    setVerifying(true);
+    setLoading(true);
     try {
       const prefill = route.params?.phone ? `+91${route.params.phone}` : undefined;
       const token = await openMsg91Widget(prefill);
       setAccessToken(token);
     } catch (err: any) {
-      const msg = err?.message ?? 'Could not verify your phone. Please try again.';
-      if (typeof err === 'object' && err && 'type' in err) {
-        setError('Verification cancelled. Tap to try again.');
-      } else {
-        setError(msg);
-      }
+      setError(err?.message ?? 'Verification cancelled. Please try again.');
     } finally {
-      setVerifying(false);
+      setLoading(false);
     }
   };
 
-  // ── Native: on-device MSG91 mobile OTP ───────────────────────────────────
+  // ─── Native step 1: send OTP via SDK ─────────────────────────────────────
+
+  const normalizedPhone = phone.startsWith('+91')
+    ? phone
+    : `+91${phone.replace(/^0/, '')}`;
+  const phoneOk = /^[0-9]{10}$/.test(phone.trim());
+
   const handleSendOtp = async () => {
-    if (sending || !phoneOk) return;
+    if (!phoneOk || loading) return;
     setError('');
-    setNotice('');
-    setSending(true);
+    setLoading(true);
     try {
-      const id = await sendMobileOtp(phone);
-      setReqId(id);
-      setNotice(`We've sent a 6-digit code to +91 ${phone}.`);
+      await authApi.sendForgotPinOtp({ phone: normalizedPhone });
+      setOtpDigits(Array(OTP_LENGTH).fill(''));
+      setStep(2);
+      setResendTimer(30);
+      setTimeout(() => otpRefs.current[0]?.focus(), 300);
     } catch (err: any) {
-      setError(err?.message ?? 'Could not send the OTP. Please try again.');
+      setError(err?.response?.data?.message ?? 'Could not send OTP. Please try again.');
     } finally {
-      setSending(false);
+      setLoading(false);
     }
   };
 
-  const handleResendOtp = async () => {
-    if (resending || !reqId) return;
+  const handleResend = async () => {
+    if (resendTimer > 0 || loading) return;
     setError('');
-    setNotice('');
-    setResending(true);
+    setLoading(true);
     try {
-      await retryMobileOtp(reqId);
-      setNotice('A new code is on its way.');
+      await authApi.sendForgotPinOtp({ phone: normalizedPhone });
+      setOtpDigits(Array(OTP_LENGTH).fill(''));
+      setResendTimer(30);
+      setTimeout(() => otpRefs.current[0]?.focus(), 100);
     } catch (err: any) {
-      setError(err?.message ?? 'Could not resend the code. Please try again.');
+      setError(err?.response?.data?.message ?? 'Could not resend OTP.');
     } finally {
-      setResending(false);
+      setLoading(false);
     }
   };
 
-  const handleVerifyOtp = async () => {
-    if (verifying || !otpOk || !reqId) return;
+  // ─── Native step 2: verify OTP via SDK ───────────────────────────────────
+
+  const otp = otpDigits.join('');
+  const otpComplete = otp.length === OTP_LENGTH;
+
+  const handleOtpChange = useCallback((value: string, index: number) => {
+    const digit = value.replace(/[^0-9]/g, '').slice(-1);
+    const next = [...otpDigits];
+    next[index] = digit;
+    setOtpDigits(next);
     setError('');
-    setNotice('');
-    setVerifying(true);
+    if (digit && index < OTP_LENGTH - 1) otpRefs.current[index + 1]?.focus();
+  }, [otpDigits]);
+
+  const handleOtpKeyPress = useCallback((e: any, index: number) => {
+    if (e.nativeEvent.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+  }, [otpDigits]);
+
+  const handleOtpVerify = async () => {
+    if (!otpComplete || loading) return;
+    setError('');
+    setLoading(true);
     try {
-      const token = await verifyMobileOtp(reqId, otp);
-      setAccessToken(token);
+      const res = await authApi.checkForgotPinOtp({ phone: normalizedPhone, otp });
+      const token = res.data.data?.resetToken;
+      if (!token) throw new Error('Verification failed. Please try again.');
+      setResetToken(token);
+      setStep(3);
     } catch (err: any) {
-      setError(err?.message ?? 'Invalid OTP. Please try again.');
+      setError(err?.response?.data?.message ?? 'Invalid OTP. Please try again.');
+      setOtpDigits(Array(OTP_LENGTH).fill(''));
+      setTimeout(() => otpRefs.current[0]?.focus(), 100);
     } finally {
-      setVerifying(false);
+      setLoading(false);
     }
   };
 
-  // ── Shared: reset PIN with the access token ──────────────────────────────
+  // ─── Shared: reset PIN ────────────────────────────────────────────────────
+
+  const pinOk    = newPin.length === 6 && /^[0-9]+$/.test(newPin);
+  const confirmOk = confirmPin === newPin && confirmPin.length === 6;
+  const hasToken  = IS_WEB ? !!accessToken : !!resetToken;
+  const canReset  = hasToken && pinOk && confirmOk && !loading;
+
+  // On web: show PIN form once we have the access token
+  // On native: PIN form is step 3
+  const showPinForm = IS_WEB ? !!accessToken : step === 3;
+
   const handleReset = async () => {
-    if (!canReset || !accessToken) return;
+    if (!canReset) return;
     setError('');
-    setResetting(true);
+    setLoading(true);
     try {
-      const res = await authApi.resetPin({ accessToken, newPin });
+      let res;
+      if (IS_WEB) {
+        res = await authApi.resetPin({ accessToken, newPin });
+      } else {
+        res = await authApi.resetPinWithToken({ resetToken, newPin });
+      }
       login(res.data.data.user, res.data.data.accessToken);
     } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ??
-        'Could not reset PIN. Please try verifying again.';
+      const msg = err?.response?.data?.message ?? 'Could not reset PIN. Please try again.';
       setError(Array.isArray(msg) ? msg[0] : msg);
       if (err?.response?.status === 401) {
-        // Token rejected — restart the flow.
-        setAccessToken(null);
-        if (!IS_WEB) setReqId(null);
+        setResetToken('');
+        setAccessToken('');
+        if (!IS_WEB) setStep(1);
       }
     } finally {
-      setResetting(false);
+      setLoading(false);
     }
   };
 
-  // Which stage are we in?
-  const stage: 'pin' | 'otp' | 'phone' | 'webVerify' = accessToken
-    ? 'pin'
-    : IS_WEB
-      ? 'webVerify'
-      : reqId
-        ? 'otp'
-        : 'phone';
+  // ─── Render ───────────────────────────────────────────────────────────────
 
-  const eyebrow =
-    stage === 'pin'
-      ? IS_WEB
-        ? 'STEP 2'
-        : 'STEP 3'
-      : stage === 'otp'
-        ? 'STEP 2'
-        : 'STEP 1';
+  const eyebrow = IS_WEB
+    ? (accessToken ? 'STEP 2 OF 2' : 'STEP 1 OF 2')
+    : (['STEP 1 OF 3', 'STEP 2 OF 3', 'STEP 3 OF 3'][step - 1]);
 
-  const title =
-    stage === 'pin' ? 'SET A' : stage === 'otp' ? 'ENTER' : 'FORGOT';
-  const titleAccent =
-    stage === 'pin' ? 'NEW PIN.' : stage === 'otp' ? 'THE CODE.' : 'YOUR PIN?';
-  const subtitle =
-    stage === 'pin'
-      ? "Choose a new 6-digit PIN. You'll use this to log in next time."
-      : stage === 'otp'
-        ? `Enter the 6-digit code we texted to +91 ${phone}.`
-        : IS_WEB
-          ? 'Verify your phone with a one-time SMS code, then choose a new PIN.'
-          : 'Enter your registered phone number — we\'ll text you a one-time code.';
+  const titleMain = IS_WEB
+    ? (accessToken ? 'SET A' : 'FORGOT')
+    : (['FORGOT', 'VERIFY', 'SET A'][step - 1]);
+
+  const titleAccent = IS_WEB
+    ? (accessToken ? 'NEW PIN.' : 'YOUR PIN?')
+    : (['YOUR PIN?', 'YOUR PHONE.', 'NEW PIN.'][step - 1]);
+
+  const subtitle = IS_WEB
+    ? (accessToken
+        ? "Choose a new 6-digit PIN. You'll use this to log in next time."
+        : "Tap below to verify your phone number and receive a one-time code.")
+    : ([
+        "Enter your registered phone number and we'll send a one-time code via SMS.",
+        "Enter the 6-digit code we just sent to your number.",
+        "Choose a new 6-digit PIN. You'll use this to log in next time.",
+      ][step - 1]);
 
   return (
     <SafeAreaView style={s.screen}>
@@ -207,7 +226,7 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Logo header (cream w/ lime stripe) */}
+          {/* Logo header */}
           <View style={s.logoHeader}>
             <View style={s.sideStripe} />
             <Image
@@ -222,26 +241,39 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
             />
           </View>
 
-          {/* Editorial body */}
           <Animated.View style={[s.body, { opacity: fadeIn }]}>
             <Text style={s.eyebrow}>{eyebrow}</Text>
-            <Text style={s.title}>{title}</Text>
+            <Text style={s.title}>{titleMain}</Text>
             <Text style={s.titleAccent}>{titleAccent}</Text>
             <Text style={s.subtitle}>{subtitle}</Text>
 
-            {/* STAGE: phone (native) */}
-            {stage === 'phone' && (
+            {/* ── Web: verify button (step 1) ── */}
+            {IS_WEB && !accessToken && (
+              <TouchableOpacity
+                style={[s.primaryBtn, loading && s.btnDisabled]}
+                onPress={handleWebVerify}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
+                {loading
+                  ? <ActivityIndicator color={YColors.bg} size="small" />
+                  : <Text style={s.primaryBtnText}>VERIFY YOUR PHONE</Text>}
+              </TouchableOpacity>
+            )}
+
+            {/* ── Native step 1: phone entry ── */}
+            {!IS_WEB && step === 1 && (
               <>
                 <View style={s.field}>
                   <Text style={s.label}>PHONE NUMBER</Text>
                   <View style={s.phoneRow}>
-                    <View style={s.ccBox}>
-                      <Text style={s.ccText}>+91</Text>
+                    <View style={s.countryBadge}>
+                      <Text style={s.countryText}>+91</Text>
                     </View>
                     <TextInput
                       style={[s.input, s.phoneInput]}
                       value={phone}
-                      onChangeText={(t) => {
+                      onChangeText={t => {
                         setPhone(t.replace(/[^0-9]/g, '').slice(0, 10));
                         setError('');
                       }}
@@ -249,120 +281,88 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
                       placeholderTextColor={YColors.ink3}
                       keyboardType="number-pad"
                       maxLength={10}
-                      editable={!sending}
-                      returnKeyType="send"
-                      onSubmitEditing={phoneOk ? handleSendOtp : undefined}
+                      returnKeyType="done"
+                      onSubmitEditing={handleSendOtp}
+                      editable={!loading}
                     />
                   </View>
                 </View>
-
                 <TouchableOpacity
-                  style={[s.primaryBtn, (!phoneOk || sending) && s.btnDisabled]}
+                  style={[s.primaryBtn, (!phoneOk || loading) && s.btnDisabled]}
                   onPress={handleSendOtp}
-                  disabled={!phoneOk || sending}
+                  disabled={!phoneOk || loading}
                   activeOpacity={0.85}
                 >
-                  {sending ? (
-                    <ActivityIndicator color={YColors.bg} size="small" />
-                  ) : (
-                    <Text style={s.primaryBtnText}>SEND OTP</Text>
-                  )}
+                  {loading
+                    ? <ActivityIndicator color={YColors.bg} size="small" />
+                    : <Text style={s.primaryBtnText}>SEND OTP</Text>}
                 </TouchableOpacity>
               </>
             )}
 
-            {/* STAGE: otp (native) */}
-            {stage === 'otp' && (
+            {/* ── Native step 2: OTP entry ── */}
+            {!IS_WEB && step === 2 && (
               <>
-                <View style={s.field}>
-                  <Text style={s.label}>6-DIGIT CODE</Text>
-                  <TextInput
-                    style={[s.input, s.otpInput]}
-                    value={otp}
-                    onChangeText={(t) => {
-                      setOtp(t.replace(/[^0-9]/g, '').slice(0, 6));
-                      setError('');
-                    }}
-                    placeholder="• • • • • •"
-                    placeholderTextColor={YColors.ink3}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    editable={!verifying}
-                    returnKeyType="done"
-                    onSubmitEditing={otpOk ? handleVerifyOtp : undefined}
-                  />
+                <View style={s.otpRow}>
+                  {otpDigits.map((digit, i) => (
+                    <React.Fragment key={i}>
+                      {i === 3 && (
+                        <View style={s.otpDash}>
+                          <Text style={s.otpDashText}>—</Text>
+                        </View>
+                      )}
+                      <TextInput
+                        ref={ref => { otpRefs.current[i] = ref; }}
+                        style={[s.otpBox, digit ? s.otpBoxFilled : null]}
+                        value={digit}
+                        onChangeText={v => handleOtpChange(v, i)}
+                        onKeyPress={e => handleOtpKeyPress(e, i)}
+                        keyboardType="number-pad"
+                        maxLength={1}
+                        selectTextOnFocus
+                        editable={!loading}
+                      />
+                    </React.Fragment>
+                  ))}
                 </View>
-
-                <TouchableOpacity
-                  style={[s.primaryBtn, (!otpOk || verifying) && s.btnDisabled]}
-                  onPress={handleVerifyOtp}
-                  disabled={!otpOk || verifying}
-                  activeOpacity={0.85}
-                >
-                  {verifying ? (
-                    <ActivityIndicator color={YColors.bg} size="small" />
-                  ) : (
-                    <Text style={s.primaryBtnText}>VERIFY CODE</Text>
-                  )}
-                </TouchableOpacity>
-
                 <View style={s.resendRow}>
-                  <TouchableOpacity onPress={handleResendOtp} disabled={resending}>
-                    <Text style={s.linkAction}>
-                      {resending ? 'Resending…' : 'Resend code'}
-                    </Text>
-                  </TouchableOpacity>
-                  <Text style={s.linkText}>  ·  </Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setReqId(null);
-                      setOtp('');
-                      setError('');
-                      setNotice('');
-                    }}
-                  >
-                    <Text style={s.linkAction}>Change number</Text>
-                  </TouchableOpacity>
+                  {resendTimer > 0 ? (
+                    <Text style={s.resendTimer}>Resend in {resendTimer}s</Text>
+                  ) : (
+                    <TouchableOpacity onPress={handleResend} disabled={loading}>
+                      <Text style={s.resendLink}>Resend OTP</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
-              </>
-            )}
-
-            {/* STAGE: web widget verify */}
-            {stage === 'webVerify' && (
-              <>
                 <TouchableOpacity
-                  style={[s.primaryBtn, verifying && s.btnDisabled]}
-                  onPress={handleVerifyPhoneWeb}
-                  disabled={verifying}
+                  style={[s.primaryBtn, (!otpComplete || loading) && s.btnDisabled]}
+                  onPress={handleOtpVerify}
+                  disabled={!otpComplete || loading}
                   activeOpacity={0.85}
                 >
-                  {verifying ? (
-                    <ActivityIndicator color={YColors.bg} size="small" />
-                  ) : (
-                    <Text style={s.primaryBtnText}>VERIFY YOUR PHONE</Text>
-                  )}
+                  {loading
+                    ? <ActivityIndicator color={YColors.bg} size="small" />
+                    : <Text style={s.primaryBtnText}>VERIFY OTP</Text>}
                 </TouchableOpacity>
-                <Text style={s.helperText}>
-                  Tapping this opens a verification window powered by MSG91.
-                  Enter your phone, then the 6-digit code we'll text you.
-                </Text>
+                <TouchableOpacity
+                  style={s.linkRow}
+                  onPress={() => setStep(1)}
+                  disabled={loading}
+                >
+                  <Text style={s.linkText}>← Change phone number</Text>
+                </TouchableOpacity>
               </>
             )}
 
-            {/* STAGE: pin (shared) */}
-            {stage === 'pin' && (
+            {/* ── Shared: new PIN form (web step 2 / native step 3) ── */}
+            {showPinForm && (
               <>
-                <View style={s.verifiedRow}>
-                  <Text style={s.verifiedDot}>●</Text>
-                  <Text style={s.verifiedText}>Phone verified</Text>
-                </View>
-
                 <View style={s.field}>
                   <Text style={s.label}>NEW 6-DIGIT PIN</Text>
                   <TextInput
                     style={s.input}
                     value={newPin}
-                    onChangeText={(t) => {
+                    onChangeText={t => {
                       setNewPin(t.replace(/[^0-9]/g, '').slice(0, 6));
                       setError('');
                     }}
@@ -372,18 +372,17 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
                     maxLength={6}
                     secureTextEntry
                     returnKeyType="next"
-                    editable={!resetting}
+                    editable={!loading}
                     autoComplete="new-password"
                     textContentType="newPassword"
                   />
                 </View>
-
                 <View style={s.field}>
                   <Text style={s.label}>CONFIRM PIN</Text>
                   <TextInput
                     style={s.input}
                     value={confirmPin}
-                    onChangeText={(t) => {
+                    onChangeText={t => {
                       setConfirmPin(t.replace(/[^0-9]/g, '').slice(0, 6));
                       setError('');
                     }}
@@ -393,7 +392,7 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
                     maxLength={6}
                     secureTextEntry
                     returnKeyType="done"
-                    editable={!resetting}
+                    editable={!loading}
                     onSubmitEditing={canReset ? handleReset : undefined}
                     autoComplete="new-password"
                     textContentType="newPassword"
@@ -402,6 +401,25 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
                     <Text style={s.warnHint}>PINs don't match</Text>
                   )}
                 </View>
+                <TouchableOpacity
+                  style={[s.primaryBtn, !canReset && s.btnDisabled]}
+                  onPress={handleReset}
+                  disabled={!canReset}
+                  activeOpacity={0.85}
+                >
+                  {loading
+                    ? <ActivityIndicator color={YColors.bg} size="small" />
+                    : <Text style={s.primaryBtnText}>RESET PIN & LOG IN</Text>}
+                </TouchableOpacity>
+                {!IS_WEB && (
+                  <TouchableOpacity
+                    style={s.linkRow}
+                    onPress={() => setStep(2)}
+                    disabled={loading}
+                  >
+                    <Text style={s.linkText}>← Back to OTP</Text>
+                  </TouchableOpacity>
+                )}
               </>
             )}
 
@@ -417,24 +435,9 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
               </View>
             )}
 
-            {stage === 'pin' && (
-              <TouchableOpacity
-                style={[s.primaryBtn, !canReset && s.btnDisabled]}
-                onPress={handleReset}
-                disabled={!canReset}
-                activeOpacity={0.85}
-              >
-                {resetting ? (
-                  <ActivityIndicator color={YColors.bg} size="small" />
-                ) : (
-                  <Text style={s.primaryBtnText}>RESET PIN & LOG IN</Text>
-                )}
-              </TouchableOpacity>
-            )}
-
             <TouchableOpacity
               onPress={() => navigation.goBack()}
-              disabled={resetting}
+              disabled={loading}
               style={s.linkRow}
             >
               <Text style={s.linkText}>
@@ -565,70 +568,56 @@ const s = StyleSheet.create({
     color: YColors.live,
     marginTop: 6,
   },
-  helperText: {
-    fontFamily: YFonts.ui,
-    fontSize: 12,
-    color: YColors.ink3,
-    marginTop: 12,
-    lineHeight: 17,
-  },
 
-  resendRow: {
+  phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  countryBadge: {
+    backgroundColor: YColors.bg2,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: YColors.line2,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  countryText: {
+    fontFamily: YFonts.uiSemibold,
+    fontSize: 16,
+    color: YColors.ink,
+  },
+  phoneInput: { flex: 1 },
+
+  otpRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 16,
-  },
-
-  verifiedRow: {
-    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(200,242,50,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(10,10,11,0.12)',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
     marginBottom: 20,
-    alignSelf: 'flex-start',
   },
-  verifiedDot: { fontSize: 10, color: YColors.ink },
-  verifiedText: {
+  otpBox: {
+    width: 44,
+    height: 52,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: YColors.line2,
+    backgroundColor: YColors.bg2,
+    textAlign: 'center',
     fontFamily: YFonts.uiExtrabold,
-    fontSize: 12,
+    fontSize: 20,
     color: YColors.ink,
-    letterSpacing: 1,
   },
+  otpBoxFilled: {
+    borderColor: YColors.accent,
+    backgroundColor: 'rgba(24,88,214,0.08)',
+  },
+  otpDash: { paddingHorizontal: 2 },
+  otpDashText: { color: YColors.ink3, fontSize: 16 },
 
-  noticeBox: {
-    backgroundColor: 'rgba(24,88,214,0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(24,88,214,0.30)',
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  noticeText: {
-    fontFamily: YFonts.uiSemibold,
+  resendRow: { alignItems: 'center', marginBottom: 20 },
+  resendTimer: { fontFamily: YFonts.ui, fontSize: 13, color: YColors.ink3 },
+  resendLink: {
+    fontFamily: YFonts.uiExtrabold,
     fontSize: 13,
-    color: YColors.accentDeep,
-  },
-
-  errorBox: {
-    backgroundColor: 'rgba(255,61,92,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,61,92,0.35)',
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  errorText: {
-    fontFamily: YFonts.uiSemibold,
-    fontSize: 13,
-    color: YColors.live,
+    color: YColors.accent,
+    letterSpacing: 0.5,
   },
 
   primaryBtn: {
@@ -646,14 +635,22 @@ const s = StyleSheet.create({
     letterSpacing: 2,
   },
 
-  linkRow: { marginTop: 16, alignItems: 'center', paddingVertical: 8 },
-  linkText: {
-    fontFamily: YFonts.ui,
+  errorBox: {
+    backgroundColor: 'rgba(255,61,92,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,61,92,0.35)',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  errorText: {
+    fontFamily: YFonts.uiSemibold,
     fontSize: 13,
-    color: YColors.ink2,
+    color: YColors.live,
   },
-  linkAction: {
-    fontFamily: YFonts.uiExtrabold,
-    color: YColors.accent,
-  },
+
+  linkRow: { marginTop: 16, alignItems: 'center', paddingVertical: 8 },
+  linkText: { fontFamily: YFonts.ui, fontSize: 13, color: YColors.ink2 },
+  linkAction: { fontFamily: YFonts.uiExtrabold, color: YColors.accent },
 });

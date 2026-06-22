@@ -5,12 +5,11 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
-  Alert,
-  Platform,
   Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, useFocusEffect, type RouteProp } from '@react-navigation/native';
+import Svg, { Path } from 'react-native-svg';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import {
@@ -47,17 +46,6 @@ const statusColor = (s: string): { bg: string; fg: string } => {
   }
 };
 
-const confirm = (message: string, onYes: () => void) => {
-  if (Platform.OS === 'web') {
-    // eslint-disable-next-line no-alert
-    if (typeof window !== 'undefined' && window.confirm(message)) onYes();
-  } else {
-    Alert.alert('Cancel booking', message, [
-      { text: 'Keep', style: 'cancel' },
-      { text: 'Cancel booking', style: 'destructive', onPress: onYes },
-    ]);
-  }
-};
 
 export default function MyBookingsScreen() {
   const nav = useNavigation<Nav>();
@@ -69,7 +57,7 @@ export default function MyBookingsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
 
   const fetch = useCallback(async () => {
     if (!isAuthed) {
@@ -94,19 +82,6 @@ export default function MyBookingsScreen() {
     }, [fetch]),
   );
 
-  const onCancel = (b: Booking) => {
-    confirm(`Cancel ${b.court?.name ?? 'court'} on ${b.bookingDate} at ${b.startTime}?`, async () => {
-      setCancellingId(b.id);
-      try {
-        await bookingsApi.cancel(b.id);
-        await fetch();
-      } catch (e: any) {
-        setError(e?.response?.data?.message || e?.message || 'Could not cancel');
-      } finally {
-        setCancellingId(null);
-      }
-    });
-  };
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
@@ -159,7 +134,6 @@ export default function MyBookingsScreen() {
             <YSectionHead eyebrow={`${bookings.length} BOOKING${bookings.length === 1 ? '' : 'S'}`} title="ALL" />
             {bookings.map((b) => {
               const sc = statusColor(b.status);
-              const cancellable = b.status === 'confirmed' || b.status === 'pending';
               return (
                 <Pressable
                   key={b.id}
@@ -186,16 +160,14 @@ export default function MyBookingsScreen() {
                       {b.channel === 'online' ? 'ONLINE' : 'AT VENUE'} ·{' '}
                       {b.paymentStatus.toUpperCase()}
                     </YMono>
-                    {cancellable ? (
-                      <YButton
-                        variant="ghost"
-                        size="sm"
-                        disabled={cancellingId === b.id}
-                        onPress={(e) => { e.stopPropagation?.(); onCancel(b); }}
-                      >
-                        {cancellingId === b.id ? '…' : 'CANCEL'}
-                      </YButton>
-                    ) : null}
+                    <Pressable
+                      hitSlop={12}
+                      onPress={(e) => { e.stopPropagation?.(); nav.navigate('BookingDetail', { bookingId: b.id }); }}
+                    >
+                      <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                        <Path d="M9 18l6-6-6-6" stroke={YColors.accent} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    </Pressable>
                   </View>
                 </Pressable>
               );
