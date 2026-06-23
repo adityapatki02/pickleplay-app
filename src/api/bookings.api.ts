@@ -18,4 +18,9 @@ export const bookingsApi = {
 
   cancel: (bookingId: string) =>
     apiClient.post<ApiResponse<Booking>>(`/bookings/${bookingId}/cancel`),
+
+  // Deliberate cancellation of a PAID booking with refund (only within the refund window —
+  // before the held venue transfer releases). Backend returns 400 REFUND_WINDOW_CLOSED otherwise.
+  refund: (bookingId: string) =>
+    apiClient.post<ApiResponse<Booking>>(`/bookings/${bookingId}/refund`),
 };
