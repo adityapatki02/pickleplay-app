@@ -22,10 +22,8 @@ import {
   YTopBar,
   YAvatar,
   YBadge,
-  YButton,
   YSectionHead,
   YTournamentRow,
-  YQuickAction,
   YStatTile,
   YVenueEditorial,
   YVenueRow,
@@ -86,6 +84,7 @@ export default function HomeScreen() {
   const [myHosted, setMyHosted] = useState<Tournament[]>([]);
   const [nearby, setNearby] = useState<Tournament[]>([]);
   const [apiVenues, setApiVenues] = useState<ApiVenue[]>([]);
+  const [myVenues, setMyVenues] = useState<ApiVenue[]>([]);
   const [nextBooking, setNextBooking] = useState<Booking | null>(null);
   const [activeSport, setActiveSport] = useState<string | null>(null);
   // Fetched once on mount — null means not yet resolved, undefined means denied/unavailable
@@ -108,11 +107,12 @@ export default function HomeScreen() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [regsRes, hostedRes, discoverRes, bookingsRes] = await Promise.allSettled([
+      const [regsRes, hostedRes, discoverRes, bookingsRes, myVenuesRes] = await Promise.allSettled([
         registrationsApi.getMyRegistrations(),
         tournamentsApi.getMyTournaments(),
         tournamentsApi.discover({ limit: 5 }),
         bookingsApi.myBookings(),
+        venuesApi.getMyVenues(),
       ]);
 
       if (regsRes.status === 'fulfilled') {
@@ -127,12 +127,16 @@ export default function HomeScreen() {
         const data = unwrap<Tournament[]>(discoverRes.value);
         setNearby(Array.isArray(data) ? data : []);
       }
+      if (myVenuesRes.status === 'fulfilled') {
+        const data = (myVenuesRes.value as any)?.data?.data ?? (myVenuesRes.value as any)?.data ?? [];
+        setMyVenues(Array.isArray(data) ? data : []);
+      }
       if (bookingsRes.status === 'fulfilled') {
         const data = unwrap<Booking[]>(bookingsRes.value);
         const all = Array.isArray(data) ? data : [];
         const now = new Date().toISOString().slice(0, 10);
         const upcoming = all
-          .filter(b => b.status === 'confirmed' && b.bookingDate >= now)
+          .filter(b => (b.status === 'confirmed' || b.status === 'pending') && b.bookingDate >= now)
           .sort((a, b) =>
             a.bookingDate !== b.bookingDate
               ? a.bookingDate.localeCompare(b.bookingDate)
@@ -187,7 +191,8 @@ export default function HomeScreen() {
     fetchAll();
   }, [fetchAll]);
 
-  const goPlay = () => nav.navigate('PlayTab', { screen: 'Play' });
+  const goVenueAdmin = (venueId: string) =>
+    nav.navigate('MeTab', { screen: 'VenueAdmin', params: { venueId } });
   const goHost = () => nav.navigate('PlayTab', { screen: 'CreateTournament' });
   const goBook = () => nav.navigate('BookTab', { screen: 'Book' });
   const openVenue = (venueId: string) =>
@@ -405,40 +410,50 @@ export default function HomeScreen() {
                 editable={false}
               />
             </View>
+            {/* Host nudge */}
+            <Pressable style={styles.hostNudge} onPress={goHost} hitSlop={8}>
+              <YUiText size={12} weight={500} color="rgba(255,255,255,0.7)">
+                Need to host a tournament?
+              </YUiText>
+              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                <Path d="M9 18l6-6-6-6" stroke="rgba(255,255,255,0.7)" strokeWidth={2} strokeLinecap="round" />
+              </Svg>
+            </Pressable>
           </View>
         </View>
 
-        {/* Big quick actions — bento grid, untouched */}
-        <View style={styles.quickRow}>
-          <View style={{ flex: 1 }}>
-            <YQuickAction
-              big
-              label="HOST"
-              sub="Run a tournament"
-              color={YColors.lime}
-              icon={
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                  <Path d="M3 21h18M5 21V8l7-4 7 4v13M9 12h2M13 12h2M9 16h2M13 16h2" stroke="#000" strokeWidth={2} strokeLinecap="round" />
-                </Svg>
-              }
-              onPress={goHost}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <YQuickAction
-              big
-              label="DISCOVER"
-              sub={nearby.length > 0 ? `${nearby.length} tournaments` : 'Browse near you'}
-              color={YColors.accent}
-              icon={
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                  <Path d="M21 21l-4.3-4.3M10 17a7 7 0 1 1 0-14 7 7 0 0 1 0 14z" stroke="#fff" strokeWidth={2} strokeLinecap="round" />
-                </Svg>
-              }
-              onPress={goPlay}
-            />
-          </View>
-        </View>
+        {/* Venue admin card — only for venue owners */}
+        {myVenues.length > 0 && (
+          <Pressable
+            style={styles.adminCard}
+            onPress={() => goVenueAdmin(myVenues[0].id)}
+          >
+            <View style={styles.adminIconCircle}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M3 21h18M5 21V8l7-4 7 4v13M9 12h2M13 12h2M9 16h2M13 16h2"
+                  stroke="#fff"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                />
+              </Svg>
+            </View>
+            <YDisplay size={18} color="#fff" style={{ fontStyle: 'italic', flex: 1, marginHorizontal: 12 }}>
+              VENUE ADMIN
+            </YDisplay>
+            <View style={styles.adminIconCircle}>
+              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M7 17L17 7M17 7H9M17 7v8"
+                  stroke="#fff"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </View>
+          </Pressable>
+        )}
 
         {/* Stat tiles — only shown when the user has events or hosted tournaments */}
         {(upcomingRegs.length > 0 || visibleHosted.length > 0) && (
@@ -586,13 +601,8 @@ export default function HomeScreen() {
             <View style={styles.emptyState}>
               <YEyebrow color={YColors.ink3}>NOTHING YET</YEyebrow>
               <YUiText size={12} color={YColors.ink2} style={{ marginTop: 6 }}>
-                No tournaments in your city right now. Be the first to host.
+                No tournaments in your city right now.
               </YUiText>
-              <View style={{ marginTop: 14 }}>
-                <YButton size="sm" variant="primary" onPress={goHost}>
-                  HOST A TOURNAMENT
-                </YButton>
-              </View>
             </View>
           ) : (
             visibleNearby.slice(0, 4).map((t) => (
@@ -688,6 +698,13 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 20,
   },
+  hostNudge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 10,
+  },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -736,6 +753,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     flexDirection: 'row',
     gap: 10,
+  },
+  adminCard: {
+    marginTop: 14,
+    marginHorizontal: 16,
+    backgroundColor: YColors.accent,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  adminIconCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bookCardWrap: {
     marginTop: 14,
