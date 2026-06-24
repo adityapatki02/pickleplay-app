@@ -46,6 +46,12 @@ const to12h = (hhmm: string) => {
   return `${hh}:${String(m).padStart(2, '0')} ${ap}`;
 };
 
+// Refunds are allowed only up to this many hours before the slot.
+const REFUND_CUTOFF_HOURS = 24;
+// Slot start as epoch ms (venues operate in IST, +05:30).
+const slotStartMs = (bookingDate: string, startTime: string) =>
+  Date.parse(`${bookingDate}T${startTime}:00+05:30`);
+
 const BackIcon = () => (
   <Svg width={22} height={22} viewBox="0 0 24 24">
     <Path d="M15 6l-6 6 6 6" stroke={YColors.ink} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
@@ -100,16 +106,53 @@ export default function BookingDetailScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  const doCancel = async () => {
-    setCancelling(true);
-    try {
-      await bookingsApi.cancel(bookingId);
-      await load();
-    } catch (e: any) {
-      Alert.alert('Error', e?.response?.data?.message || e?.message || 'Could not cancel');
-    } finally {
-      setCancelling(false);
-    }
+  const doCancel = () => {
+    if (!booking) return;
+    const isPaid = booking.paymentStatus === 'paid';
+    const eligible =
+      isPaid &&
+      slotStartMs(booking.bookingDate, booking.startTime) - Date.now() >
+        REFUND_CUTOFF_HOURS * 3600 * 1000;
+    const amount = Number(booking.amount);
+
+    const message = !isPaid
+      ? 'This will cancel your booking and free the slot.'
+      : eligible
+        ? `You're cancelling more than 24 hours before your slot, so ₹${amount} will be refunded to your original payment method.`
+        : 'Cancellations within 24 hours of the slot are non-refundable. You can still cancel, but no refund will be issued.';
+
+    Alert.alert('Cancel booking?', message, [
+      { text: 'Keep booking', style: 'cancel' },
+      {
+        text: isPaid && !eligible ? 'Cancel anyway' : 'Cancel booking',
+        style: 'destructive',
+        onPress: async () => {
+          setCancelling(true);
+          try {
+            // Paid → refund endpoint (refunds if eligible, else cancels without refund).
+            // Unpaid → plain cancel.
+            if (isPaid) {
+              await bookingsApi.refund(bookingId);
+            } else {
+              await bookingsApi.cancel(bookingId);
+            }
+            await load();
+            Alert.alert(
+              'Booking cancelled',
+              isPaid
+                ? eligible
+                  ? `₹${amount} will be refunded to your original payment method within 5–7 business days.`
+                  : 'Your booking has been cancelled. No refund was issued (within 24 hours of the slot).'
+                : 'Your booking has been cancelled.',
+            );
+          } catch (e: any) {
+            Alert.alert('Error', e?.response?.data?.message || e?.message || 'Could not cancel');
+          } finally {
+            setCancelling(false);
+          }
+        },
+      },
+    ]);
   };
 
   const handleModify = () => setShowModify(true);
@@ -327,7 +370,15 @@ export default function BookingDetailScreen() {
           <Pressable hitSlop={8}>
             <YUiText size={12} color={YColors.accent}>Reschedule Policy</YUiText>
           </Pressable>
-          <Pressable hitSlop={8}>
+          <Pressable
+            hitSlop={8}
+            onPress={() =>
+              Alert.alert(
+                'Cancellation Policy',
+                'Cancel more than 24 hours before your slot for a full refund. Cancellations within 24 hours of the slot are non-refundable.',
+              )
+            }
+          >
             <YUiText size={12} color={YColors.accent}>Cancellation Policy</YUiText>
           </Pressable>
         </View>
