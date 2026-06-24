@@ -438,7 +438,7 @@ export default function HomeScreen() {
                 />
               </Svg>
             </View>
-            <YDisplay size={18} color="#fff" style={{ fontStyle: 'italic', flex: 1, marginHorizontal: 12 }}>
+            <YDisplay size={18} color="#fff" style={{ flex: 1, marginHorizontal: 12 }}>
               VENUE ADMIN
             </YDisplay>
             <View style={styles.adminIconCircle}>

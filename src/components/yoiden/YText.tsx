@@ -20,10 +20,13 @@ export const YDisplay: React.FC<Common & { size?: number; color?: string; italic
         fontFamily: YFonts.display,
         fontSize: size,
         color,
-        fontStyle: italic ? 'italic' : 'normal',
+        // Anton has no italic variant — applying fontStyle:'italic' makes Android fall
+        // back to the system font. Keep it upright and fake the slant with a skew so the
+        // display look is identical on web, iOS and Android.
         letterSpacing: 0.4,
         textTransform: 'uppercase',
         lineHeight: size * 0.92,
+        ...(italic ? { transform: [{ skewX: '-10deg' }] } : null),
       },
       style as any,
     ]}

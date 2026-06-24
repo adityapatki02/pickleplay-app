@@ -195,7 +195,7 @@ export default function VenueAdminScreen({ route }: Props) {
               <Path d="M19 12H5M12 5l-7 7 7 7" stroke={YColors.ink} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </Pressable>
-          <YDisplay size={32} color={YColors.accent} style={{ fontStyle: 'italic', marginTop: 8 }}>
+          <YDisplay size={32} color={YColors.accent} style={{ marginTop: 8 }}>
             VENUE ADMIN
           </YDisplay>
         </View>
@@ -268,7 +268,7 @@ export default function VenueAdminScreen({ route }: Props) {
                   return (
                     <Pressable key={c.id} style={[styles.courtCard, isSel && styles.courtCardSelected]} onPress={() => setSelectedCourt(isSel ? null : c)}>
                       <View style={styles.courtCardTop}>
-                        <YUiText size={16} weight={900} color={YColors.ink} style={{ fontStyle: 'italic', letterSpacing: 0.5 }}>{c.name.toUpperCase()}</YUiText>
+                        <YUiText size={16} weight={900} color={YColors.ink} style={{ transform: [{ skewX: '-10deg' }], letterSpacing: 0.5 }}>{c.name.toUpperCase()}</YUiText>
                         <View style={[styles.courtBadge, c.isActive ? styles.badgeActive : styles.badgeInactive]}>
                           <YUiText size={10} weight={800} color={c.isActive ? '#1a6b35' : '#991b1b'} style={{ letterSpacing: 0.8 }}>
                             {c.isActive ? 'ACTIVE' : 'INACTIVE'}

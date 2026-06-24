@@ -46,10 +46,12 @@ export const YFonts = {
 } as const;
 
 export const YType = {
-  // Display — Anton, condensed, italic, uppercase
+  // Display — Anton, condensed, faux-italic (skew), uppercase.
+  // Anton has no italic file; fontStyle:'italic' would fall back to the system font on
+  // Android, so we skew instead to keep the slant consistent across platforms.
   display: {
     fontFamily: YFonts.display,
-    fontStyle: 'italic' as const,
+    transform: [{ skewX: '-10deg' }] as const,
     letterSpacing: 0.5,
     textTransform: 'uppercase' as const,
   },
