@@ -251,7 +251,7 @@ const s = StyleSheet.create({
   title: {
     fontFamily: YFonts.display,
     fontSize: 40,
-    fontStyle: 'italic',
+    transform: [{ skewX: '-10deg' }],
     color: YColors.ink,
     letterSpacing: 0.5,
     lineHeight: 44,
@@ -259,7 +259,7 @@ const s = StyleSheet.create({
   titleAccent: {
     fontFamily: YFonts.display,
     fontSize: 40,
-    fontStyle: 'italic',
+    transform: [{ skewX: '-10deg' }],
     color: YColors.accent,
     letterSpacing: 0.5,
     lineHeight: 44,
@@ -333,7 +333,7 @@ const s = StyleSheet.create({
   },
   skillRating: {
     fontFamily: YFonts.display,
-    fontStyle: 'italic',
+    transform: [{ skewX: '-10deg' }],
     fontSize: 20,
     color: YColors.ink3,
   },

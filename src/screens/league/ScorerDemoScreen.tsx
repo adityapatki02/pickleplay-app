@@ -340,7 +340,7 @@ const s = StyleSheet.create({
   },
   slotLabel: {
     fontFamily: YFonts.display,
-    fontStyle: 'italic',
+    transform: [{ skewX: '-10deg' }],
     fontSize: 36,
     color: YColors.ink,
     letterSpacing: 0.5,
@@ -405,7 +405,7 @@ const s = StyleSheet.create({
   },
   score: {
     fontFamily: YFonts.display,
-    fontStyle: 'italic',
+    transform: [{ skewX: '-10deg' }],
     fontSize: 120,
     lineHeight: 128,
     color: YColors.ink,
@@ -470,7 +470,7 @@ const s = StyleSheet.create({
   },
   middleDash: {
     fontFamily: YFonts.display,
-    fontStyle: 'italic',
+    transform: [{ skewX: '-10deg' }],
     fontSize: 40,
     color: YColors.ink3,
   },
@@ -493,7 +493,7 @@ const s = StyleSheet.create({
   },
   winName: {
     fontFamily: YFonts.display,
-    fontStyle: 'italic',
+    transform: [{ skewX: '-10deg' }],
     fontSize: 28,
     color: '#FFFFFF',
     letterSpacing: 0.5,

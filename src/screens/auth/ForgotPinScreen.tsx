@@ -504,7 +504,7 @@ const s = StyleSheet.create({
   title: {
     fontFamily: YFonts.display,
     fontSize: 44,
-    fontStyle: 'italic',
+    transform: [{ skewX: '-10deg' }],
     color: YColors.ink,
     letterSpacing: 0.5,
     lineHeight: 48,
@@ -512,7 +512,7 @@ const s = StyleSheet.create({
   titleAccent: {
     fontFamily: YFonts.display,
     fontSize: 44,
-    fontStyle: 'italic',
+    transform: [{ skewX: '-10deg' }],
     color: YColors.accent,
     letterSpacing: 0.5,
     lineHeight: 48,
