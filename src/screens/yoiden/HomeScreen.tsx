@@ -251,7 +251,7 @@ export default function HomeScreen() {
       reviews: v.reviewCount ?? 0,
       sports: (v.sports ?? []) as unknown as Venue['sports'],
       imageUrl: firstPhoto ?? `https://picsum.photos/seed/${v.id}/640/400`,
-      sponsored: false,
+      sponsored: v.isSponsored ?? false,
       topRated: (v.rating ?? 0) >= 4.5,
     };
   };

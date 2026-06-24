@@ -43,6 +43,7 @@ export interface Venue {
   timezone: string;
   status: string;
   isFeatured: boolean;
+  isSponsored?: boolean;
   courts?: VenueCourt[];
 }
 
