@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   TextInput,
+  Image,
 } from 'react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { xAlert, xConfirm } from '../../utils/alert';
@@ -27,6 +28,7 @@ import { colors, spacing, typography, borderRadius, shadows } from '../../config
 import DatePickerModal, { DateField } from '../../components/ui/DatePickerModal';
 import PlacesAutocomplete, { PlaceResult } from '../../components/ui/PlacesAutocomplete';
 import { YColors, YTopBar, YButton } from '../../components/yoiden';
+import * as ImagePicker from 'expo-image-picker';
 
 const NAVY = YColors.ink;
 const BLUE_ACCENT = YColors.accent;
@@ -58,6 +60,7 @@ interface FormData {
   contactEmail: string;
   // Step 3 — CATEGORIES
   categories: CategoryDraft[];
+  banner: { uri: string; name: string; type: string } | null;
 }
 
 const INITIAL_FORM: FormData = {
@@ -73,6 +76,7 @@ const INITIAL_FORM: FormData = {
   contactPhone: '',
   contactEmail: '',
   categories: [],
+  banner: null,
 };
 
 const INITIAL_CATEGORY: Omit<CategoryDraft, '_id'> = {
@@ -189,6 +193,67 @@ const fieldStyles = StyleSheet.create({
     marginTop: spacing.xs,
   },
 });
+
+function BannerPicker({
+  value,
+  onChange,
+}: {
+  value: FormData['banner'];
+  onChange: (b: FormData['banner']) => void;
+}) {
+  const pick = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [5, 2], // matches the API's 1600×640 banner frame
+      quality: 0.9,
+    });
+    if (res.canceled || !res.assets?.length) return;
+    const a = res.assets[0];
+    onChange({
+      uri: a.uri,
+      name: a.fileName || 'banner.jpg',
+      type: a.mimeType || 'image/jpeg',
+    });
+  };
+
+  return (
+    <View style={{ marginBottom: 16 }}>
+      {value ? (
+        <View style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: YColors.ink + '22' }}>
+          <Image source={{ uri: value.uri }} style={{ width: '100%', aspectRatio: 5 / 2 }} resizeMode="cover" />
+          <View style={{ flexDirection: 'row' }}>
+            <TouchableOpacity onPress={pick} style={{ flex: 1, paddingVertical: 10, alignItems: 'center', backgroundColor: NAVY }}>
+              <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 1 }}>CHANGE</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => onChange(null)} style={{ flex: 1, paddingVertical: 10, alignItems: 'center', backgroundColor: '#EDEBE4' }}>
+              <Text style={{ color: NAVY, fontSize: 11, fontWeight: '800', letterSpacing: 1 }}>REMOVE</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <TouchableOpacity
+          onPress={pick}
+          style={{
+            borderWidth: 1.5,
+            borderStyle: 'dashed',
+            borderColor: BLUE_ACCENT,
+            borderRadius: 12,
+            paddingVertical: 26,
+            alignItems: 'center',
+          }}
+        >
+          <Text style={{ color: BLUE_ACCENT, fontSize: 12, fontWeight: '800', letterSpacing: 1 }}>
+            + ADD BANNER IMAGE (OPTIONAL)
+          </Text>
+          <Text style={{ color: '#737780', fontSize: 10, marginTop: 4 }}>
+            Wide image, 5:2 — shown on the public tournament page
+          </Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
 
 function PickerRow<T extends string>({
   label,
@@ -473,6 +538,19 @@ export default function CreateTournamentScreen() {
         await tournamentsApi.addCategory(tId, catInput);
       }
 
+      // Banner upload is best-effort — the tournament already exists, and the
+      // detail screen has ADD BANNER for retries.
+      if (form.banner) {
+        try {
+          await tournamentsApi.uploadBanner(tId, form.banner);
+        } catch {
+          xAlert(
+            'Banner not uploaded',
+            'The tournament was created, but the banner failed to upload. You can add it from the tournament page.',
+          );
+        }
+      }
+
       addTournament(tournament);
 
       const statusMsg = asDraft
@@ -523,6 +601,7 @@ export default function CreateTournamentScreen() {
         onChangeText={(v) => update({ description: v })}
         multiline
       />
+      <BannerPicker value={form.banner} onChange={(banner) => update({ banner })} />
       <FormField
         label="City *"
         placeholder="e.g. Bangalore"
