@@ -67,6 +67,8 @@ export interface TournamentCategory {
   status: CategoryStatus;
   paymentMode: PaymentMode;
   registeredTeams?: number;
+  waitlistedCount?: number;
+  pendingCount?: number;
   createdAt: string;
   updatedAt: string;
 }

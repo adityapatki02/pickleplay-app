@@ -10,6 +10,10 @@ export const matchesApi = {
   getStandings: (tournamentId: string, categoryId: string) =>
     apiClient.get(`/tournaments/${tournamentId}/categories/${categoryId}/standings`),
 
+  // Public, unauthenticated — used by the tournament kiosk schedule tab.
+  getSchedule: (tournamentId: string) =>
+    apiClient.get(`/tournaments/${tournamentId}/schedule`),
+
   startMatch: (matchId: string) =>
     apiClient.patch(`/matches/${matchId}/start`),
 

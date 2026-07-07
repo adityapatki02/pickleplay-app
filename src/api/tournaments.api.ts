@@ -1,4 +1,7 @@
+import { Platform } from 'react-native';
 import apiClient from './client';
+import { API_BASE_URL } from '../config/constants';
+import { useAuthStore } from '../store/authStore';
 import {
   Tournament,
   TournamentCategory,
@@ -27,8 +30,51 @@ export const tournamentsApi = {
   getById: (id: string) =>
     apiClient.get<ApiResponse<Tournament>>(`/tournaments/${id}`),
 
-  getBySlug: (slug: string) =>
-    apiClient.get<ApiResponse<Tournament>>(`/tournaments/${slug}`),
+  // Public tournament page (kiosk + /t/:slug). Drafts 404.
+  getPublicBySlug: (slug: string) =>
+    apiClient.get<ApiResponse<Tournament>>(`/public/tournaments/${slug}`),
+
+  // Public entrants list for one category (omit categoryId → first category).
+  getPublicEntrants: (slug: string, categoryId?: string) =>
+    apiClient.get<ApiResponse<{
+      entrants: { name: string; seed: number | null; status: string; registeredAt: string }[];
+      confirmedCount: number;
+      pendingCount: number;
+    }>>(`/public/events/${slug}/entrants`, {
+      params: categoryId ? { categoryId } : undefined,
+    }),
+
+  /**
+   * Multipart banner upload. Uses fetch (not the axios instance) so the
+   * runtime sets the multipart boundary itself — axios's instance-level
+   * `Content-Type: application/json` default would corrupt FormData posts.
+   */
+  uploadBanner: async (
+    tournamentId: string,
+    file: { uri: string; name: string; type: string },
+  ): Promise<string> => {
+    const form = new FormData();
+    if (Platform.OS === 'web') {
+      const blob = await (await fetch(file.uri)).blob();
+      form.append('file', new File([blob], file.name, { type: file.type }));
+    } else {
+      form.append('file', { uri: file.uri, name: file.name, type: file.type } as any);
+    }
+    const token = useAuthStore.getState().token;
+    const res = await fetch(`${API_BASE_URL}/tournaments/${tournamentId}/banner`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: form,
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+      throw new Error(json?.message || `Banner upload failed (${res.status})`);
+    }
+    return json.data.bannerUrl as string;
+  },
+
+  removeBanner: (tournamentId: string) =>
+    apiClient.delete(`/tournaments/${tournamentId}/banner`),
 
   update: (id: string, data: Partial<CreateTournamentInput>) =>
     apiClient.put<ApiResponse<Tournament>>(`/tournaments/${id}`, data),
