@@ -1,4 +1,6 @@
-export const API_BASE_URL = 'https://yoiden-api-lonnxhto7a-el.a.run.app/api/v1';
+// Override with EXPO_PUBLIC_API_URL for local dev (e.g. http://localhost:3000/api/v1).
+// Prod builds leave it unset and use the deployed API.
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://yoiden-api-lonnxhto7a-el.a.run.app/api/v1';
 
 /** Razorpay publishable key — safe to expose in the app bundle.
  *  Use rzp_test_... for development, rzp_live_... for production. */
