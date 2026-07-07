@@ -180,6 +180,10 @@ export type RootStackParamList = {
   PlayerTabs: NavigatorScreenParams<PlayerTabParamList>;
   OrgTabs: NavigatorScreenParams<OrganizerTabParamList>;
   AppTabs: NavigatorScreenParams<AppTabParamList>;
+  PublicPlayerRecap: { userId: string };
+  ProfileSetup: undefined;
+  TournamentPublic: { tournamentId?: string; slug?: string };
+  TournamentStandings: { tournamentId: string };
 };
 
 // Helper types for screen props
