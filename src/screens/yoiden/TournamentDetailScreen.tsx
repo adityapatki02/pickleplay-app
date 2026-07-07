@@ -28,6 +28,8 @@ import { tournamentsApi } from '../../api/tournaments.api';
 import type { Tournament, TournamentCategory } from '../../types/tournament.types';
 import type { PlayStackParamList } from '../../navigation/YoidenTabNavigator';
 import { useAuthStore } from '../../store/authStore';
+import * as ImagePicker from 'expo-image-picker';
+import { xAlert, xConfirm } from '../../utils/alert';
 
 type Route = RouteProp<PlayStackParamList, 'TournamentDetail'>;
 type Nav = NativeStackNavigationProp<PlayStackParamList, 'TournamentDetail'>;
@@ -90,6 +92,53 @@ export default function TournamentDetailScreen() {
   }, [fetchDetail]);
 
   const isOrganizer = !!t && !!currentUser && t.organizerId === currentUser.id;
+
+  const [bannerBusy, setBannerBusy] = useState(false);
+
+  const changeBanner = async () => {
+    if (!t) return;
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [5, 2],
+      quality: 0.9,
+    });
+    if (res.canceled || !res.assets?.length) return;
+    const a = res.assets[0];
+    setBannerBusy(true);
+    try {
+      await tournamentsApi.uploadBanner(t.id, {
+        uri: a.uri,
+        name: a.fileName || 'banner.jpg',
+        type: a.mimeType || 'image/jpeg',
+      });
+      await fetchDetail();
+    } catch (e: any) {
+      xAlert('Upload failed', e?.message || 'Could not upload banner');
+    } finally {
+      setBannerBusy(false);
+    }
+  };
+
+  const removeBanner = () => {
+    if (!t) return;
+    xConfirm(
+      'Remove banner?',
+      'The page falls back to the default cover.',
+      async () => {
+        setBannerBusy(true);
+        try {
+          await tournamentsApi.removeBanner(t.id);
+          await fetchDetail();
+        } catch (e: any) {
+          xAlert('Failed', e?.message || 'Could not remove banner');
+        } finally {
+          setBannerBusy(false);
+        }
+      },
+      'Remove',
+    );
+  };
 
   if (loading) {
     return (
@@ -161,6 +210,23 @@ export default function TournamentDetailScreen() {
             {t.isFeatured ? <YBadge color="#000" bg={YColors.lime}>FEATURED</YBadge> : null}
             {isOrganizer ? <YBadge color="#fff" bg="#000">YOU HOST</YBadge> : null}
           </View>
+
+          {isOrganizer ? (
+            <View style={styles.coverEditRow}>
+              <Pressable onPress={changeBanner} disabled={bannerBusy} style={styles.coverEditBtn}>
+                <YUiText size={10} weight={900} color="#fff" style={{ letterSpacing: 1 }}>
+                  {bannerBusy ? 'UPLOADING…' : t.bannerUrl ? 'CHANGE BANNER' : 'ADD BANNER'}
+                </YUiText>
+              </Pressable>
+              {t.bannerUrl && !bannerBusy ? (
+                <Pressable onPress={removeBanner} style={styles.coverEditBtn}>
+                  <YUiText size={10} weight={900} color="#fff" style={{ letterSpacing: 1 }}>
+                    REMOVE
+                  </YUiText>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
 
           {/* Bottom-left poster title block */}
           <View style={styles.coverTitleBlock}>
@@ -388,6 +454,21 @@ const styles = StyleSheet.create({
     gap: 6,
     flexWrap: 'wrap',
     justifyContent: 'flex-end',
+  },
+  coverEditRow: {
+    position: 'absolute',
+    right: 14,
+    bottom: 14,
+    flexDirection: 'row',
+    gap: 6,
+  },
+  coverEditBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   coverTitleBlock: {
     position: 'absolute',
