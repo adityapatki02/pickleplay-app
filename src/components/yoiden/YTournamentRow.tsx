@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Pressable, StyleSheet, ViewStyle } from 'react-native';
+import { View, Image, Pressable, StyleSheet, ViewStyle } from 'react-native';
 import { YColors } from '../../config/yoiden';
 import { YDisplay, YEyebrow, YMono, YUiText } from './YText';
 import { YBadge } from './YTags';
@@ -12,6 +12,7 @@ type TournamentLike = {
   startDate?: string;       // ISO date
   status?: string;          // 'registration_open' | 'in_progress' | etc.
   isFeatured?: boolean;
+  bannerUrl?: string;
   categories?: {
     entryFee: number;
     maxTeams: number;
@@ -92,10 +93,27 @@ export const YTournamentRow: React.FC<YTournamentRowProps> = ({
       onPress={onPress}
       style={({ pressed }) => [styles.row, { opacity: pressed ? 0.92 : 1 }, style]}
     >
-      {/* Date block */}
+      {/* Date block — banner-backed when the tournament has one */}
       <View style={styles.dateBlock}>
-        <YDisplay size={28} italic={false}>{day}</YDisplay>
-        <YUiText size={10} weight={800} color={YColors.ink2} style={{ letterSpacing: 1.4, marginTop: 4 }}>
+        {tournament.bannerUrl ? (
+          <>
+            <Image
+              source={{ uri: tournament.bannerUrl }}
+              style={StyleSheet.absoluteFill}
+              resizeMode="cover"
+            />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,10,11,0.45)' }]} />
+          </>
+        ) : null}
+        <YDisplay size={28} italic={false} color={tournament.bannerUrl ? '#fff' : YColors.ink}>
+          {day}
+        </YDisplay>
+        <YUiText
+          size={10}
+          weight={800}
+          color={tournament.bannerUrl ? 'rgba(255,255,255,0.85)' : YColors.ink2}
+          style={{ letterSpacing: 1.4, marginTop: 4 }}
+        >
           {month}
         </YUiText>
       </View>
