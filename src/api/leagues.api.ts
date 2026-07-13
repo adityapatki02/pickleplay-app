@@ -318,6 +318,11 @@ export const getTopPerformers = (
 export const getLifetimeStats = (playerId: string) =>
   apiClient.get(`/players/${playerId}/lifetime-stats`).then((r) => (r.data as any)?.data ?? r.data);
 
+export const getPlayerCareer = (playerId: string, include?: 'private') =>
+  apiClient
+    .get(`/players/${playerId}/career`, { params: include ? { include } : {} })
+    .then((r) => (r.data as any)?.data ?? r.data);
+
 export const getPlayerBasicInfo = (playerId: string) =>
   apiClient.get(`/players/${playerId}`).then((r) => (r.data as any)?.data ?? r.data);
 
