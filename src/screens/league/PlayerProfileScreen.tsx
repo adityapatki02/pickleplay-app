@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,15 +8,9 @@ import {
   SafeAreaView,
   StatusBar,
   ActivityIndicator,
-  RefreshControl,
-  Platform,
 } from 'react-native';
-import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import {
-  getPlayerBasicInfo,
-  getPlayerMatches,
-  getLifetimeStats,
-} from '../../api/leagues.api';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { getPlayerCareer } from '../../api/leagues.api';
 import { xAlert } from '../../utils/alert';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
@@ -25,25 +19,12 @@ import { YColors, YTopBar } from '../../components/yoiden';
 const NAVY: string = YColors.ink;
 const BLUE: string = YColors.accent;
 const GREEN = '#06D6A0';
-const RED = '#EF4444';
-const GOLD = '#F59E0B';
 const SURFACE: string = YColors.bg;
 const BORDER: string = YColors.line2;
 const TEXT_COLOR: string = YColors.ink;
 const TEXT_SUB: string = YColors.ink2;
 const TEXT_MUTED: string = YColors.ink3;
 const WHITE = '#FFFFFF';
-
-// Category display labels + emojis
-const CAT_LABELS: Record<string, { label: string; emoji: string }> = {
-  kids: { label: 'Kids', emoji: '🧒' },
-  teen: { label: 'Teen', emoji: '🧑' },
-  women1: { label: 'Women 1', emoji: '👩' },
-  women2: { label: 'Women 2', emoji: '👩' },
-  men1: { label: 'Men 1', emoji: '👨' },
-  men2: { label: 'Men 2', emoji: '👨' },
-  men3: { label: 'Men 3', emoji: '👨' },
-};
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function initialsFrom(name: string): string {
@@ -53,17 +34,87 @@ function initialsFrom(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function relativeDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return '';
-  const now = Date.now();
-  const diff = now - d.getTime();
-  const day = 24 * 60 * 60 * 1000;
-  if (diff < day) return 'today';
-  if (diff < 2 * day) return 'yesterday';
-  if (diff < 7 * day) return `${Math.floor(diff / day)} days ago`;
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+function formatLabel(format: string): string {
+  if (!format) return '';
+  return format.charAt(0).toUpperCase() + format.slice(1);
+}
+
+// Column definitions for the by-format / by-league tables. The first four
+// (played/won/lost/winPct) always show; matchPoints/teamPoints only show
+// when the sport's `metrics` list includes them.
+type Col = { key: string; label: string; get: (f: any) => string | number };
+
+const ALL_COLS: Col[] = [
+  { key: 'played', label: 'P', get: (f) => f.played ?? 0 },
+  { key: 'won', label: 'W', get: (f) => f.won ?? 0 },
+  { key: 'lost', label: 'L', get: (f) => f.lost ?? 0 },
+  { key: 'winPct', label: 'Win%', get: (f) => `${f.winPct ?? 0}%` },
+  { key: 'matchPoints', label: 'Match pts', get: (f) => f.matchPointsFor ?? 0 },
+  { key: 'teamPoints', label: 'Team pts', get: (f) => f.teamPoints ?? 0 },
+];
+
+const ALWAYS_ON = new Set(['played', 'won', 'lost', 'winPct']);
+
+function colsForMetrics(metrics: string[] | undefined): Col[] {
+  const m = metrics || [];
+  return ALL_COLS.filter((c) => ALWAYS_ON.has(c.key) || m.includes(c.key));
+}
+
+// ── Small reusable stat table ───────────────────────────────────────────────
+const StatTable: React.FC<{ cols: Col[]; rows: { label: string; f: any }[]; totalRow?: { label: string; f: any } }> = ({
+  cols,
+  rows,
+  totalRow,
+}) => (
+  <View style={styles.table}>
+    <View style={styles.tableHeaderRow}>
+      <Text style={[styles.tableCell, styles.tableHeaderCell, { flex: 2, textAlign: 'left' }]}>Format</Text>
+      {cols.map((c) => (
+        <Text key={c.key} style={[styles.tableCell, styles.tableHeaderCell]}>
+          {c.label}
+        </Text>
+      ))}
+    </View>
+    {rows.map((r, idx) => (
+      <View key={r.label + idx} style={styles.tableRow}>
+        <Text style={[styles.tableCell, styles.tableLabelCell, { flex: 2, textAlign: 'left' }]} numberOfLines={1}>
+          {r.label}
+        </Text>
+        {cols.map((c) => (
+          <Text key={c.key} style={styles.tableCell}>
+            {c.get(r.f)}
+          </Text>
+        ))}
+      </View>
+    ))}
+    {totalRow && (
+      <View style={[styles.tableRow, styles.tableTotalRow]}>
+        <Text style={[styles.tableCell, styles.tableTotalCell, { flex: 2, textAlign: 'left' }]}>{totalRow.label}</Text>
+        {cols.map((c) => (
+          <Text key={c.key} style={[styles.tableCell, styles.tableTotalCell]}>
+            {c.get(totalRow.f)}
+          </Text>
+        ))}
+      </View>
+    )}
+  </View>
+);
+
+function buildTotal(formats: any[]) {
+  const totalPlayed = formats.reduce((s, f) => s + (f.played || 0), 0);
+  const totalWon = formats.reduce((s, f) => s + (f.won || 0), 0);
+  const totalLost = formats.reduce((s, f) => s + (f.lost || 0), 0);
+  const totalMatchPts = formats.reduce((s, f) => s + (f.matchPointsFor || 0), 0);
+  const totalTeamPts = formats.reduce((s, f) => s + (f.teamPoints || 0), 0);
+  const winPct = totalPlayed > 0 ? Math.round((totalWon / totalPlayed) * 100) : 0;
+  return {
+    played: totalPlayed,
+    won: totalWon,
+    lost: totalLost,
+    winPct,
+    matchPointsFor: totalMatchPts,
+    teamPoints: totalTeamPts,
+  };
 }
 
 // ── Screen ──────────────────────────────────────────────────────────────────
@@ -73,73 +124,37 @@ const PlayerProfileScreen: React.FC = () => {
   const { playerId, seasonId } = route.params || {};
 
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [basic, setBasic] = useState<any>(null);
-  const [lifetime, setLifetime] = useState<any>(null);
-  const [matches, setMatches] = useState<any[]>([]);
+  const [career, setCareer] = useState<any>(null);
+  const [selectedSport, setSelectedSport] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
     if (!playerId) return;
-    try {
-      const [b, l, m] = await Promise.all([
-        getPlayerBasicInfo(playerId).catch(() => null),
-        getLifetimeStats(playerId).catch(() => null),
-        getPlayerMatches(playerId, { seasonId, limit: 30 }).catch(() => []),
-      ]);
-      setBasic(b);
-      setLifetime(l);
-      setMatches(Array.isArray(m) ? m : []);
-    } catch (err: any) {
-      xAlert('Error', err?.message || 'Failed to load player profile');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [playerId, seasonId]);
+    setLoading(true);
+    getPlayerCareer(playerId, 'private')
+      .then((c) => {
+        setCareer(c);
+        setSelectedSport(c?.sports?.[0]?.sport ?? null);
+      })
+      .catch((e: any) => xAlert('Error', e?.message || 'Failed to load profile'))
+      .finally(() => setLoading(false));
+  }, [playerId]);
 
-  useFocusEffect(
-    useCallback(() => {
-      setLoading(true);
-      load();
-    }, [load]),
-  );
+  const sport = career?.sports?.find((s: any) => s.sport === selectedSport) ?? career?.sports?.[0];
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    load();
-  }, [load]);
-
-  // Derived: sort categoryBreakdown entries by played DESC for display
-  const catEntries = useMemo(() => {
-    const cb = lifetime?.categoryBreakdown || {};
-    return Object.entries(cb)
-      .map(([slug, raw]: [string, any]) => ({
-        slug,
-        label: CAT_LABELS[slug]?.label || slug,
-        emoji: CAT_LABELS[slug]?.emoji || '🎾',
-        played: raw.played || 0,
-        won: raw.won || 0,
-        lost: raw.lost || 0,
-        winRate: raw.played > 0 ? Math.round((raw.won / raw.played) * 100) : 0,
-      }))
-      .filter((e) => e.played > 0)
-      .sort((a, b) => b.played - a.played);
-  }, [lifetime]);
-
-  const franchise = basic?.currentFranchise;
-  const heroBg = franchise?.color || NAVY;
-
-  if (loading && !basic) {
+  if (loading && !career) {
     return (
       <SafeAreaView style={styles.root}>
         <StatusBar barStyle="light-content" backgroundColor={NAVY} />
-        <YTopBar eyebrow="SPPL" title="PLAYER PROFILE" onBack={() => navigation.goBack()} />
+        <YTopBar eyebrow="PROFILE" title="PLAYER PROFILE" onBack={() => navigation.goBack()} />
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <ActivityIndicator size="large" color={BLUE} />
         </View>
       </SafeAreaView>
     );
   }
+
+  const player = career?.player;
+  const cols = colsForMetrics(sport?.metrics);
 
   return (
     <SafeAreaView style={styles.root}>
@@ -152,161 +167,102 @@ const PlayerProfileScreen: React.FC = () => {
         <View style={{ width: 60 }} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: 40 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        {/* Hero card */}
-        <View style={[styles.hero, { backgroundColor: heroBg }]}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+        {/* Profile header */}
+        <View style={styles.profileHeader}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initialsFrom(basic?.name || '')}</Text>
+            <Text style={styles.avatarText}>{initialsFrom(player?.fullName || '')}</Text>
           </View>
-          <Text style={styles.playerName}>{basic?.name || 'Unknown'}</Text>
-          <View style={styles.chipRow}>
-            {franchise && (
-              <View style={styles.chip}>
-                <Text style={styles.chipText}>{franchise.shortName || franchise.name}</Text>
-              </View>
-            )}
-            {basic?.currentCategory && CAT_LABELS[basic.currentCategory] && (
-              <View style={styles.chip}>
-                <Text style={styles.chipText}>
-                  {CAT_LABELS[basic.currentCategory].emoji} {CAT_LABELS[basic.currentCategory].label}
-                </Text>
-              </View>
-            )}
-            {basic?.jerseyNumber != null && (
-              <View style={styles.chip}>
-                <Text style={styles.chipText}>🎽 #{basic.jerseyNumber}</Text>
-              </View>
-            )}
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.name} numberOfLines={1}>
+              {player?.fullName || 'Unknown'}
+            </Text>
+            {player?.city ? <Text style={styles.city}>{player.city}</Text> : null}
           </View>
+          {sport ? (
+            <View style={styles.headline}>
+              <Text style={styles.headlinePct}>{sport.headline?.winPct ?? 0}%</Text>
+              <Text style={styles.headlineLabel}>{sport.sport} win</Text>
+            </View>
+          ) : null}
         </View>
 
-        {/* Lifetime stats grid */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>LIFETIME</Text>
-          {!lifetime || lifetime.matchesPlayed === 0 ? (
-            <Text style={styles.emptyText}>No matches played yet.</Text>
-          ) : (
-            <View style={styles.statsGrid}>
-              <StatCell big value={lifetime.matchesPlayed} label="Played" />
-              <StatCell big color={GREEN} value={lifetime.matchesWon} label="Won" />
-              <StatCell big color={BLUE} value={`${lifetime.winRate}%`} label="Win Rate" />
-              <StatCell
-                big
-                color={GOLD}
-                value={((lifetime as any).teamPointsEarned || 0) + (lifetime.bonusPointsEarned || 0)}
-                label="Total Pts"
-              />
-            </View>
-          )}
-          {lifetime && lifetime.matchesPlayed > 0 && (
-            <View style={styles.subStats}>
-              <Text style={styles.subStatText}>
-                Team Pts: <Text style={{ fontWeight: '700', color: GREEN }}>{(lifetime as any).teamPointsEarned || 0}</Text>
-                {'  ·  '}Bonus: <Text style={{ fontWeight: '700', color: NAVY }}>{lifetime.bonusPointsEarned}</Text>
-                {'  ·  '}Points: <Text style={{ fontWeight: '700', color: NAVY }}>{lifetime.pointsScored}</Text>
-                {'  ·  '}Point diff: <Text style={{
-                  color: lifetime.pointDiff >= 0 ? GREEN : RED,
-                  fontWeight: '700',
-                }}>
-                  {lifetime.pointDiff >= 0 ? '+' : ''}{lifetime.pointDiff}
+        {/* Sport filter chips */}
+        {career?.sports?.length > 1 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs} contentContainerStyle={{ paddingHorizontal: 14 }}>
+            {career.sports.map((s: any) => (
+              <TouchableOpacity
+                key={s.sport}
+                style={[styles.tab, s.sport === selectedSport && styles.tabActive]}
+                onPress={() => setSelectedSport(s.sport)}
+              >
+                <Text style={[styles.tabText, s.sport === selectedSport && styles.tabTextActive]}>
+                  {s.sport.charAt(0).toUpperCase() + s.sport.slice(1)}
                 </Text>
-                {basic?.totalSeasons != null && (
-                  <>
-                    {'  ·  '}Seasons: <Text style={{ fontWeight: '700', color: NAVY }}>{basic.totalSeasons}</Text>
-                  </>
-                )}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Category breakdown */}
-        {catEntries.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>BY CATEGORY</Text>
-            {catEntries.map((c) => (
-              <View key={c.slug} style={styles.catRow}>
-                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={styles.catEmoji}>{c.emoji}</Text>
-                  <Text style={styles.catLabel}>{c.label}</Text>
-                </View>
-                <View style={styles.catStats}>
-                  <Text style={styles.catStat}>
-                    <Text style={styles.catStatNum}>{c.played}</Text>
-                    <Text style={styles.catStatLabel}> P</Text>
-                  </Text>
-                  <Text style={styles.catStat}>
-                    <Text style={[styles.catStatNum, { color: GREEN }]}>{c.won}</Text>
-                    <Text style={styles.catStatLabel}> W</Text>
-                  </Text>
-                  <View style={[styles.winRatePill, { backgroundColor: c.winRate >= 60 ? '#D1FAE5' : c.winRate >= 40 ? '#FEF3C7' : '#FEE2E2' }]}>
-                    <Text style={[styles.winRateText, {
-                      color: c.winRate >= 60 ? '#047857' : c.winRate >= 40 ? '#92400E' : '#991B1B',
-                    }]}>
-                      {c.winRate}%
-                    </Text>
-                  </View>
-                </View>
-              </View>
+              </TouchableOpacity>
             ))}
-          </View>
+          </ScrollView>
         )}
 
-        {/* Recent matches */}
-        <View style={styles.card}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <Text style={styles.cardTitle}>RECENT MATCHES</Text>
-            <Text style={styles.cardCount}>{matches.length}</Text>
+        {!sport ? (
+          <View style={styles.card}>
+            <Text style={styles.emptyText}>No stats available yet.</Text>
           </View>
-          {matches.length === 0 ? (
-            <Text style={styles.emptyText}>No match history yet.</Text>
-          ) : (
-            matches.map((m, idx) => {
-              const catInfo = CAT_LABELS[m.categorySlug] || { label: m.categorySlug, emoji: '🎾' };
-              const opp = m.opponentTeam?.shortName || m.opponentTeam?.name || 'TBD';
-              return (
-                <View key={m.matchId || idx} style={styles.matchRow}>
-                  <View style={[styles.wlBadge, { backgroundColor: m.won ? GREEN : RED }]}>
-                    <Text style={styles.wlBadgeText}>{m.won ? 'W' : 'L'}</Text>
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <Text style={styles.matchCat} numberOfLines={1}>
-                        {catInfo.emoji} {catInfo.label}
+        ) : (
+          <>
+            {/* By-format table */}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>BY FORMAT</Text>
+              {sport.formats?.length > 0 ? (
+                <StatTable
+                  cols={cols}
+                  rows={sport.formats.map((f: any) => ({ label: formatLabel(f.format), f }))}
+                  totalRow={{ label: 'Total', f: buildTotal(sport.formats) }}
+                />
+              ) : (
+                <Text style={styles.emptyText}>No matches played yet.</Text>
+              )}
+            </View>
+
+            {/* By-league */}
+            {sport.leagues?.length > 0 && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>BY LEAGUE</Text>
+                {sport.leagues.map((l: any, idx: number) => (
+                  <View key={l.seasonId || idx} style={styles.leagueBlock}>
+                    <View style={styles.leagueHeaderRow}>
+                      <Text style={styles.leagueName} numberOfLines={1}>
+                        {l.leagueName} {l.seasonName ? `· ${l.seasonName}` : ''}
                       </Text>
-                      <Text style={styles.matchScore}>
-                        {m.myScore ?? '-'}–{m.oppScore ?? '-'}
-                      </Text>
+                      {l.auctionPrice != null && <Text style={styles.leaguePrice}>₹{l.auctionPrice}</Text>}
                     </View>
-                    <Text style={styles.matchOpp} numberOfLines={1}>
-                      vs {opp}
-                      {m.partnerName ? `  ·  w/ ${m.partnerName}` : ''}
-                    </Text>
-                    <Text style={styles.matchMeta}>
-                      {m.seasonName ? `${m.seasonName}  ·  ` : ''}
-                      {relativeDate(m.scheduledStart)}
-                    </Text>
+                    {l.team ? <Text style={styles.leagueTeam}>{l.team}</Text> : null}
+                    {l.byFormat?.length > 0 ? (
+                      <StatTable cols={cols} rows={l.byFormat.map((f: any) => ({ label: formatLabel(f.format), f }))} />
+                    ) : null}
                   </View>
-                </View>
-              );
-            })
-          )}
-        </View>
+                ))}
+              </View>
+            )}
+          </>
+        )}
+
+        {/* Private strip */}
+        {career?.private ? (
+          <View style={styles.privateStrip}>
+            <Text style={styles.privateTxt}>
+              Your profile · fantasy {career.private.fantasy?.points ?? 0} pts
+              {career.private.fantasy?.rank != null ? ` · rank ${career.private.fantasy.rank}` : ''}
+            </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('EditProfile')}>
+              <Text style={styles.privateLink}>Edit profile</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
 };
-
-// ── Small stat cell ─────────────────────────────────────────────────────────
-const StatCell: React.FC<{ value: string | number; label: string; big?: boolean; color?: string }> = ({ value, label, big, color }) => (
-  <View style={styles.statCell}>
-    <Text style={[styles.statValue, big && { fontSize: 26 }, color ? { color } : null]}>{value}</Text>
-    <Text style={styles.statLabel}>{label}</Text>
-  </View>
-);
 
 export default PlayerProfileScreen;
 
@@ -325,94 +281,99 @@ const styles = StyleSheet.create({
   backTxt: { color: WHITE, fontSize: 14, fontWeight: '600' },
   headerTitle: { color: WHITE, fontSize: 15, fontWeight: '800', letterSpacing: 0.5 },
 
-  hero: {
+  profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     margin: 14,
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  avatarText: { color: WHITE, fontSize: 30, fontWeight: '800', letterSpacing: 1 },
-  playerName: { color: WHITE, fontSize: 22, fontWeight: '800', marginBottom: 10, textAlign: 'center' },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6 },
-  chip: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    padding: 16,
+    backgroundColor: WHITE,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: BORDER,
   },
-  chipText: { color: WHITE, fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: NAVY,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { color: WHITE, fontSize: 20, fontWeight: '800', letterSpacing: 0.5 },
+  name: { fontSize: 17, fontWeight: '800', color: TEXT_COLOR },
+  city: { fontSize: 12, color: TEXT_SUB, marginTop: 2 },
+  headline: { alignItems: 'flex-end' },
+  headlinePct: { fontSize: 20, fontWeight: '800', color: BLUE },
+  headlineLabel: { fontSize: 10, color: TEXT_MUTED, fontWeight: '600', letterSpacing: 0.3, marginTop: 2 },
+
+  tabs: { marginBottom: 4 },
+  tab: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: WHITE,
+    borderWidth: 1,
+    borderColor: BORDER,
+    marginRight: 8,
+  },
+  tabActive: { backgroundColor: NAVY, borderColor: NAVY },
+  tabText: { fontSize: 12, fontWeight: '700', color: TEXT_SUB },
+  tabTextActive: { color: WHITE },
 
   card: {
     backgroundColor: WHITE,
     marginHorizontal: 14,
-    marginBottom: 12,
+    marginTop: 12,
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
     borderColor: BORDER,
   },
   cardTitle: { fontSize: 11, fontWeight: '800', color: TEXT_SUB, letterSpacing: 0.8, marginBottom: 12 },
-  cardCount: { fontSize: 11, fontWeight: '700', color: TEXT_MUTED },
   emptyText: { fontSize: 12, color: TEXT_MUTED, fontStyle: 'italic', textAlign: 'center', paddingVertical: 12 },
 
-  statsGrid: { flexDirection: 'row', justifyContent: 'space-between' },
-  statCell: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 20, fontWeight: '800', color: NAVY },
-  statLabel: { fontSize: 10, color: TEXT_SUB, fontWeight: '600', marginTop: 4, letterSpacing: 0.5 },
-  subStats: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: BORDER },
-  subStatText: { fontSize: 11, color: TEXT_SUB, textAlign: 'center' },
-
-  catRow: {
+  table: { width: '100%' },
+  tableHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+    marginBottom: 4,
+  },
+  tableHeaderCell: { fontSize: 10, fontWeight: '800', color: TEXT_MUTED, letterSpacing: 0.3 },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: SURFACE,
+  },
+  tableCell: { flex: 1, fontSize: 12, color: TEXT_COLOR, textAlign: 'right' },
+  tableLabelCell: { fontSize: 12, fontWeight: '700', color: TEXT_COLOR },
+  tableTotalRow: { borderBottomWidth: 0, borderTopWidth: 1, borderTopColor: BORDER, marginTop: 2 },
+  tableTotalCell: { fontWeight: '800', color: NAVY },
+
+  leagueBlock: {
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: SURFACE,
   },
-  catEmoji: { fontSize: 18, marginRight: 8 },
-  catLabel: { fontSize: 13, fontWeight: '700', color: TEXT_COLOR },
-  catStats: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  catStat: { fontSize: 12 },
-  catStatNum: { fontSize: 14, fontWeight: '800', color: NAVY },
-  catStatLabel: { fontSize: 10, color: TEXT_SUB, fontWeight: '600' },
-  winRatePill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, minWidth: 42, alignItems: 'center' },
-  winRateText: { fontSize: 11, fontWeight: '800' },
+  leagueHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  leagueName: { fontSize: 13, fontWeight: '800', color: TEXT_COLOR, flex: 1 },
+  leaguePrice: { fontSize: 12, fontWeight: '700', color: GREEN, marginLeft: 8 },
+  leagueTeam: { fontSize: 11, color: TEXT_SUB, marginTop: 2, marginBottom: 8 },
 
-  matchRow: {
+  privateStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: SURFACE,
+    justifyContent: 'space-between',
+    margin: 14,
+    marginTop: 4,
+    padding: 14,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
   },
-  wlBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  wlBadgeText: { color: WHITE, fontSize: 13, fontWeight: '800' },
-  matchCat: { fontSize: 12, fontWeight: '700', color: NAVY, flex: 1 },
-  matchScore: { fontSize: 14, fontWeight: '800', color: NAVY, marginLeft: 6 },
-  matchOpp: { fontSize: 11, color: TEXT_SUB, marginTop: 2 },
-  matchMeta: { fontSize: 10, color: TEXT_MUTED, marginTop: 3, letterSpacing: 0.2 },
+  privateTxt: { fontSize: 12, color: NAVY, fontWeight: '600', flex: 1, marginRight: 8 },
+  privateLink: { fontSize: 12, color: BLUE, fontWeight: '800' },
 });
