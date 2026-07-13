@@ -254,7 +254,7 @@ const PlayerProfileScreen: React.FC = () => {
               Your profile · fantasy {career.private.fantasy?.points ?? 0} pts
               {career.private.fantasy?.rank != null ? ` · rank ${career.private.fantasy.rank}` : ''}
             </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('EditProfile')}>
+            <TouchableOpacity onPress={() => navigation.navigate('ProfileTab', { screen: 'EditProfile' })}>
               <Text style={styles.privateLink}>Edit profile</Text>
             </TouchableOpacity>
           </View>
