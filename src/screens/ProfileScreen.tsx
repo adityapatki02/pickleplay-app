@@ -97,6 +97,14 @@ const BellIcon = () => (
   </Svg>
 );
 
+const StatsIcon = () => (
+  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+    <Line x1="18" y1="20" x2="18" y2="10" stroke={TEXT_SECONDARY} strokeWidth={1.8} strokeLinecap="round" />
+    <Line x1="12" y1="20" x2="12" y2="4" stroke={TEXT_SECONDARY} strokeWidth={1.8} strokeLinecap="round" />
+    <Line x1="6" y1="20" x2="6" y2="14" stroke={TEXT_SECONDARY} strokeWidth={1.8} strokeLinecap="round" />
+  </Svg>
+);
+
 const HelpIcon = () => (
   <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
     <Circle cx="12" cy="12" r="10" stroke={TEXT_SECONDARY} strokeWidth={1.8} />
@@ -408,6 +416,16 @@ export default function ProfileScreen() {
         {/* ── SETTINGS ── */}
         <View style={s.card}>
           <Text style={s.cardLabel}>SETTINGS</Text>
+          <SettingRow
+            icon={<StatsIcon />}
+            label="My Stats"
+            onPress={() =>
+              navigation.navigate('MyEventsTab', {
+                screen: 'PlayerProfile',
+                params: { playerId: user.id },
+              })
+            }
+          />
           <SettingRow icon={<EditIcon />}   label="Edit Profile"       onPress={() => navigation.navigate('EditProfile')} />
           <SettingRow icon={<BellIcon />}   label="Notifications"      onPress={() => {}} />
           <SettingRow icon={<ShieldIcon />} label="Privacy & Security" onPress={() => {}} />
