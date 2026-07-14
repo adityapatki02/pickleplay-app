@@ -154,6 +154,16 @@ export default function MeScreen() {
 
         {/* MY GAME — player profile tile (demo data) */}
         <YSectionHead eyebrow="STATS · PICKLEBALL" title="MY GAME" />
+        {user?.id ? (
+          <Pressable
+            onPress={() => (nav as any).navigate('PlayerProfile', { playerId: user.id })}
+            style={{ marginHorizontal: 20, marginBottom: 12, paddingVertical: 12, borderRadius: 10, backgroundColor: YColors.ink, alignItems: 'center' }}
+          >
+            <YUiText size={12} weight={800} color="#fff" style={{ letterSpacing: 0.5 }}>
+              VIEW FULL STATS →
+            </YUiText>
+          </Pressable>
+        ) : null}
         <View style={styles.gameCard}>
           {/* Top row: Rating + Rank */}
           <View style={styles.gameTopRow}>
