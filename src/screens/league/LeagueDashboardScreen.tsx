@@ -2786,6 +2786,14 @@ const LeagueDashboardScreen: React.FC = () => {
           >
             <Text style={{ color: YColors.ink2, fontSize: 20 }}>⏻</Text>
           </TouchableOpacity>
+        ) : navigation.canGoBack && navigation.canGoBack() ? (
+          <TouchableOpacity
+            style={{ width: 40, height: 40, justifyContent: 'center', alignItems: 'center' }}
+            onPress={() => navigation.goBack()}
+            accessibilityLabel="Go back"
+          >
+            <Text style={{ color: YColors.ink, fontSize: 26, lineHeight: 28, marginTop: -2 }}>‹</Text>
+          </TouchableOpacity>
         ) : (
           <View style={{ width: 40 }} />
         )}

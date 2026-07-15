@@ -429,7 +429,7 @@ export default function ProfileScreen() {
           <SettingRow icon={<EditIcon />}   label="Edit Profile"       onPress={() => navigation.navigate('EditProfile')} />
           <SettingRow icon={<BellIcon />}   label="Notifications"      onPress={() => {}} />
           <SettingRow icon={<ShieldIcon />} label="Privacy & Security" onPress={() => {}} />
-          <SettingRow icon={<HelpIcon />}   label="Help & Support"     onPress={() => Linking.openURL('mailto:support@yoiden.com')} last />
+          <SettingRow icon={<HelpIcon />}   label="Help & Support"     onPress={() => Linking.openURL('mailto:aditya.patki@crescendotranscriptions.com')} last />
         </View>
 
         {/* ── APP INFO ── */}

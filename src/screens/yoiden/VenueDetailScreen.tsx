@@ -31,7 +31,6 @@ import { venuesApi } from '../../api/venues.api';
 import { bookingsApi } from '../../api/bookings.api';
 import { useAuthStore } from '../../store/authStore';
 import type { Venue, CourtAvailability, BookingCell } from '../../types/booking.types';
-import { DEMO_VENUE_ID } from '../../config/demo-venues';
 
 /** Map the backend's { courtId, courtName, slots } shape → CourtAvailability */
 const mapAvailability = (raw: any[]): CourtAvailability[] =>

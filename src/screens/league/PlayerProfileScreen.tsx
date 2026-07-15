@@ -16,9 +16,13 @@ import { xAlert } from '../../utils/alert';
 // ─── Design tokens ──────────────────────────────────────────────────────────
 import { YColors, YTopBar } from '../../components/yoiden';
 
-const NAVY: string = YColors.ink;
+// Header / avatar / active tabs use a deep blue (was near-black — the page read
+// as a wall of black). LIME drives the small accent lines before each section;
+// GREEN stays a readable teal for the auction-price text.
+const NAVY: string = YColors.accentDeep;
 const BLUE: string = YColors.accent;
 const GREEN = '#06D6A0';
+const LIME: string = YColors.lime;
 const SURFACE: string = YColors.bg;
 const BORDER: string = YColors.line2;
 const TEXT_COLOR: string = YColors.ink;
@@ -212,6 +216,7 @@ const PlayerProfileScreen: React.FC = () => {
           <>
             {/* By-format table */}
             <View style={styles.card}>
+              <View style={styles.accentBar} />
               <Text style={styles.cardTitle}>BY FORMAT</Text>
               {sport.formats?.length > 0 ? (
                 <StatTable
@@ -227,6 +232,7 @@ const PlayerProfileScreen: React.FC = () => {
             {/* By-league */}
             {sport.leagues?.length > 0 && (
               <View style={styles.card}>
+                <View style={styles.accentBar} />
                 <Text style={styles.cardTitle}>BY LEAGUE</Text>
                 {sport.leagues.map((l: any, idx: number) => (
                   <View key={l.seasonId || idx} style={styles.leagueBlock}>
@@ -329,6 +335,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
+  accentBar: { width: 32, height: 3, borderRadius: 2, backgroundColor: LIME, marginBottom: 10 },
   cardTitle: { fontSize: 11, fontWeight: '800', color: TEXT_SUB, letterSpacing: 0.8, marginBottom: 12 },
   emptyText: { fontSize: 12, color: TEXT_MUTED, fontStyle: 'italic', textAlign: 'center', paddingVertical: 12 },
 

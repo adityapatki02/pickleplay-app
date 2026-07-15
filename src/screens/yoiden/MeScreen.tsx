@@ -5,6 +5,7 @@ import {
   StyleSheet,
   RefreshControl,
   Pressable,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -25,8 +26,11 @@ import {
   YTournamentRow,
 } from '../../components/yoiden';
 import { useAuthStore } from '../../store/authStore';
+import { authApi } from '../../api/auth.api';
 import { tournamentsApi } from '../../api/tournaments.api';
 import { registrationsApi } from '../../api/registrations.api';
+import { SUPPORT_EMAIL, PRIVACY_URL, TERMS_URL } from '../../config/constants';
+import { xConfirm, xAlert } from '../../utils/alert';
 import type { Tournament } from '../../types/tournament.types';
 import type { YoidenTabParamList } from '../../navigation/YoidenTabNavigator';
 
@@ -89,8 +93,39 @@ export default function MeScreen() {
 
   const openTournament = (id: string) =>
     nav.navigate('MeTab', { screen: 'TournamentDetail', params: { tournamentId: id } });
+  const openEditProfile = () => (nav as any).navigate('MeTab', { screen: 'EditProfile' });
+  const openURL = (url: string) => Linking.openURL(url).catch(() => {});
+  const contactSupport = () =>
+    openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Yoiden support')}`);
 
-  const upcomingRegs = myRegs.map((r) => r.tournament).filter((t): t is Tournament => !!t);
+  const doDelete = async () => {
+    try {
+      await authApi.deleteAccount();
+      logout();
+    } catch (e: any) {
+      xAlert('Error', e?.response?.data?.message ?? 'Could not delete your account. Please try again.');
+    }
+  };
+  const handleDeleteAccount = () =>
+    xConfirm(
+      'Delete account',
+      'This permanently deletes your account and all your data. This cannot be undone.',
+      doDelete,
+    );
+
+  // Collapse to one entry per tournament — a player registered in several
+  // categories of the same event would otherwise duplicate the row (and its key).
+  const upcomingRegs = (() => {
+    const seen = new Set<string>();
+    const list: Tournament[] = [];
+    for (const r of myRegs) {
+      const t = r.tournament;
+      if (!t || seen.has(t.id)) continue;
+      seen.add(t.id);
+      list.push(t);
+    }
+    return list;
+  })();
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
@@ -103,7 +138,7 @@ export default function MeScreen() {
           eyebrow={user?.city ? user.city.toUpperCase() : 'PROFILE'}
           title="ME"
           action={
-            <Pressable style={styles.iconBtn} hitSlop={8}>
+            <Pressable style={styles.iconBtn} hitSlop={8} onPress={openEditProfile}>
               <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
                 <Path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke={YColors.ink} strokeWidth={1.5} fill="none" />
               </Svg>
@@ -145,19 +180,20 @@ export default function MeScreen() {
               </YBadge>
             ) : null}
             {user?.city ? (
-              <YBadge color="#fff" bg={YColors.ink}>
+              <YBadge color="#fff" bg={YColors.accent}>
                 {user.city.toUpperCase()}
               </YBadge>
             ) : null}
           </View>
         </View>
 
-        {/* MY GAME — player profile tile (demo data) */}
+        {/* MY GAME — stats overview; full career lives behind VIEW FULL STATS */}
+        <View style={styles.accentBar} />
         <YSectionHead eyebrow="STATS · PICKLEBALL" title="MY GAME" />
         {user?.id ? (
           <Pressable
             onPress={() => (nav as any).navigate('PlayerProfile', { playerId: user.id })}
-            style={{ marginHorizontal: 20, marginBottom: 12, paddingVertical: 12, borderRadius: 10, backgroundColor: YColors.ink, alignItems: 'center' }}
+            style={{ marginHorizontal: 20, marginBottom: 12, paddingVertical: 12, borderRadius: 10, backgroundColor: YColors.accent, alignItems: 'center' }}
           >
             <YUiText size={12} weight={800} color="#fff" style={{ letterSpacing: 0.5 }}>
               VIEW FULL STATS →
@@ -165,92 +201,9 @@ export default function MeScreen() {
           </Pressable>
         ) : null}
         <View style={styles.gameCard}>
-          {/* Top row: Rating + Rank */}
-          <View style={styles.gameTopRow}>
-            <View>
-              <YEyebrow color={YColors.ink3}>RATING</YEyebrow>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 6 }}>
-                <YDisplay size={44} color={YColors.ink}>1842</YDisplay>
-                <YUiText size={12} weight={800} color="#0E8F66" style={{ marginLeft: 10, letterSpacing: 0.5 }}>
-                  +24
-                </YUiText>
-              </View>
-              <YUiText size={11} color={YColors.ink2} weight={600} style={{ marginTop: 2 }}>
-                Up 24 from last month
-              </YUiText>
-            </View>
-            <View style={styles.rankPill}>
-              <YEyebrow color="rgba(255,255,255,0.65)" size={9}>RANK</YEyebrow>
-              <YDisplay size={28} color="#fff" italic={false} style={{ marginTop: 2 }}>B+</YDisplay>
-            </View>
-          </View>
-
-          {/* W/L/Win% row */}
-          <View style={styles.gameStatsRow}>
-            <View style={styles.gameStatBox}>
-              <YMono size={20} bold color={YColors.ink}>38</YMono>
-              <YEyebrow color={YColors.ink3} size={9} style={{ marginTop: 4 }}>WINS</YEyebrow>
-            </View>
-            <View style={styles.gameStatDivider} />
-            <View style={styles.gameStatBox}>
-              <YMono size={20} bold color={YColors.ink}>14</YMono>
-              <YEyebrow color={YColors.ink3} size={9} style={{ marginTop: 4 }}>LOSSES</YEyebrow>
-            </View>
-            <View style={styles.gameStatDivider} />
-            <View style={styles.gameStatBox}>
-              <YMono size={20} bold color={YColors.accent}>73%</YMono>
-              <YEyebrow color={YColors.ink3} size={9} style={{ marginTop: 4 }}>WIN RATE</YEyebrow>
-            </View>
-            <View style={styles.gameStatDivider} />
-            <View style={styles.gameStatBox}>
-              <YMono size={20} bold color="#0E8F66">4</YMono>
-              <YEyebrow color={YColors.ink3} size={9} style={{ marginTop: 4 }}>STREAK</YEyebrow>
-            </View>
-          </View>
-
-          {/* Form pills (last 5 matches) */}
-          <View style={styles.formRow}>
-            <YEyebrow color={YColors.ink3}>FORM · LAST 5</YEyebrow>
-            <View style={styles.formPills}>
-              {['W', 'W', 'L', 'W', 'W'].map((r, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.formPill,
-                    r === 'W' ? styles.formPillWin : styles.formPillLoss,
-                  ]}
-                >
-                  <YUiText size={11} weight={900} color={r === 'W' ? '#0E8F66' : YColors.live}>
-                    {r}
-                  </YUiText>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* Badges */}
-          <View style={styles.badgeRow}>
-            <YBadge color="#000" bg={YColors.lime}>100 MATCHES</YBadge>
-            <YBadge color="#fff" bg={YColors.accent}>COMEBACK KID</YBadge>
-            <YBadge color="#fff" bg={YColors.ink}>POOL CRUSHER</YBadge>
-          </View>
-        </View>
-
-        {/* Next match preview */}
-        <View style={styles.nextMatchCard}>
-          <View style={{ flex: 1 }}>
-            <YEyebrow color={YColors.ink3}>NEXT MATCH</YEyebrow>
-            <YUiText size={14} weight={900} color={YColors.ink} style={{ marginTop: 4, letterSpacing: 0.3 }}>
-              MUMBAI OPEN '26
-            </YUiText>
-            <YMono size={11} color={YColors.ink2} style={{ marginTop: 4 }}>
-              SUN · 6:30 PM · COURT 3
-            </YMono>
-          </View>
-          <View style={styles.nextMatchClock}>
-            <YDisplay size={22} color={YColors.accent}>2d</YDisplay>
-            <YEyebrow color={YColors.ink3} size={9}>TO GO</YEyebrow>
-          </View>
+          <YUiText size={13} color={YColors.ink2} style={{ lineHeight: 19 }}>
+            Your full pickleball career — matches, win rate, and per-format stats across every league and tournament you've played.
+          </YUiText>
         </View>
 
         {/* My Bookings card */}
@@ -327,11 +280,11 @@ export default function MeScreen() {
         {/* Actions */}
         <YSectionHead eyebrow="ACCOUNT" title="SETTINGS" />
         <View style={styles.actionsWrap}>
-          <Row label="EDIT PROFILE" />
-          <Row label="PASSWORD & SECURITY" />
-          <Row label="NOTIFICATIONS" />
-          <Row label="HELP & FEEDBACK" />
-          <Row label="ABOUT YOIDEN" />
+          <Row label="EDIT PROFILE" onPress={openEditProfile} />
+          <Row label="PRIVACY POLICY" onPress={() => openURL(PRIVACY_URL)} />
+          <Row label="TERMS OF SERVICE" onPress={() => openURL(TERMS_URL)} />
+          <Row label="HELP & SUPPORT" onPress={contactSupport} />
+          <Row label="DELETE ACCOUNT" onPress={handleDeleteAccount} destructive />
         </View>
 
         <View style={{ marginTop: 24, paddingHorizontal: 20, alignItems: 'flex-start' }}>
@@ -358,17 +311,26 @@ const Stat: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   </View>
 );
 
-const Row: React.FC<{ label: string; onPress?: () => void }> = ({ label, onPress }) => (
+const Row: React.FC<{ label: string; onPress?: () => void; destructive?: boolean }> = ({ label, onPress, destructive }) => (
   <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && { backgroundColor: YColors.bg3 }]}>
-    <YUiText size={12} weight={800} color={YColors.ink} style={{ letterSpacing: 1.2 }}>{label}</YUiText>
+    <YUiText size={12} weight={800} color={destructive ? YColors.live : YColors.ink} style={{ letterSpacing: 1.2 }}>{label}</YUiText>
     <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-      <Path d="M9 6l6 6-6 6" stroke={YColors.ink3} strokeWidth={2} strokeLinecap="round" />
+      <Path d="M9 6l6 6-6 6" stroke={destructive ? YColors.live : YColors.ink3} strokeWidth={2} strokeLinecap="round" />
     </Svg>
   </Pressable>
 );
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: YColors.bg },
+  accentBar: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: YColors.lime,
+    marginLeft: 20,
+    marginTop: 24,
+    marginBottom: -14,
+  },
   iconBtn: {
     width: 38, height: 38, borderRadius: 999,
     backgroundColor: YColors.bg3, borderWidth: 1, borderColor: YColors.line2,

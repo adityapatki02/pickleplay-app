@@ -5,7 +5,6 @@ import type {
   DetailAndManageRoutes,
   HomeStackParamList,
   PlayStackParamList,
-  FantasyStackParamList,
   BookStackParamList,
   MeStackParamList,
   YoidenTabParamList,
@@ -14,7 +13,6 @@ import type {
 export type {
   HomeStackParamList,
   PlayStackParamList,
-  FantasyStackParamList,
   BookStackParamList,
   MeStackParamList,
   YoidenTabParamList,
@@ -24,7 +22,6 @@ import { YTabBar } from '../components/yoiden';
 
 import HomeScreen from '../screens/yoiden/HomeScreen';
 import PlayScreen from '../screens/yoiden/PlayScreen';
-import FantasyScreen from '../screens/yoiden/FantasyScreen';
 import MeScreen from '../screens/yoiden/MeScreen';
 
 import TournamentDetailScreen from '../screens/yoiden/TournamentDetailScreen';
@@ -48,6 +45,8 @@ import BookingDetailScreen from '../screens/yoiden/BookingDetailScreen';
 
 // League (SPPL) screens — themed for demo
 import LeagueDashboardScreen from '../screens/league/LeagueDashboardScreen';
+import LiveLeaguesScreen from '../screens/league/LiveLeaguesScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
 import LeagueStandingsScreen from '../screens/league/StandingsScreen';
 import LeagueStatsScreen from '../screens/league/StatsScreen';
 import LeagueTieDetailScreen from '../screens/league/TieDetailScreen';
@@ -69,6 +68,7 @@ function registerDetailAndManageScreens<T extends DetailAndManageRoutes>(
     <>
       {/* Location — opens as a slide-up modal */}
       <S name="CityPicker" component={CityPickerScreen} options={{ presentation: 'modal' }} />
+      <S name="EditProfile" component={EditProfileScreen} />
       {/* Tournament */}
       <S name="TournamentDetail" component={TournamentDetailScreen} />
       <S name="CreateTournament" component={CreateTournamentScreen} />
@@ -81,6 +81,8 @@ function registerDetailAndManageScreens<T extends DetailAndManageRoutes>(
       <S name="ScoreLogger" component={ScoreLoggerScreen} />
       <S name="TournamentStandings" component={StandingsScreen} />
       <S name="TournamentRankings" component={RankingsScreen} />
+      {/* All leagues currently going on — opened from the Home league slider */}
+      <S name="LiveLeagues" component={LiveLeaguesScreen} />
       {/* SPPL league. In the league-kiosk build the dashboard is the Home
           stack's root, so it needs the leagueId baked in as initialParams —
           this is what a tab-press popToTop falls back to. In the full app the
@@ -120,13 +122,6 @@ const PlayStackNavigator = () => (
   </PlayStack.Navigator>
 );
 
-const FantasyStack = createNativeStackNavigator<FantasyStackParamList>();
-const FantasyStackNavigator = () => (
-  <FantasyStack.Navigator screenOptions={{ headerShown: false }}>
-    <FantasyStack.Screen name="Fantasy" component={FantasyScreen} />
-  </FantasyStack.Navigator>
-);
-
 const BookStack = createNativeStackNavigator<BookStackParamList>();
 const BookStackNavigator = () => (
   <BookStack.Navigator screenOptions={{ headerShown: false }}>
@@ -157,7 +152,6 @@ export const YoidenTabNavigator: React.FC = () => (
     <Tab.Screen name="HomeTab" component={HomeStackNavigator} />
     <Tab.Screen name="PlayTab" component={PlayStackNavigator} />
     <Tab.Screen name="BookTab" component={BookStackNavigator} />
-    <Tab.Screen name="FantasyTab" component={FantasyStackNavigator} />
     <Tab.Screen name="MeTab" component={MeStackNavigator} />
   </Tab.Navigator>
 );

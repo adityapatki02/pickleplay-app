@@ -3,6 +3,7 @@ import { NavigatorScreenParams } from '@react-navigation/native';
 // ─── Shared deep routes ─────────────────────────────────────────
 export type DetailAndManageRoutes = {
   CityPicker: undefined;
+  EditProfile: undefined;
   TournamentDetail: { tournamentId: string };
   CreateTournament: undefined;
   Register: { tournamentId: string; categoryId?: string };
@@ -14,6 +15,7 @@ export type DetailAndManageRoutes = {
   ScoreLogger: { tournamentId: string };
   TournamentStandings: { tournamentId: string };
   TournamentRankings: { tournamentId: string };
+  LiveLeagues: undefined;
   LeagueDashboard: { leagueId: string; seasonId: string };
   Standings: { leagueId: string; seasonId: string };
   LeagueStats: { leagueId: string; seasonId: string };
@@ -35,10 +37,6 @@ export type HomeStackParamList = DetailAndManageRoutes & {
 
 export type PlayStackParamList = DetailAndManageRoutes & {
   Play: undefined;
-};
-
-export type FantasyStackParamList = {
-  Fantasy: undefined;
 };
 
 export type BookStackParamList = {
@@ -64,7 +62,6 @@ export type YoidenTabParamList = {
   HomeTab: NavigatorScreenParams<HomeStackParamList>;
   PlayTab: NavigatorScreenParams<PlayStackParamList>;
   BookTab: NavigatorScreenParams<BookStackParamList>;
-  FantasyTab: NavigatorScreenParams<FantasyStackParamList>;
   MeTab: NavigatorScreenParams<MeStackParamList>;
 };
 

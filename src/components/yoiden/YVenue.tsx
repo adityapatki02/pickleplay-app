@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Image, Pressable, StyleSheet, ViewStyle } from 'react-native';
 import Svg, { Path, Circle, Ellipse, Line } from 'react-native-svg';
 import { YColors } from '../../config/yoiden';
-import { YUiText } from './YText';
+import { YUiText, YDisplay } from './YText';
 
 // Sports a venue can offer. Drives the sport-icon chips on each card.
 export type Sport = 'tennis' | 'padel' | 'pickleball' | 'football' | 'basketball' | 'swimming' | 'badminton';
@@ -111,21 +111,24 @@ const SPORT_ICONS: Record<Sport, (p: IconProps) => React.JSX.Element> = {
   swimming: SportSwimming,
 };
 
+const sportLabel = (s: string) =>
+  String(s)
+    .split('-')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+
 type SportsRowProps = { sports: Sport[]; size?: number; iconSize?: number; gap?: number; style?: ViewStyle };
-const SportsRow: React.FC<SportsRowProps> = ({ sports, size = 34, iconSize = 18, gap = 8, style }) => (
-  <View style={[{ flexDirection: 'row', gap }, style]}>
-    {sports.map((s, i) => {
-      const Icon = SPORT_ICONS[s];
-      const primary = i === 0;
-      return (
-        <View
-          key={`${s}-${i}`}
-          style={[styles.sportChip, { width: size, height: size }, styles.sportChipNeutral]}
-        >
-          {Icon ? <Icon size={iconSize} color={YColors.ink} /> : null}
-        </View>
-      );
-    })}
+// Named text pills, laid out in a 2-column grid — two per row, wrapping to the
+// next row when a venue offers 3 or 4 sports.
+const SportsRow: React.FC<SportsRowProps> = ({ sports, style }) => (
+  <View style={[{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 8 }, style]}>
+    {sports.map((s, i) => (
+      <View key={`${s}-${i}`} style={styles.sportPill}>
+        <YUiText size={12} weight={700} color={YColors.ink2} numberOfLines={1}>
+          {sportLabel(s as unknown as string)}
+        </YUiText>
+      </View>
+    ))}
   </View>
 );
 
@@ -139,10 +142,6 @@ export const YVenueEditorial: React.FC<EditorialProps> = ({ venue, onPress, styl
       ) : (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: PLACEHOLDER }]} />
       )}
-      <View style={styles.eImgBtns}>
-        <View style={styles.circBtn}><Heart size={16} color={YColors.ink} /></View>
-        <View style={styles.circBtn}><ShareIcon size={15} color={YColors.ink} /></View>
-      </View>
       {venue.sponsored ? (
         <View style={styles.sponsoredBadge}>
           <YUiText size={10} weight={900} color={YColors.ink} style={{ letterSpacing: 1.4 }}>SPONSORED</YUiText>
@@ -163,9 +162,9 @@ export const YVenueEditorial: React.FC<EditorialProps> = ({ venue, onPress, styl
         </View>
       )}
 
-      <YUiText size={24} weight={900} color={YColors.ink} numberOfLines={1} style={{ marginTop: venue.rating > 0 ? 6 : 0, letterSpacing: -0.4 }}>
+      <YDisplay size={26} color={YColors.accent} numberOfLines={1} style={{ marginTop: venue.rating > 0 ? 6 : 0 }}>
         {venue.name}
-      </YUiText>
+      </YDisplay>
 
       <View style={styles.locRow}>
         <Pin size={13} color={GREY} />
@@ -181,8 +180,6 @@ export const YVenueEditorial: React.FC<EditorialProps> = ({ venue, onPress, styl
       <View style={styles.divider} />
 
       <View style={styles.actionRow}>
-        <View style={styles.sqBtn}><Heart size={18} color={YColors.ink} /></View>
-        <View style={styles.sqBtn}><ShareIcon size={17} color={YColors.ink} /></View>
         <Pressable style={styles.bookBtn} onPress={onPress}>
           <YUiText size={14} weight={800} color="#fff" style={{ letterSpacing: 0.3 }}>BOOK</YUiText>
           <Arrow size={16} />
@@ -211,9 +208,9 @@ export const YVenueRow: React.FC<RowProps> = ({ venue, onPress, style }) => (
 
     <View style={styles.cBody}>
       <View style={styles.cTopRow}>
-        <YUiText size={16} weight={800} color={YColors.ink} numberOfLines={1} style={{ flex: 1, letterSpacing: -0.2 }}>
+        <YDisplay size={19} color={YColors.accent} numberOfLines={1} style={{ flex: 1 }}>
           {venue.name}
-        </YUiText>
+        </YDisplay>
         {venue.rating > 0 && (
           <View style={styles.ratingChip}>
             <Star size={12} color={YColors.accent} />
@@ -236,8 +233,6 @@ export const YVenueRow: React.FC<RowProps> = ({ venue, onPress, style }) => (
       ) : null}
 
       <View style={styles.cActions}>
-        <View style={styles.sqBtnSm}><Heart size={15} color={YColors.ink} /></View>
-        <View style={styles.sqBtnSm}><ShareIcon size={14} color={YColors.ink} /></View>
         <Pressable style={styles.bookBtnSm} onPress={onPress}>
           <YUiText size={12} weight={800} color="#fff" style={{ letterSpacing: 0.3 }}>BOOK</YUiText>
         </Pressable>
@@ -364,19 +359,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // Sport chips
-  sportChip: {
+  // Named sport pills — 2-per-row grid (see SportsRow)
+  sportPill: {
+    width: '48%',
+    paddingVertical: 8,
     borderRadius: 9,
     borderWidth: 1,
+    borderColor: YColors.line2,
+    backgroundColor: YColors.bg2,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  sportChipPrimary: {
-    backgroundColor: YColors.lime,
-    borderColor: YColors.ink,
-  },
-  sportChipNeutral: {
-    backgroundColor: YColors.bg2,
-    borderColor: YColors.line2,
   },
 });

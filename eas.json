@@ -31,6 +31,19 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleId": "aditya.s.patki@gmail.com",
+        "ascAppId": "6791264893",
+        "appleTeamId": "Q9UZLJPMD3",
+        "ascApiKeyPath": "./AuthKey_5V8NATR8UT.p8",
+        "ascApiKeyId": "5V8NATR8UT",
+        "ascApiKeyIssuerId": "bf59836c-e4e5-4d4e-bf5d-d8f2cce53b69"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "internal"
+      }
+    }
   }
 }

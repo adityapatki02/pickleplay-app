@@ -6,7 +6,11 @@ import {
   StyleSheet,
   RefreshControl,
   Pressable,
-  TextInput,
+  Linking,
+  Image,
+  useWindowDimensions,
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Ellipse, Line } from 'react-native-svg';
@@ -37,19 +41,16 @@ import { registrationsApi } from '../../api/registrations.api';
 import { venuesApi } from '../../api/venues.api';
 import type { Tournament } from '../../types/tournament.types';
 import type { Venue as ApiVenue } from '../../types/booking.types';
-import { SPPL, type YoidenTabParamList } from '../../navigation/nav-types';
+import { type YoidenTabParamList } from '../../navigation/nav-types';
+import { FEATURED_LEAGUES, liveLeagues, type FeaturedLeague } from '../../config/leagues';
 
 type Nav = BottomTabNavigationProp<YoidenTabParamList, 'HomeTab'>;
 
-// Featured tournaments shown on Home (both banner + Your Events + Nearby are
-// filtered to this allowlist). Two slots:
-//   1. AIPA West Zone — used for SHADOW SCORING (real KheloMore data)
-//   2. AIPA West Zone — DEMO — sandbox twin for live demos (synthetic players)
-// Clear both (set to []) to restore the full discover/your-events feed.
-const FEATURED_TOURNAMENT_IDS = [
-  '043c6b38-da45-41e9-968f-34f4d4d0bb05', // AIPA — live shadow
-  '77e4837b-9730-4ba6-b070-65948ff70dc6', // AIPA — DEMO
-] as const;
+// Featured-tournament allowlist. Empty = show the real discover / your-events
+// feed (production). Previously pinned to a synthetic "AIPA — DEMO" tournament
+// for sales demos — cleared for release so Home shows real events.
+const FEATURED_TOURNAMENT_IDS: readonly string[] = [];
+
 
 
 
@@ -89,13 +90,24 @@ export default function HomeScreen() {
   // Fetched once on mount — null means not yet resolved, undefined means denied/unavailable
   const userCoords = useRef<{ lat: number; lng: number } | null>(null);
 
+  // Featured-league slider geometry + paging
+  const { width: winW } = useWindowDimensions();
+  const LEAGUE_GAP = 12;
+  const leagueCardW = Math.min(winW, 520) - 32; // cap on wide web viewports
+  const [leaguePage, setLeaguePage] = useState(0);
+  const onLeagueScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) =>
+    setLeaguePage(Math.round(e.nativeEvent.contentOffset.x / (leagueCardW + LEAGUE_GAP)));
+
   const loadVenues = useCallback(async (sport?: string | null) => {
     try {
-      const coords = userCoords.current;
+      // The chosen city (the label) drives which courts show: the backend
+      // geocodes the city name and matches venues by real distance (radius).
+      // Only fall back to device GPS when no city is set (brand-new user).
+      const hasCity = !!user?.city;
       const res = await venuesApi.list({
-        city: coords ? undefined : (user?.city || undefined), // prefer GPS over city text
-        lat: coords?.lat,
-        lng: coords?.lng,
+        city: hasCity ? user!.city : undefined,
+        lat: hasCity ? undefined : userCoords.current?.lat,
+        lng: hasCity ? undefined : userCoords.current?.lng,
         limit: 8,
         sport: sport || undefined,
       }) as any;
@@ -158,13 +170,14 @@ export default function HomeScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-fetch venues whenever the sport chip changes (after initial load)
+  // Re-fetch venues whenever the sport chip OR the chosen city changes
+  // (after the initial load) so switching city updates the courts live.
   useEffect(() => {
     if (!loading) {
       loadVenues(activeSport);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSport]);
+  }, [activeSport, user?.city]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -178,11 +191,20 @@ export default function HomeScreen() {
     nav.navigate('BookTab', { screen: 'VenueDetail', params: { venueId } });
   const goMe = () => nav.navigate('MeTab', { screen: 'Me' });
   const openLocation = () => nav.navigate('HomeTab', { screen: 'CityPicker' });
-  const goSPPL = () =>
+  const HOST_CONTACT_WA = '918149998143';
+  const getInTouch = () =>
+    Linking.openURL(
+      `https://wa.me/${HOST_CONTACT_WA}?text=${encodeURIComponent(
+        "Hi Yoiden, I'd like to host a custom league.",
+      )}`,
+    ).catch(() => {});
+  const openLeague = (l: FeaturedLeague) =>
     nav.navigate('HomeTab', {
       screen: 'LeagueDashboard',
-      params: { leagueId: SPPL.leagueId, seasonId: SPPL.seasonId },
+      params: { leagueId: l.leagueId, seasonId: l.seasonId },
     });
+  const goLiveLeagues = () =>
+    nav.navigate('HomeTab', { screen: 'LiveLeagues' });
   const openTournament = (id: string) =>
     nav.navigate('HomeTab', { screen: 'TournamentDetail', params: { tournamentId: id } });
 
@@ -215,11 +237,13 @@ export default function HomeScreen() {
   // Fields not yet in the backend (rating, distanceKm, sports) are zeroed so
   // the card components hide them via their own guards.
   const toDisplayVenue = (v: ApiVenue, i: number): Venue => {
-    // photos may be {url,caption}[] or string[] depending on backend version
+    // photos may be {url,thumbUrl,caption}[] or string[] depending on backend
+    // version. Cards use the lightweight thumbUrl when available (fast lists).
     const firstPhoto = Array.isArray(v.photos)
       ? typeof v.photos[0] === 'string'
         ? (v.photos[0] as string)
-        : (v.photos[0] as { url: string })?.url
+        : (v.photos[0] as { url: string; thumbUrl?: string })?.thumbUrl ??
+          (v.photos[0] as { url: string })?.url
       : undefined;
     return {
       id: v.id,
@@ -237,12 +261,6 @@ export default function HomeScreen() {
   const displayVenues: Venue[] = apiVenues.map(toDisplayVenue);
   const sponsoredVenues = displayVenues.filter((v) => v.sponsored);
   const normalVenues = displayVenues.filter((v) => !v.sponsored);
-
-  // Live card is shown only when at least one tournament spans today
-  const todayStr = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
-  const hasTodayMatch = [...allUpcomingRegs, ...myHosted, ...nearby].some(
-    (t) => t.startDate?.slice(0, 10) <= todayStr && t.endDate?.slice(0, 10) >= todayStr,
-  );
 
   return (
     // SafeAreaView gets accent bg so the status-bar notch region is blue too
@@ -294,134 +312,137 @@ export default function HomeScreen() {
               </View>
             }
             action={
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <Pressable style={styles.iconBtn} hitSlop={8}>
-                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                    <Path
-                      d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 0 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5m6 0a3 3 0 0 1-6 0"
-                      stroke="#fff"
-                      strokeWidth={1.8}
-                      strokeLinecap="round"
-                      fill="none"
-                    />
-                  </Svg>
-                </Pressable>
-                <Pressable onPress={goMe} hitSlop={4}>
-                  <YAvatar
-                    initials={initials(fullName)}
-                    size={38}
-                    color={YColors.lime}
-                    textColor="#000"
-                  />
-                </Pressable>
-              </View>
+              <Pressable onPress={goMe} hitSlop={4}>
+                <YAvatar
+                  initials={initials(fullName)}
+                  size={38}
+                  color={YColors.lime}
+                  textColor="#000"
+                />
+              </Pressable>
             }
           />
+        </View>
 
-          {/* Live hero — only shown when a tournament is happening today */}
-          {hasTodayMatch && (
-            <View style={styles.liveCard}>
-              <YEyebrow color={YColors.ink3}>NO LIVE MATCHES</YEyebrow>
-              <YDisplay size={28} color={YColors.ink} style={{ marginTop: 6 }}>
-                ALL QUIET
-              </YDisplay>
-              <YUiText size={12} color={YColors.ink2} style={{ marginTop: 8 }}>
-                Nothing courtside right now. Live coverage will appear here during a tournament.
+        {/* FEATURED LEAGUES — horizontal slider of live/featured league banners.
+            One card today (SPPL); swipes between many when more go live, with
+            a "See all live leagues" link into the full LiveLeagues page. */}
+        <View style={styles.leagueSection}>
+          <View style={styles.leagueHeadRow}>
+            <YUiText size={10} weight={900} color={YColors.ink3} style={{ letterSpacing: 1.4 }}>
+              {FEATURED_LEAGUES.length > 1 ? 'FEATURED LEAGUES' : 'FEATURED LEAGUE'}
+            </YUiText>
+            {liveLeagues().length > 0 ? (
+              <Pressable onPress={goLiveLeagues} hitSlop={8}>
+                <YUiText size={11.5} weight={800} color={YColors.accent}>
+                  See all live leagues →
+                </YUiText>
+              </Pressable>
+            ) : null}
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={leagueCardW + LEAGUE_GAP}
+            snapToAlignment="start"
+            decelerationRate="fast"
+            contentContainerStyle={{ paddingHorizontal: 16 }}
+            onMomentumScrollEnd={onLeagueScroll}
+          >
+            {FEATURED_LEAGUES.map((l, i) => {
+              const live = l.status === 'live';
+              const last = i === FEATURED_LEAGUES.length - 1;
+              return (
+                <Pressable
+                  key={l.key}
+                  onPress={() => openLeague(l)}
+                  style={({ pressed }) => [
+                    styles.leagueBanner,
+                    { width: leagueCardW, marginRight: last ? 0 : LEAGUE_GAP },
+                    pressed && { opacity: 0.94 },
+                  ]}
+                >
+                  <View style={styles.leagueTop}>
+                    <View style={styles.leagueLogoWrap}>
+                      <Image source={l.logo} style={styles.leagueLogo} resizeMode="cover" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 14 }}>
+                      <View style={styles.leagueTitleRow}>
+                        <YDisplay size={26} color="#fff">{l.name}</YDisplay>
+                        {live ? (
+                          <View style={styles.livePill}>
+                            <View style={styles.liveDot} />
+                            <YUiText size={9} weight={900} color="#fff" style={{ letterSpacing: 1 }}>LIVE</YUiText>
+                          </View>
+                        ) : null}
+                      </View>
+                      <YUiText size={11} weight={800} color="rgba(255,255,255,0.62)" style={{ letterSpacing: 2, marginTop: 2 }}>
+                        {l.season.toUpperCase()}
+                      </YUiText>
+                    </View>
+                  </View>
+
+                  {/* Live tile — current match when one is on, else a season summary */}
+                  <View style={styles.leagueTile}>
+                    <View style={styles.leagueTileDot} />
+                    <YUiText size={12.5} weight={700} color="#fff" numberOfLines={1} style={{ flex: 1 }}>
+                      {live ? 'Match underway — tap to watch live' : `${l.blurb} · ${l.season}`}
+                    </YUiText>
+                  </View>
+
+                  <View style={styles.leagueFooter}>
+                    <YUiText size={12} weight={600} color="rgba(255,255,255,0.75)">
+                      Standings · Schedule · Fantasy
+                    </YUiText>
+                    <YUiText size={12.5} weight={900} color={YColors.lime}>
+                      Open league →
+                    </YUiText>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          {FEATURED_LEAGUES.length > 1 ? (
+            <View style={styles.leagueDots}>
+              {FEATURED_LEAGUES.map((l, i) => (
+                <View
+                  key={l.key}
+                  style={[styles.leagueDot, i === leaguePage && styles.leagueDotActive]}
+                />
+              ))}
+            </View>
+          ) : null}
+        </View>
+
+        {/* ORGANIZE — compact bar: short CREATE action + one-line custom-league link */}
+        <View style={styles.organizeBar}>
+          <View style={styles.organizeIcon}>
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+              <Path d="M3 21h18M5 21V8l7-4 7 4v13M9 12h2M13 12h2M9 16h2M13 16h2" stroke={YColors.ink} strokeWidth={2} strokeLinecap="round" />
+            </Svg>
+          </View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <YUiText size={14} weight={900} color={YColors.ink}>
+              Run your own event
+            </YUiText>
+            <Pressable onPress={getInTouch} hitSlop={6}>
+              <YUiText size={11.5} weight={700} color={YColors.accent} style={{ marginTop: 2 }}>
+                Custom league? Get in touch →
               </YUiText>
-            </View>
-          )}
-
-          {/* Search bar — marks the bottom of the blue zone */}
-          <View style={styles.searchWrap}>
-            <View style={styles.searchBar}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M21 21l-4.3-4.3M10 17a7 7 0 1 1 0-14 7 7 0 0 1 0 14z"
-                  stroke={YColors.ink3}
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  fill="none"
-                />
-              </Svg>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search venues, tournaments…"
-                placeholderTextColor={YColors.ink3}
-                editable={false}
-              />
-            </View>
+            </Pressable>
           </View>
+          <Pressable onPress={goHost} style={styles.organizeCta} hitSlop={4}>
+            <YUiText size={12} weight={900} color="#000" style={{ letterSpacing: 0.4 }}>
+              CREATE
+            </YUiText>
+          </Pressable>
         </View>
 
-        {/* Big quick actions — bento grid, untouched */}
-        <View style={styles.quickRow}>
-          <View style={{ flex: 1 }}>
-            <YQuickAction
-              big
-              label="HOST"
-              sub="Run a tournament"
-              color={YColors.lime}
-              icon={
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                  <Path d="M3 21h18M5 21V8l7-4 7 4v13M9 12h2M13 12h2M9 16h2M13 16h2" stroke="#000" strokeWidth={2} strokeLinecap="round" />
-                </Svg>
-              }
-              onPress={goHost}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <YQuickAction
-              big
-              label="DISCOVER"
-              sub={nearby.length > 0 ? `${nearby.length} tournaments` : 'Browse near you'}
-              color={YColors.accent}
-              icon={
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                  <Path d="M21 21l-4.3-4.3M10 17a7 7 0 1 1 0-14 7 7 0 0 1 0 14z" stroke="#fff" strokeWidth={2} strokeLinecap="round" />
-                </Svg>
-              }
-              onPress={goPlay}
-            />
-          </View>
-        </View>
-
-        {/* Stat tiles — only shown when the user has events or hosted tournaments */}
-        {(upcomingRegs.length > 0 || visibleHosted.length > 0) && (
-          <View style={[styles.quickRow, { marginTop: 10 }]}>
-            {upcomingRegs.length > 0 && (
-              <View style={{ flex: 1 }}>
-                <YStatTile
-                  label="MY EVENTS"
-                  value={upcomingRegs.length}
-                  accent={YColors.ink}
-                  icon={
-                    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-                      <Path d="M7 4v2M17 4v2M4 8h16M5 6h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z" stroke={YColors.ink} strokeWidth={1.6} strokeLinecap="round" fill="none" />
-                    </Svg>
-                  }
-                  onPress={goMe}
-                />
-              </View>
-            )}
-            {visibleHosted.length > 0 && (
-              <View style={{ flex: 1 }}>
-                <YStatTile
-                  label="HOSTING"
-                  value={visibleHosted.length}
-                  accent={YColors.accent}
-                  icon={
-                    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-                      <Path d="M3 21h18M5 21V8l7-4 7 4v13M9 12h2M13 12h2M9 16h2M13 16h2" stroke={YColors.ink} strokeWidth={1.6} strokeLinecap="round" fill="none" />
-                    </Svg>
-                  }
-                  onPress={goMe}
-                />
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Sport selector */}
+        {/* Book a court — green accent partition + header */}
+        <View style={styles.sectionAccent} />
+        <YSectionHead eyebrow="BOOK A COURT" title="PLAY NEAR YOU" />
         <View style={styles.sportSection}>
           <YUiText size={11} weight={900} color={YColors.ink3} style={{ letterSpacing: 1.2, paddingHorizontal: 20, marginBottom: 12 }}>
             CHOOSE A SPORT
@@ -461,31 +482,36 @@ export default function HomeScreen() {
         </View>
 
         {/* VENUES NEARBY — live from /venues API */}
-        {(loading || displayVenues.length > 0) && (
-          <>
-            <YSectionHead
-              eyebrow={user?.city ? user.city.toUpperCase() : 'NEAR YOU'}
-              title="VENUES NEARBY"
-              action={displayVenues.length > 0 ? 'ALL →' : undefined}
-              onActionPress={goBook}
-            />
-            <View style={styles.listWrap}>
-              {loading ? (
-                // Skeleton placeholders while fetching
-                [0, 1].map((i) => <View key={i} style={styles.venueSkeleton} />)
-              ) : (
-                <>
-                  {sponsoredVenues.map((v) => (
-                    <YVenueEditorial key={v.id} venue={v} onPress={() => openVenue(v.id)} style={{ marginBottom: 14 }} />
-                  ))}
-                  {normalVenues.map((v) => (
-                    <YVenueRow key={v.id} venue={v} onPress={() => openVenue(v.id)} style={{ marginBottom: 8 }} />
-                  ))}
-                </>
-              )}
-            </View>
-          </>
-        )}
+        <>
+          <YSectionHead
+            eyebrow={user?.city ? user.city.toUpperCase() : 'NEAR YOU'}
+            title="VENUES NEARBY"
+            action={displayVenues.length > 0 ? 'ALL →' : undefined}
+            onActionPress={goBook}
+          />
+          <View style={styles.listWrap}>
+            {loading ? (
+              // Skeleton placeholders while fetching
+              [0, 1].map((i) => <View key={i} style={styles.venueSkeleton} />)
+            ) : displayVenues.length > 0 ? (
+              <>
+                {sponsoredVenues.map((v) => (
+                  <YVenueEditorial key={v.id} venue={v} onPress={() => openVenue(v.id)} style={{ marginBottom: 14 }} />
+                ))}
+                {normalVenues.map((v) => (
+                  <YVenueRow key={v.id} venue={v} onPress={() => openVenue(v.id)} style={{ marginBottom: 8 }} />
+                ))}
+              </>
+            ) : (
+              <View style={styles.emptyState}>
+                <YEyebrow color={YColors.ink3}>COMING SOON</YEyebrow>
+                <YUiText size={12} color={YColors.ink2} style={{ marginTop: 6 }}>
+                  Courts coming soon to {user?.city || 'your city'}.
+                </YUiText>
+              </View>
+            )}
+          </View>
+        </>
 
         {/* YOUR EVENTS — combined registrations + hosted */}
         {(upcomingRegs.length > 0 || visibleHosted.length > 0) ? (
@@ -659,6 +685,135 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     flexDirection: 'row',
     gap: 10,
+  },
+  // ── Featured league slider ────────────────────────────────────────
+  leagueSection: {
+    marginTop: 18,
+  },
+  leagueHeadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  leagueDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+  },
+  leagueDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: YColors.line2,
+  },
+  leagueDotActive: {
+    width: 18,
+    backgroundColor: YColors.accentDeep,
+  },
+  leagueBanner: {
+    backgroundColor: '#0B2545', // deep navy — reads as broadcast, not chrome
+    borderRadius: 18,
+    padding: 16,
+    overflow: 'hidden',
+  },
+  leagueTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  leagueLogoWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  leagueLogo: {
+    width: '100%',
+    height: '100%',
+  },
+  leagueTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  livePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: YColors.live,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#fff',
+  },
+  leagueTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 11,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    marginTop: 14,
+  },
+  leagueTileDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: YColors.lime,
+  },
+  leagueFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+  },
+
+  organizeBar: {
+    marginTop: 16,
+    marginHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: YColors.line2,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  organizeIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: YColors.lime,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  organizeCta: {
+    backgroundColor: YColors.lime,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginLeft: 10,
+  },
+  sectionAccent: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: YColors.lime,
+    marginTop: 18,
+    marginBottom: -6,
+    marginLeft: 20,
   },
   bookCardWrap: {
     marginTop: 14,

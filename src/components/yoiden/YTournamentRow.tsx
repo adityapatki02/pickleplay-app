@@ -138,9 +138,9 @@ export const YTournamentRow: React.FC<YTournamentRowProps> = ({
           ) : null}
         </View>
 
-        <YUiText size={16} weight={900} color={YColors.ink} style={styles.name} numberOfLines={1}>
-          {tournament.name.toUpperCase()}
-        </YUiText>
+        <YDisplay size={19} color={YColors.accent} style={styles.name} numberOfLines={1}>
+          {tournament.name}
+        </YDisplay>
         {tournament.venueName ? (
           <YUiText size={12} color={YColors.ink2} style={{ marginTop: 4 }} numberOfLines={1}>
             {tournament.venueName}

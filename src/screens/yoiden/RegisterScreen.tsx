@@ -18,6 +18,8 @@ import { colors, typography, spacing, borderRadius, shadows } from '../../config
 import { tournamentsApi } from '../../api/tournaments.api';
 import { registrationsApi } from '../../api/registrations.api';
 import { paymentsApi } from '../../api/payments.api';
+import { openRazorpay } from '../../utils/razorpay';
+import { useAuthStore } from '../../store/authStore';
 import { TournamentCategory } from '../../types/tournament.types';
 import { YColors, YTopBar } from '../../components/yoiden';
 
@@ -27,6 +29,7 @@ type SubmitState = 'idle' | 'submitting' | 'success' | 'waitlisted';
 
 export default function RegisterScreen({ navigation, route }: Props) {
   const { tournamentId, categoryId } = route.params;
+  const user = useAuthStore((s) => s.user);
 
   const [category, setCategory] = useState<TournamentCategory | null>(null);
   const [loading, setLoading] = useState(true);
@@ -110,29 +113,58 @@ export default function RegisterScreen({ navigation, route }: Props) {
         regData?.data?.id ?? regData?.registration?.id;
       const status: string = regData?.data?.status ?? regData?.registration?.status ?? '';
 
-      if (paymentMethod === 'online') {
-        if (registrationId) {
-          try {
-            await paymentsApi.createOrder(registrationId);
-          } catch {
-            // Payment order creation may fail in non-production environments
-          }
-        }
-        Alert.alert(
-          'Payment Coming Soon',
-          'Payment integration coming soon — registered with pending payment status.',
-          [{ text: 'OK' }]
-        );
-      }
-
+      // Waitlisted players don't pay now — they pay if/when a spot opens up.
       if (status === 'waitlisted') {
         const position: number | undefined =
           regData?.data?.waitlistPosition ?? regData?.registration?.waitlistPosition;
         setWaitlistPosition(position ?? null);
         setSubmitState('waitlisted');
-      } else {
-        setSubmitState('success');
+        return;
       }
+
+      // Online payment → real Razorpay checkout. The backend confirms the
+      // registration via the Razorpay webhook once payment is captured.
+      if (paymentMethod === 'online' && Number(category.entryFee) > 0) {
+        if (!registrationId) {
+          Alert.alert('Payment error', 'Could not start payment. You are registered with payment pending — you can complete it from your registrations.');
+          setSubmitState('success');
+          return;
+        }
+        let order: { orderId: string; amount: number; currency?: string; key: string };
+        try {
+          const orderRes = await paymentsApi.createOrder(registrationId);
+          order = (orderRes.data as any)?.data ?? (orderRes.data as any);
+        } catch {
+          Alert.alert('Payment unavailable', 'We could not start the payment right now. You are registered with payment pending — complete it later from your registrations.');
+          setSubmitState('success');
+          return;
+        }
+        try {
+          await openRazorpay({
+            key: order.key,
+            amount: order.amount,
+            currency: order.currency ?? 'INR',
+            order_id: order.orderId,
+            name: 'Yoiden',
+            description: `${category.name} · entry fee`,
+            prefill: {
+              name: user?.displayName || user?.fullName || '',
+              contact: user?.phone || '',
+            },
+            theme: { color: YColors.accent },
+          });
+          // Payment captured — webhook marks the registration confirmed shortly.
+          setSubmitState('success');
+        } catch (rzpErr: any) {
+          console.warn('[Razorpay]', rzpErr?.description ?? rzpErr);
+          Alert.alert('Payment not completed', 'Your payment was not completed. Your registration is saved with payment pending — you can complete it later from your registrations.');
+          setSubmitState('idle');
+        }
+        return;
+      }
+
+      // Free entry, or pay-at-venue → registered.
+      setSubmitState('success');
     } catch (err: any) {
       const serverMessage: string =
         err?.response?.data?.message ?? err?.message ?? 'Registration failed.';

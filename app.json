@@ -12,12 +12,13 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.yoiden.app",
       "buildNumber": "1",
       "infoPlist": {
-        "NSCameraUsageDescription": "Yoiden needs camera access to take profile photos.",
-        "NSPhotoLibraryUsageDescription": "Yoiden needs photo library access to set a profile picture.",
+        "NSCameraUsageDescription": "Yoiden needs camera access to take profile and venue photos.",
+        "NSPhotoLibraryUsageDescription": "Yoiden needs photo library access to set a profile picture and upload venue photos.",
+        "NSLocationWhenInUseUsageDescription": "Yoiden uses your location to show tournaments and courts near you.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -30,7 +31,9 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["android.permission.ACCESS_COARSE_LOCATION"],
+      "blockedPermissions": ["android.permission.ACCESS_FINE_LOCATION"]
     },
     "web": {
       "favicon": "./assets/icon.png",

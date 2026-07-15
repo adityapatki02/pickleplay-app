@@ -182,7 +182,10 @@ export const CityPickerScreen: React.FC = () => {
       if (selected.state) payload.state = selected.state;
       const res = await apiClient.put('/auth/me', payload);
       const updated = (res.data as any)?.data ?? res.data;
-      if (updated && updateUser) updateUser({ ...user, ...updated });
+      // Keep the picked city's Google coordinates on the profile so the home
+      // venue search centres on this city (matched by distance, not name).
+      if (updated && updateUser)
+        updateUser({ ...user, ...updated, cityLat: selected.lat, cityLng: selected.lng } as any);
       // When opened as a modal (post-login), close ourselves so Home re-renders
       // with the new city. During onboarding (root screen) there's nothing to
       // pop — the navigator gate handles the transition instead.

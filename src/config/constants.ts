@@ -6,6 +6,13 @@ export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://yoiden-a
  *  Use rzp_test_... for development, rzp_live_... for production. */
 export const RAZORPAY_KEY = 'rzp_live_T1smxtRwzaVgcA';
 
+// Support + legal. The privacy policy URL is REQUIRED by Apple/Google and must
+// resolve to a live page before store submission — host these before shipping.
+export const SUPPORT_EMAIL = 'aditya.patki@crescendotranscriptions.com';
+export const PRIVACY_URL = 'https://yoiden.com/privacy';
+export const TERMS_URL = 'https://yoiden.com/terms';
+export const REFUND_URL = 'https://yoiden.com/refunds';
+
 export const DEFAULT_RATING = 1200;
 export const DEFAULT_GROUP_SIZE = 4;
 export const DEFAULT_MATCH_DURATION_MIN = 30;

@@ -6,6 +6,7 @@ import {
   Pressable,
   RefreshControl,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -25,7 +26,6 @@ import {
 import { venuesApi } from '../../api/venues.api';
 import type { Venue } from '../../types/booking.types';
 import type { BookStackParamList } from '../../navigation/YoidenTabNavigator';
-import { DEMO_VENUE_ID, DEMO_VENUE } from '../../config/demo-venues';
 
 type Nav = NativeStackNavigationProp<BookStackParamList, 'Book'>;
 
@@ -41,6 +41,13 @@ const priceRange = (venue: Venue): string => {
   const min = Math.round(Math.min(...prices));
   const max = Math.round(Math.max(...prices));
   return min === max ? `₹${min}` : `₹${min}–₹${max}`;
+};
+
+// First photo of a venue (lightweight thumb when the backend provides one).
+const venuePhoto = (v: Venue): string | undefined => {
+  const p = Array.isArray(v.photos) ? v.photos[0] : undefined;
+  if (!p) return undefined;
+  return typeof p === 'string' ? p : ((p as { thumbUrl?: string; url: string }).thumbUrl ?? p.url);
 };
 
 export default function BookScreen() {
@@ -98,40 +105,9 @@ export default function BookScreen() {
         />
 
         <YSectionHead
-          eyebrow={`${venues.length + 1} VENUE${venues.length === 0 ? '' : 'S'}`}
+          eyebrow={`${venues.length} VENUE${venues.length === 1 ? '' : 'S'}`}
           title="NEARBY COURTS"
         />
-
-        {/* ── Demo venue — always shown ── */}
-        <View style={[styles.list, { marginBottom: 4 }]}>
-          <Pressable
-            onPress={() => openVenue(DEMO_VENUE_ID)}
-            style={({ pressed }) => [styles.card, styles.demoCard, pressed && { opacity: 0.92 }]}
-          >
-            <View style={styles.cardHead}>
-              <View style={{ flex: 1 }}>
-                <YDisplay size={22} color={YColors.accent} style={{ lineHeight: 24 }}>
-                  {DEMO_VENUE.name}
-                </YDisplay>
-                <YUiText size={12} color={YColors.ink2} style={{ marginTop: 4 }}>
-                  {DEMO_VENUE.city}
-                </YUiText>
-              </View>
-              <YBadge color="#000" bg={YColors.lime}>₹1–₹2/hr</YBadge>
-            </View>
-            <YUiText size={12} color={YColors.ink3} style={{ marginTop: 10 }}>
-              {DEMO_VENUE.address}
-            </YUiText>
-            <View style={styles.cardFoot}>
-              <YMono size={10} color={YColors.ink3} style={{ letterSpacing: 1 }}>
-                2 COURTS · {DEMO_VENUE.openTime}–{DEMO_VENUE.closeTime}
-              </YMono>
-              <YButton variant="primary" size="sm" onPress={() => openVenue(DEMO_VENUE_ID)}>
-                BOOK
-              </YButton>
-            </View>
-          </Pressable>
-        </View>
 
         {loading ? (
           <View style={styles.center}>
@@ -159,35 +135,42 @@ export default function BookScreen() {
                 onPress={() => openVenue(v.id)}
                 style={({ pressed }) => [styles.card, pressed && { opacity: 0.92 }]}
               >
-                <View style={styles.cardHead}>
-                  <View style={{ flex: 1 }}>
-                    <YDisplay size={22} color={YColors.accent} style={{ lineHeight: 24 }}>
-                      {v.name}
-                    </YDisplay>
-                    <YUiText size={12} color={YColors.ink2} style={{ marginTop: 4 }}>
-                      {v.city}
-                      {v.state ? `, ${v.state}` : ''}
-                    </YUiText>
+                <Image
+                  source={{ uri: venuePhoto(v) ?? `https://picsum.photos/seed/${v.id}/640/360` }}
+                  style={styles.cardImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.cardBody}>
+                  <View style={styles.cardHead}>
+                    <View style={{ flex: 1 }}>
+                      <YDisplay size={22} color={YColors.accent} style={{ lineHeight: 24 }}>
+                        {v.name}
+                      </YDisplay>
+                      <YUiText size={12} color={YColors.ink2} style={{ marginTop: 4 }}>
+                        {v.city}
+                        {v.state ? `, ${v.state}` : ''}
+                      </YUiText>
+                    </View>
+                    {priceRange(v) ? (
+                      <YBadge color="#000" bg={YColors.lime}>
+                        {priceRange(v)}/hr
+                      </YBadge>
+                    ) : null}
                   </View>
-                  {priceRange(v) ? (
-                    <YBadge color="#000" bg={YColors.lime}>
-                      {priceRange(v)}/hr
-                    </YBadge>
-                  ) : null}
-                </View>
 
-                <YUiText size={12} color={YColors.ink3} numberOfLines={2} style={{ marginTop: 10 }}>
-                  {v.address}
-                </YUiText>
+                  <YUiText size={12} color={YColors.ink3} numberOfLines={2} style={{ marginTop: 10 }}>
+                    {v.address}
+                  </YUiText>
 
-                <View style={styles.cardFoot}>
-                  <YMono size={10} color={YColors.ink3} style={{ letterSpacing: 1 }}>
-                    {(v.courts?.length ?? 0)} COURT{(v.courts?.length ?? 0) === 1 ? '' : 'S'} ·{' '}
-                    {v.openTime}–{v.closeTime}
-                  </YMono>
-                  <YButton variant="primary" size="sm" onPress={() => openVenue(v.id)}>
-                    BOOK
-                  </YButton>
+                  <View style={styles.cardFoot}>
+                    <YMono size={10} color={YColors.ink3} style={{ letterSpacing: 1 }}>
+                      {(v.courts?.length ?? 0)} COURT{(v.courts?.length ?? 0) === 1 ? '' : 'S'} ·{' '}
+                      {v.openTime}–{v.closeTime}
+                    </YMono>
+                    <YButton variant="primary" size="sm" onPress={() => openVenue(v.id)}>
+                      BOOK
+                    </YButton>
+                  </View>
                 </View>
               </Pressable>
             ))}
@@ -214,13 +197,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: YColors.line,
     borderRadius: 14,
-    padding: 16,
+    overflow: 'hidden',
     marginBottom: 12,
   },
-  demoCard: {
-    borderColor: YColors.accent,
-    borderWidth: 1.5,
+  cardImage: {
+    width: '100%',
+    height: 150,
+    backgroundColor: YColors.bg3,
   },
+  cardBody: { padding: 16 },
   cardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   cardFoot: {
     marginTop: 16,

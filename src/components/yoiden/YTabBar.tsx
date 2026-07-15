@@ -7,7 +7,7 @@ import { YColors } from '../../config/yoiden';
 import { IS_LEAGUE_KIOSK } from '../../config/appMode';
 import { YMono } from './YText';
 
-type TabId = 'home' | 'play' | 'book' | 'fantasy' | 'me';
+type TabId = 'home' | 'play' | 'book' | 'me';
 
 const TabIcon: React.FC<{ id: TabId; color: string; active: boolean; size?: number }> = ({
   id,
@@ -32,13 +32,15 @@ const TabIcon: React.FC<{ id: TabId; color: string; active: boolean; size?: numb
     );
   }
   if (id === 'play') {
-    // Pickleball paddle silhouette — racket head + handle
+    // Events — trophy (Lucide)
     return (
       <Svg width={size} height={size} viewBox="0 0 24 24">
-        <Path d="M12 3a6 6 0 0 1 6 6c0 3-2 5.5-5 5.9V20a1 1 0 0 1-1 1h0a1 1 0 0 1-1-1v-5.1C8 14.5 6 12 6 9a6 6 0 0 1 6-6z" {...stroke} />
-        <Circle cx={10} cy={9} r={0.6} fill={color} />
-        <Circle cx={14} cy={9} r={0.6} fill={color} />
-        <Circle cx={12} cy={11} r={0.6} fill={color} />
+        <Path d="M10 14.66v1.626a2 2 0 0 1-.976 1.696A5 5 0 0 0 7 21.978" {...stroke} />
+        <Path d="M14 14.66v1.626a2 2 0 0 0 .976 1.696A5 5 0 0 1 17 21.978" {...stroke} />
+        <Path d="M18 9h1.5a1 1 0 0 0 0-5H18" {...stroke} />
+        <Path d="M4 22h16" {...stroke} />
+        <Path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z" {...stroke} />
+        <Path d="M6 9H4.5a1 1 0 0 1 0-5H6" {...stroke} />
       </Svg>
     );
   }
@@ -48,16 +50,6 @@ const TabIcon: React.FC<{ id: TabId; color: string; active: boolean; size?: numb
       <Svg width={size} height={size} viewBox="0 0 24 24">
         <Path d="M4 7a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7z" {...stroke} />
         <Path d="M4 10h16M8 4v3M16 4v3" {...stroke} />
-      </Svg>
-    );
-  }
-  if (id === 'fantasy') {
-    // Cleaner trophy
-    return (
-      <Svg width={size} height={size} viewBox="0 0 24 24">
-        <Path d="M8 4h8v5a4 4 0 0 1-8 0V4z" {...stroke} />
-        <Path d="M5 5h3M16 5h3M5 5a2 2 0 0 0 3 2M19 5a2 2 0 0 1-3 2" {...stroke} />
-        <Path d="M9 19h6M12 14v5" {...stroke} />
       </Svg>
     );
   }
@@ -73,12 +65,12 @@ const TabIcon: React.FC<{ id: TabId; color: string; active: boolean; size?: numb
 // Full app surfaces all five tabs. The league-kiosk build shows only HOME —
 // the other stacks stay registered so any existing navigate() calls still
 // resolve, they're just not shown as tabs on that single-tournament site.
+// The app ships a 4-tab bar: HOME · EVENTS · BOOK · ME.
 const ALL_TABS: { id: TabId; label: string }[] = [
-  { id: 'home',    label: 'HOME' },
-  { id: 'play',    label: 'PLAY' },
-  { id: 'book',    label: 'BOOK' },
-  { id: 'fantasy', label: 'FANTASY' },
-  { id: 'me',      label: 'ME' },
+  { id: 'home', label: 'HOME' },
+  { id: 'play', label: 'EVENTS' },
+  { id: 'book', label: 'BOOK' },
+  { id: 'me',   label: 'ME' },
 ];
 const TAB_META = IS_LEAGUE_KIOSK ? ALL_TABS.filter((t) => t.id === 'home') : ALL_TABS;
 
@@ -87,8 +79,17 @@ const routeToTab = (route: string): TabId => {
   if (lower.includes('home'))    return 'home';
   if (lower.includes('play'))    return 'play';
   if (lower.includes('book'))    return 'book';
-  if (lower.includes('fantasy')) return 'fantasy';
   return 'me';
+};
+
+// Root screen of each tab's stack — pressing an already-active tab resets its
+// stack back to this screen (so HOME from a pushed detail like the league page
+// returns to the Home screen instead of doing nothing).
+const TAB_ROOT: Record<TabId, string> = {
+  home:    'Home',
+  play:    'Play',
+  book:    'Book',
+  me:      'Me',
 };
 
 export const YTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
@@ -98,7 +99,13 @@ export const YTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
 
   const onTabPress = (id: TabId) => {
     const target = state.routes.find((r) => routeToTab(r.name) === id);
-    if (target) navigation.navigate(target.name);
+    if (!target) return;
+    // A tab tap always lands on that tab's ROOT screen. Without this, a deep
+    // screen left on a tab's stack (e.g. a league opened from Home) stays on
+    // top, so switching away and tapping Home would reopen the league instead
+    // of showing Home.
+    const go = navigation.navigate as (name: string, params?: object) => void;
+    go(target.name, { screen: TAB_ROOT[id] });
   };
 
   // Single-tournament kiosk shows one tab, so the bar is slimmed down.
@@ -136,14 +143,14 @@ export const YTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
                     id={t.id}
                     color={isActive ? YColors.accent : YColors.ink2}
                     active={isActive}
-                    size={compact ? 18 : 22}
+                    size={compact ? 18 : 28}
                   />
                 </View>
                 <YMono
                   size={compact ? 8 : 9}
                   bold={isActive}
                   color={isActive ? YColors.accent : YColors.ink2}
-                  style={{ letterSpacing: 1.2, marginTop: compact ? 1 : 4 }}
+                  style={{ letterSpacing: 1.2, marginTop: compact ? 1 : 1 }}
                 >
                   {t.label}
                 </YMono>
@@ -196,8 +203,8 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   iconWrap: {
-    width: 40,
-    height: 28,
+    width: 50,
+    height: 34,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',

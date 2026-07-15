@@ -18,6 +18,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
 import { YColors, YDisplay, YEyebrow, YUiText, YMono } from '../../components/yoiden';
+import { REFUND_URL } from '../../config/constants';
 import { bookingsApi } from '../../api/bookings.api';
 import { useAuthStore } from '../../store/authStore';
 import type { Booking } from '../../types/booking.types';
@@ -324,11 +325,8 @@ export default function BookingDetailScreen() {
 
         {/* Policy links */}
         <View style={styles.policyRow}>
-          <Pressable hitSlop={8}>
-            <YUiText size={12} color={YColors.accent}>Reschedule Policy</YUiText>
-          </Pressable>
-          <Pressable hitSlop={8}>
-            <YUiText size={12} color={YColors.accent}>Cancellation Policy</YUiText>
+          <Pressable hitSlop={8} onPress={() => Linking.openURL(REFUND_URL).catch(() => {})}>
+            <YUiText size={12} color={YColors.accent}>Cancellation &amp; Refund Policy</YUiText>
           </Pressable>
         </View>
       </ScrollView>
@@ -337,17 +335,7 @@ export default function BookingDetailScreen() {
       <Modal visible={showModify} transparent animationType="fade" onRequestClose={() => setShowModify(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setShowModify(false)}>
           <View style={styles.modalSheet}>
-            <YEyebrow color={YColors.ink3} style={{ marginBottom: 16 }}>MODIFY BOOKING</YEyebrow>
-            <Pressable
-              style={styles.modalBtn}
-              onPress={() => {
-                setShowModify(false);
-                Alert.alert('Coming Soon', 'Rescheduling will be available soon.');
-              }}
-            >
-              <YUiText size={15} color={YColors.accent} style={{ fontWeight: '600' }}>Reschedule</YUiText>
-            </Pressable>
-            <View style={styles.modalDivider} />
+            <YEyebrow color={YColors.ink3} style={{ marginBottom: 16 }}>MANAGE BOOKING</YEyebrow>
             <Pressable
               style={styles.modalBtn}
               disabled={cancelling}

@@ -3,7 +3,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AuthStackParamList } from './types';
 import { SplashScreen } from '../screens/auth/SplashScreen';
 import { PhoneInputScreen } from '../screens/auth/PhoneInputScreen';
-import { OTPVerifyScreen } from '../screens/auth/OTPVerifyScreen';
 import { ProfileSetupScreen } from '../screens/auth/ProfileSetupScreen';
 import { CityPickerScreen } from '../screens/auth/CityPickerScreen';
 import { ForgotPinScreen } from '../screens/auth/ForgotPinScreen';
@@ -21,7 +20,6 @@ export const AuthNavigator: React.FC = () => {
     >
       <Stack.Screen name="Splash" component={SplashScreen} options={{ title: 'Yoiden' }} />
       <Stack.Screen name="PhoneInput" component={PhoneInputScreen} options={{ title: 'Yoiden' }} />
-      <Stack.Screen name="OTPVerify" component={OTPVerifyScreen} options={{ title: 'Yoiden' }} />
       <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} options={{ title: 'Yoiden' }} />
       <Stack.Screen name="CityPicker" component={CityPickerScreen} options={{ title: 'Yoiden' }} />
       <Stack.Screen name="ForgotPin" component={ForgotPinScreen} options={{ title: 'Yoiden' }} />

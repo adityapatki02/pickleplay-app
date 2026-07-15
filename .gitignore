@@ -43,3 +43,9 @@ dist-*/
 
 # Superpowers brainstorm artifacts
 .superpowers/
+
+# Google Play service-account key (secret — never commit)
+google-play-service-account.json
+
+# Apple App Store Connect API key (secret — never commit)
+*.p8
