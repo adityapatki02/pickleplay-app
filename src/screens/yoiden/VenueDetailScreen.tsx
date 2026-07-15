@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   View,
@@ -8,6 +8,9 @@ import {
   ActivityIndicator,
   Modal,
   TextInput,
+  Image,
+  Linking,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
@@ -100,7 +103,53 @@ const Chevron = ({ dir }: { dir: 'left' | 'right' }) => (
     <Path d={dir === 'left' ? 'M15 6l-6 6 6 6' : 'M9 6l6 6-6 6'} stroke={YColors.accent} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
   </Svg>
 );
+const PinIcon = () => (
+  <Svg width={14} height={14} viewBox="0 0 24 24">
+    <Path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" stroke={YColors.accent} strokeWidth={2} fill="none" strokeLinejoin="round" />
+    <Circle cx={12} cy={9.5} r={2.2} stroke={YColors.accent} strokeWidth={2} fill="none" />
+  </Svg>
+);
+const StarIcon = () => (
+  <Svg width={13} height={13} viewBox="0 0 24 24">
+    <Path d="M12 2.5l2.9 6.1 6.6.9-4.8 4.7 1.1 6.6L12 17.7l-5.8 3.1 1.1-6.6-4.8-4.7 6.6-.9L12 2.5z" fill={YColors.gold} stroke={YColors.gold} strokeWidth={1} strokeLinejoin="round" />
+  </Svg>
+);
+const AmenityIcon = () => (
+  <Svg width={16} height={16} viewBox="0 0 24 24">
+    <Path d="M20 6L9 17l-5-5" stroke={YColors.accent} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+  </Svg>
+);
 
+/** Amenity key → display label. Unknown keys fall back to a title-cased key. */
+const AMENITY_META: Record<string, { label: string }> = {
+  floodlights: { label: 'Flood Lights' },
+  parking: { label: 'Parking' },
+  drinking_water: { label: 'Drinking Water' },
+  rental_equipment: { label: 'Rental Equipment' },
+  washroom: { label: 'Washroom' },
+  seating: { label: 'Seating' },
+  cafe: { label: 'Café' },
+  first_aid: { label: 'First Aid' },
+  changing_room: { label: 'Changing Room' },
+};
+const titleCase = (key: string) =>
+  key.split(/[_-]/).map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(' ');
+const amenityLabel = (key: string) => AMENITY_META[key]?.label ?? titleCase(key);
+
+const SPORT_LABELS: Record<string, string> = {
+  pickleball: 'Pickleball',
+  padel: 'Padel',
+  'table-tennis': 'Table Tennis',
+  tabletennis: 'Table Tennis',
+  badminton: 'Badminton',
+  tennis: 'Tennis',
+  squash: 'Squash',
+  football: 'Football',
+  cricket: 'Cricket',
+};
+const sportLabel = (s: string) => SPORT_LABELS[s.toLowerCase()] ?? titleCase(s);
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 const TIME_COL = 64;
 const MAX_OFFSET = 13;
 
@@ -131,6 +180,33 @@ export default function VenueDetailScreen() {
   const [guestPhone, setGuestPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+
+  // ── Info section (new) — photo carousel + venue details, shown above the booking flow ──
+  const outerScrollRef = useRef<ScrollView>(null);
+  const bookingSectionY = useRef(0);
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const scrollToBooking = () => {
+    outerScrollRef.current?.scrollTo({ y: Math.max(0, bookingSectionY.current - 8), animated: true });
+  };
+  const photos = useMemo(() => {
+    const raw = (venue as any)?.photos ?? [];
+    return (raw as any[]).map((p) => (typeof p === 'string' ? { url: p } : p)).filter((p) => p?.url);
+  }, [venue]);
+  const venueCourts = (venue as any)?.courts ?? [];
+  const minCourtPrice = useMemo(() => {
+    const prices = venueCourts.map((c: any) => Number(c.basePrice)).filter((n: number) => !Number.isNaN(n));
+    return prices.length ? Math.min(...prices) : null;
+  }, [venueCourts]);
+  const amenities: string[] = (venue as any)?.amenities ?? [];
+  const description: string | null = (venue as any)?.description ?? null;
+  const rating = Number((venue as any)?.rating ?? 0);
+  const reviewCount = Number((venue as any)?.reviewCount ?? 0);
+  const lat = (venue as any)?.lat;
+  const lng = (venue as any)?.lng;
+  const openMaps = () => {
+    if (lat == null || lng == null) return;
+    Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
+  };
 
   const loadVenue = useCallback(async () => {
     try {
@@ -335,6 +411,132 @@ export default function VenueDetailScreen() {
         </Pressable>
       </View>
 
+      {/* ══════════════════════════════════════════════════════════════
+          Info section (new) — photo carousel, key facts, sports,
+          amenities, description. Sits above the existing booking flow;
+          everything below lives inside this same outer ScrollView so
+          the whole page scrolls together, matching a standard court-
+          page layout (KheloMore/Huddle style).
+         ══════════════════════════════════════════════════════════════ */}
+      <ScrollView ref={outerScrollRef} style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+        {/* Photo carousel */}
+        <View style={styles.carouselWrap}>
+          {photos.length > 0 ? (
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onScroll={(e) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                if (idx !== photoIndex) setPhotoIndex(idx);
+              }}
+              scrollEventThrottle={32}
+            >
+              {photos.map((p: any, i: number) => (
+                <Image key={p.url + i} source={{ uri: p.url }} style={styles.carouselImage} resizeMode="cover" />
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={[styles.carouselImage, styles.carouselPlaceholder]}>
+              <YUiText size={13} weight={700} color={YColors.ink3}>
+                No photos yet
+              </YUiText>
+            </View>
+          )}
+          {photos.length > 1 ? (
+            <View style={styles.counterPill}>
+              <YMono size={10} bold color="#fff">
+                {photoIndex + 1}/{photos.length}
+              </YMono>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Info card */}
+        {venue && (
+          <View style={styles.infoCard}>
+            <YUiText size={20} weight={900} color={YColors.ink}>
+              {venue.name}
+            </YUiText>
+            <YUiText size={13} weight={700} color={YColors.ink2} style={{ marginTop: 6 }}>
+              {minCourtPrice != null ? `₹${minCourtPrice} onwards` : 'Pricing on request'}
+              {'  ·  '}
+              {to12h(venue.openTime)}–{to12h(venue.closeTime)}
+            </YUiText>
+            <YUiText size={13} color={YColors.ink2} style={{ marginTop: 8, lineHeight: 19 }}>
+              {[venue.address, venue.neighbourhood, venue.city].filter(Boolean).join(', ')}
+            </YUiText>
+            {lat != null && lng != null ? (
+              <Pressable onPress={openMaps} hitSlop={8} style={styles.mapLink}>
+                <PinIcon />
+                <YUiText size={12} weight={800} color={YColors.accent} style={{ marginLeft: 5 }}>
+                  View on maps
+                </YUiText>
+              </Pressable>
+            ) : null}
+            {rating > 0 ? (
+              <View style={styles.ratingRow}>
+                <StarIcon />
+                <YUiText size={13} weight={800} color={YColors.ink} style={{ marginLeft: 5 }}>
+                  {rating.toFixed(1)}
+                </YUiText>
+                <YUiText size={12} color={YColors.ink3} style={{ marginLeft: 5 }}>
+                  · {reviewCount} rating{reviewCount === 1 ? '' : 's'}
+                </YUiText>
+              </View>
+            ) : null}
+          </View>
+        )}
+
+        {/* Available sports */}
+        {venue && (venue as any).sports?.length > 0 ? (
+          <View style={styles.infoCard}>
+            <YUiText size={13} weight={900} color={YColors.ink} style={{ letterSpacing: 0.4, textTransform: 'uppercase' }}>
+              Available Sports
+            </YUiText>
+            <View style={styles.chipRow}>
+              {((venue as any).sports as string[]).map((s: string) => (
+                <View key={s} style={styles.sportChip}>
+                  <YUiText size={12} weight={700} color={YColors.ink}>
+                    {sportLabel(s)}
+                  </YUiText>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {/* Amenities */}
+        {amenities.length > 0 ? (
+          <View style={styles.infoCard}>
+            <YUiText size={13} weight={900} color={YColors.ink} style={{ letterSpacing: 0.4, textTransform: 'uppercase' }}>
+              Amenities
+            </YUiText>
+            <View style={styles.amenityGrid}>
+              {amenities.map((a) => (
+                <View key={a} style={styles.amenityItem}>
+                  <AmenityIcon />
+                  <YUiText size={12} weight={600} color={YColors.ink2} style={{ marginLeft: 8, flexShrink: 1 }}>
+                    {amenityLabel(a)}
+                  </YUiText>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {/* Description */}
+        {description ? (
+          <View style={styles.infoCard}>
+            <YUiText size={13} weight={900} color={YColors.ink} style={{ letterSpacing: 0.4, textTransform: 'uppercase' }}>
+              About
+            </YUiText>
+            <YUiText size={13} color={YColors.ink2} style={{ marginTop: 8, lineHeight: 20 }}>
+              {description}
+            </YUiText>
+          </View>
+        ) : null}
+
       {/* Venue info strip — sports chips + open/close hours */}
       {venue && (
         <View style={styles.venueInfo}>
@@ -362,77 +564,92 @@ export default function VenueDetailScreen() {
         </View>
       )}
 
-      {/* Court column headers — blue bar with lime capsules */}
-      <View style={styles.colHead}>
-        <View style={{ width: TIME_COL }} />
-        {courts.map((c) => (
-          <View key={c.court.id} style={styles.colHeadCell}>
-            <View style={styles.courtCapsule}>
-              <YUiText size={13} weight={800} color="#14210A">
-                {c.court.name}
-              </YUiText>
-            </View>
-          </View>
-        ))}
-      </View>
-
-      {/* Grid */}
-      {availLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={YColors.ink2} />
-        </View>
-      ) : courts.length === 0 ? (
-        <View style={styles.center}>
-          <YUiText size={13} color={YColors.ink2}>
-            {error ?? 'No courts open on this date.'}
-          </YUiText>
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-          <YUiText
-            size={11}
-            color={selNote ? YColors.live : YColors.ink3}
-            style={{ paddingHorizontal: 16, paddingVertical: 10, textAlign: 'center' }}
-          >
-            {selNote ?? 'Tap consecutive time slots. Either court, or both at once.'}
-          </YUiText>
-
-          {timeline.map((ch) => (
-            <View key={ch.startTime} style={styles.row}>
-              <View style={styles.timeCol}>
-                {isDay(ch.startTime) ? <SunIcon /> : <MoonIcon />}
-                <YMono size={10} color={YColors.ink2} style={{ marginTop: 3 }}>
-                  {to12h(ch.startTime)}
-                </YMono>
+      {/* Booking section anchor — measured so the new "Book now" CTA can scroll here */}
+      <View onLayout={(e) => { bookingSectionY.current = e.nativeEvent.layout.y; }}>
+        {/* Court column headers — blue bar with lime capsules */}
+        <View style={styles.colHead}>
+          <View style={{ width: TIME_COL }} />
+          {courts.map((c) => (
+            <View key={c.court.id} style={styles.colHeadCell}>
+              <View style={styles.courtCapsule}>
+                <YUiText size={13} weight={800} color="#14210A">
+                  {c.court.name}
+                </YUiText>
               </View>
-              {courts.map((c) => {
-                const free = freeAt(c.court.id, ch.startTime);
-                const sel = selected.includes(cellKey(c.court.id, ch.startTime));
-                const price = priceAt(c.court.id, ch.startTime);
-                return (
-                  <Pressable
-                    key={c.court.id}
-                    disabled={!free}
-                    onPress={() => tapCell(c.court.id, ch.startTime)}
-                    style={[styles.cell, !free && styles.cellBooked, sel && styles.cellSel]}
-                  >
-                    {free ? (
-                      <YUiText size={13} weight={800} color={sel ? '#fff' : YColors.ink}>
-                        ₹ {price}
-                        {sel ? '  ✓' : ''}
-                      </YUiText>
-                    ) : (
-                      <YUiText size={12} weight={700} color="#B6B6BC">
-                        Booked
-                      </YUiText>
-                    )}
-                  </Pressable>
-                );
-              })}
             </View>
           ))}
-        </ScrollView>
-      )}
+        </View>
+
+        {/* Grid */}
+        {availLoading ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={YColors.ink2} />
+          </View>
+        ) : courts.length === 0 ? (
+          <View style={styles.center}>
+            <YUiText size={13} color={YColors.ink2}>
+              {error ?? 'No courts open on this date.'}
+            </YUiText>
+          </View>
+        ) : (
+          <View style={{ paddingBottom: 24 }}>
+            <YUiText
+              size={11}
+              color={selNote ? YColors.live : YColors.ink3}
+              style={{ paddingHorizontal: 16, paddingVertical: 10, textAlign: 'center' }}
+            >
+              {selNote ?? 'Tap consecutive time slots. Either court, or both at once.'}
+            </YUiText>
+
+            {timeline.map((ch) => (
+              <View key={ch.startTime} style={styles.row}>
+                <View style={styles.timeCol}>
+                  {isDay(ch.startTime) ? <SunIcon /> : <MoonIcon />}
+                  <YMono size={10} color={YColors.ink2} style={{ marginTop: 3 }}>
+                    {to12h(ch.startTime)}
+                  </YMono>
+                </View>
+                {courts.map((c) => {
+                  const free = freeAt(c.court.id, ch.startTime);
+                  const sel = selected.includes(cellKey(c.court.id, ch.startTime));
+                  const price = priceAt(c.court.id, ch.startTime);
+                  return (
+                    <Pressable
+                      key={c.court.id}
+                      disabled={!free}
+                      onPress={() => tapCell(c.court.id, ch.startTime)}
+                      style={[styles.cell, !free && styles.cellBooked, sel && styles.cellSel]}
+                    >
+                      {free ? (
+                        <YUiText size={13} weight={800} color={sel ? '#fff' : YColors.ink}>
+                          ₹ {price}
+                          {sel ? '  ✓' : ''}
+                        </YUiText>
+                      ) : (
+                        <YUiText size={12} weight={700} color="#B6B6BC">
+                          Booked
+                        </YUiText>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+      </ScrollView>
+
+      {/* Sticky "Book now" CTA — shown before any slots are picked; scrolls
+          down to the booking section above. Once slots are selected, the
+          existing total/proceed bar below already communicates the CTA. */}
+      {cells.length === 0 ? (
+        <View style={styles.bookNowBar}>
+          <YButton variant="lime" size="lg" fullWidth onPress={scrollToBooking}>
+            Book Now
+          </YButton>
+        </View>
+      ) : null}
 
       {/* Date nav */}
       <View style={styles.dateNav}>
@@ -547,6 +764,43 @@ const styles = StyleSheet.create({
   center: { flex: 1, padding: 40, alignItems: 'center', justifyContent: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 12, gap: 8, backgroundColor: '#FFFFFF' },
   headerBtn: { width: 36, height: 36, borderRadius: 999, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: YColors.line2 },
+
+  // ── Info section (new) ──────────────────────────────────────────
+  carouselWrap: { width: '100%', height: 220, backgroundColor: YColors.bg3 },
+  carouselImage: { width: SCREEN_WIDTH, height: 220 },
+  carouselPlaceholder: { alignItems: 'center', justifyContent: 'center' },
+  counterPill: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(10,10,11,0.6)',
+  },
+  infoCard: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: YColors.line2,
+  },
+  mapLink: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  sportChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: YColors.bg,
+    borderWidth: 1,
+    borderColor: YColors.line2,
+  },
+  amenityGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12 },
+  amenityItem: { width: '50%', flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingRight: 8 },
+  bookNowBar: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: YColors.line2 },
   venueInfo: {
     flexDirection: 'row',
     alignItems: 'center',
