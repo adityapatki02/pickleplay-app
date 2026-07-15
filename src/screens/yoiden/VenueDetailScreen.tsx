@@ -418,7 +418,13 @@ export default function VenueDetailScreen() {
           the whole page scrolls together, matching a standard court-
           page layout (KheloMore/Huddle style).
          ══════════════════════════════════════════════════════════════ */}
-      <ScrollView ref={outerScrollRef} style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={outerScrollRef}
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        stickyHeaderIndices={[1]}
+      >
+      <View>
         {/* Photo carousel */}
         <View style={styles.carouselWrap}>
           {photos.length > 0 ? (
@@ -563,23 +569,28 @@ export default function VenueDetailScreen() {
           </YMono>
         </View>
       )}
+      </View>
 
-      {/* Booking section anchor — measured so the new "Book now" CTA can scroll here */}
-      <View onLayout={(e) => { bookingSectionY.current = e.nativeEvent.layout.y; }}>
-        {/* Court column headers — blue bar with lime capsules */}
-        <View style={styles.colHead}>
-          <View style={{ width: TIME_COL }} />
-          {courts.map((c) => (
-            <View key={c.court.id} style={styles.colHeadCell}>
-              <View style={styles.courtCapsule}>
-                <YUiText size={13} weight={800} color="#14210A">
-                  {c.court.name}
-                </YUiText>
-              </View>
+      {/* Court column headers — blue bar with lime capsules. Also doubles as the
+          "Book now" scroll-target anchor, and is the sticky header (index 1) for
+          the outer ScrollView so it pins to the top once scrolled past. */}
+      <View
+        style={styles.colHead}
+        onLayout={(e) => { bookingSectionY.current = e.nativeEvent.layout.y; }}
+      >
+        <View style={{ width: TIME_COL }} />
+        {courts.map((c) => (
+          <View key={c.court.id} style={styles.colHeadCell}>
+            <View style={styles.courtCapsule}>
+              <YUiText size={13} weight={800} color="#14210A">
+                {c.court.name}
+              </YUiText>
             </View>
-          ))}
-        </View>
+          </View>
+        ))}
+      </View>
 
+      <View>
         {/* Grid */}
         {availLoading ? (
           <View style={styles.center}>
@@ -645,7 +656,7 @@ export default function VenueDetailScreen() {
           existing total/proceed bar below already communicates the CTA. */}
       {cells.length === 0 ? (
         <View style={styles.bookNowBar}>
-          <YButton variant="lime" size="lg" fullWidth onPress={scrollToBooking}>
+          <YButton variant="accent" size="lg" fullWidth onPress={scrollToBooking}>
             Book Now
           </YButton>
         </View>
@@ -669,31 +680,26 @@ export default function VenueDetailScreen() {
       </View>
 
       {/* Total + proceed — lime pop, lifted above the floating tab bar */}
-      <View style={styles.proceedBar}>
-        {cells.length > 0 ? (
+      {cells.length > 0 && (
+        <View style={styles.proceedBar}>
           <View style={{ flex: 1 }}>
-            <YMono size={9} color="rgba(20,33,10,0.7)" style={{ letterSpacing: 1 }}>
+            <YMono size={9} color="rgba(255,255,255,0.75)" style={{ letterSpacing: 1 }}>
               TOTAL PAYABLE · {cells.length} SLOT{cells.length === 1 ? '' : 'S'} · {(summaryCourts || '').toUpperCase()}
             </YMono>
-            <YUiText size={22} weight={900} color="#14210A" style={{ marginTop: 1 }}>
+            <YUiText size={22} weight={900} color="#fff" style={{ marginTop: 1 }}>
               ₹{total}
             </YUiText>
           </View>
-        ) : (
-          <YUiText size={13} weight={700} color="rgba(20,33,10,0.7)" style={{ flex: 1 }}>
-            Select slots to see your total
-          </YUiText>
-        )}
-        <Pressable
-          disabled={cells.length === 0}
-          onPress={() => { setModalError(null); setSheetOpen(true); }}
-          style={[styles.proceedBtn, cells.length === 0 && { opacity: 0.45 }]}
-        >
-          <YMono size={12} bold color="#fff" style={{ letterSpacing: 1.5 }}>
-            PROCEED
-          </YMono>
-        </Pressable>
-      </View>
+          <Pressable
+            onPress={() => { setModalError(null); setSheetOpen(true); }}
+            style={styles.proceedBtn}
+          >
+            <YMono size={12} bold color={YColors.accent} style={{ letterSpacing: 1.5 }}>
+              PROCEED
+            </YMono>
+          </Pressable>
+        </View>
+      )}
 
       {/* Spacer to clear the floating bottom tab bar */}
       <View style={{ height: tabBarSpace, backgroundColor: '#FFFFFF' }} />
@@ -831,8 +837,8 @@ const styles = StyleSheet.create({
   cellSel: { backgroundColor: YColors.accent, borderColor: YColors.accent },
   cellBooked: { backgroundColor: '#EDEDF0', borderColor: 'transparent' },
   dateNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderColor: YColors.line },
-  proceedBar: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: YColors.lime },
-  proceedBtn: { paddingHorizontal: 28, paddingVertical: 14, borderRadius: 10, backgroundColor: YColors.accent },
+  proceedBar: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: YColors.accent },
+  proceedBtn: { paddingHorizontal: 28, paddingVertical: 14, borderRadius: 10, backgroundColor: '#fff' },
   backdrop: { flex: 1, backgroundColor: 'rgba(10,10,11,0.45)' },
   sheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, paddingBottom: 28 },
   sheetHandle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: YColors.line2, marginBottom: 16 },
