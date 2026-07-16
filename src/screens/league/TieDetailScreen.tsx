@@ -1377,7 +1377,7 @@ const TieDetailScreen: React.FC = () => {
             {scores ? (
               <YDisplay size={26} color={isCompleted ? YColors.accent : YColors.ink} style={{ lineHeight: 32 }}>{`${scores.teamAScore}–${scores.teamBScore}`}</YDisplay>
             ) : (
-              <YDisplay size={22} color={YColors.ink4} style={{ lineHeight: 24 }}>–</YDisplay>
+              <YDisplay size={22} color={YColors.ink4} style={{ lineHeight: 28 }}>–</YDisplay>
             )}
           </View>
           <View style={styles.matchPlayerSide}>
