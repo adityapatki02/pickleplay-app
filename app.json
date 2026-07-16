@@ -19,7 +19,34 @@
         "NSCameraUsageDescription": "Yoiden needs camera access to take profile and venue photos.",
         "NSPhotoLibraryUsageDescription": "Yoiden needs photo library access to set a profile picture and upload venue photos.",
         "NSLocationWhenInUseUsageDescription": "Yoiden uses your location to show tournaments and courts near you.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": [
+          "tez",
+          "phonepe",
+          "paytmmp",
+          "credpay",
+          "mobikwik",
+          "in.fampay.app",
+          "bhim",
+          "amazonpay",
+          "navi",
+          "kiwi",
+          "payzapp",
+          "jupiter",
+          "omnicard",
+          "icici",
+          "popclubapp",
+          "sbiyono",
+          "myjio",
+          "slice-upi",
+          "bobupi",
+          "shriramone",
+          "indusmobile",
+          "whatsapp",
+          "kotakbank",
+          "gpay",
+          "upi"
+        ]
       }
     },
     "android": {

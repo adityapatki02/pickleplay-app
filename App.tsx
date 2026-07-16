@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { RazorpayCheckoutHost } from './src/components/RazorpayCheckoutHost';
 import { YoidenFontMap } from './src/config/yoiden-fonts';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -38,6 +39,8 @@ export default function App() {
     <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
       <StatusBar style="dark" />
       <RootNavigator />
+      {/* App-root Razorpay WebView checkout overlay (driven imperatively). */}
+      <RazorpayCheckoutHost />
     </View>
   );
 }

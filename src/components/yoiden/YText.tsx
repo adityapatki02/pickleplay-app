@@ -23,7 +23,9 @@ export const YDisplay: React.FC<Common & { size?: number; color?: string; italic
         fontStyle: italic ? 'italic' : 'normal',
         letterSpacing: 0.4,
         textTransform: 'uppercase',
-        lineHeight: size * 0.92,
+        // Anton has tall caps; a line height under ~1.1x clips the glyph tops
+        // on iOS. Keep it generous enough to never clip, still compact.
+        lineHeight: size * 1.18,
       },
       style as any,
     ]}

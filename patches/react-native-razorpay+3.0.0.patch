@@ -1,0 +1,50 @@
+diff --git a/node_modules/react-native-razorpay/ios/RazorpayCheckout.mm b/node_modules/react-native-razorpay/ios/RazorpayCheckout.mm
+index c5b89f0..0e6ec60 100644
+--- a/node_modules/react-native-razorpay/ios/RazorpayCheckout.mm
++++ b/node_modules/react-native-razorpay/ios/RazorpayCheckout.mm
+@@ -35,17 +35,37 @@ @implementation RNRazorpayCheckout
+         tempOptions[@"integration"] = @"react_native";
+         tempOptions[@"FRAMEWORK"] = @"react_native";
+ 
+-        //get root view to present razorpay vc
+-        id<UIApplicationDelegate> app = [[UIApplication sharedApplication] delegate];
+-        UINavigationController *rootViewController = ((UINavigationController*) app.window.rootViewController);
++        // Resolve the top-most view controller to present the checkout from.
++        // The original code used `app.window.rootViewController` force-cast to a
++        // UINavigationController. Under the New Architecture `app.window` is nil
++        // (scene-based windows), and Expo's root VC is not a UINavigationController,
++        // so the checkout would not present (new arch) or crash (old arch).
++        // Find the active key window (scene-aware) and walk to its top-most VC.
++        UIWindow *keyWindow = nil;
++        for (UIWindow *w in [UIApplication sharedApplication].windows) {
++            if (w.isKeyWindow) { keyWindow = w; break; }
++        }
++        if (keyWindow == nil) {
++            for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
++                if ([scene isKindOfClass:[UIWindowScene class]]) {
++                    for (UIWindow *w in ((UIWindowScene *)scene).windows) {
++                        if (w.isKeyWindow) { keyWindow = w; break; }
++                    }
++                }
++                if (keyWindow) break;
++            }
++        }
++        if (keyWindow == nil) {
++            keyWindow = [UIApplication sharedApplication].windows.firstObject;
++        }
+ 
+-        if (rootViewController.presentedViewController) {
+-            [razorpay open:tempOptions displayController:rootViewController.presentedViewController];
+-            return;
++        UIViewController *topController = keyWindow.rootViewController;
++        while (topController.presentedViewController) {
++            topController = topController.presentedViewController;
+         }
+ 
+-        //Use 'open' method with displayController parameter
+-        [razorpay open:tempOptions displayController:rootViewController];
++        // Present via the documented displayController parameter.
++        [razorpay open:tempOptions displayController:topController];
+     });
+ }
+ 

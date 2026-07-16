@@ -231,6 +231,11 @@ export default function HomeScreen() {
 
   const upcomingRegs = onlyFeatured(allUpcomingRegs);
   const visibleHosted = onlyFeatured(myHosted);
+  // "Your events" = registrations + hosted, combined; Home shows max 3 then View all.
+  const yourEvents = [
+    ...upcomingRegs.map((t) => ({ t, hosting: false })),
+    ...visibleHosted.map((t) => ({ t, hosting: true })),
+  ];
   const visibleNearby = onlyFeatured(nearby);
 
   // Transform API venues → display shape for YVenueEditorial / YVenueRow.
@@ -440,100 +445,65 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {/* Book a court — green accent partition + header */}
+        {/* Book a court — compact white card, sized like the league banner. Lists
+            courts (just RallyHive today); the list simply grows as more venues
+            come online. Replaces the old sport-filter + venue list to save space.
+            The sport picker returns here once there are multiple sports. */}
         <View style={styles.sectionAccent} />
-        <YSectionHead eyebrow="BOOK A COURT" title="PLAY NEAR YOU" />
-        <View style={styles.sportSection}>
-          <YUiText size={11} weight={900} color={YColors.ink3} style={{ letterSpacing: 1.2, paddingHorizontal: 20, marginBottom: 12 }}>
-            CHOOSE A SPORT
-          </YUiText>
-          <View style={styles.sportRow}>
-            {([
-              { key: 'padel',     label: 'Padel' },
-              { key: 'badminton', label: 'Badminton' },
-            ] as const).map(({ key, label }) => {
-              const active = activeSport === key;
-              const stroke = active ? YColors.ink : YColors.ink2;
-              return (
-                <Pressable
-                  key={key}
-                  onPress={() => setActiveSport(active ? null : key)}
-                  style={[styles.sportChip, active && styles.sportChipActive]}
-                >
-                  {key === 'padel' ? (
-                    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-                      <Ellipse cx={12} cy={8.5} rx={5.2} ry={6} stroke={stroke} strokeWidth={1.6} />
-                      <Line x1={6.8} y1={8.5} x2={17.2} y2={8.5} stroke={stroke} strokeWidth={1} opacity={0.5} />
-                      <Line x1={12} y1={2.6} x2={12} y2={14.4} stroke={stroke} strokeWidth={1} opacity={0.5} />
-                      <Path d="M12 14.5V21" stroke={stroke} strokeWidth={2} strokeLinecap="round" />
-                    </Svg>
-                  ) : (
-                    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-                      <Ellipse cx={12} cy={18.5} rx={2.4} ry={1.7} stroke={stroke} strokeWidth={1.5} />
-                      <Path d="M10 17L7 7M12 17V6M14 17L17 7" stroke={stroke} strokeWidth={1.3} strokeLinecap="round" />
-                      <Path d="M7 7Q12 3.5 17 7" stroke={stroke} strokeWidth={1.3} strokeLinecap="round" fill="none" />
-                    </Svg>
-                  )}
-                  <YUiText size={13} weight={700} color={stroke}>{label}</YUiText>
-                </Pressable>
-              );
-            })}
+        <View style={styles.courtCard}>
+          <View style={styles.courtCardHead}>
+            <YUiText size={10} weight={900} color={YColors.ink3} style={{ letterSpacing: 1.4 }}>
+              BOOK A COURT
+            </YUiText>
+            {displayVenues.length > 3 ? (
+              <Pressable onPress={goBook} hitSlop={8}>
+                <YUiText size={11.5} weight={800} color={YColors.accent}>All courts →</YUiText>
+              </Pressable>
+            ) : null}
           </View>
+          {loading ? (
+            <View style={styles.courtSkeleton} />
+          ) : displayVenues.length > 0 ? (
+            displayVenues.slice(0, 3).map((v, i) => (
+              <Pressable
+                key={v.id}
+                onPress={() => openVenue(v.id)}
+                style={({ pressed }) => [styles.courtRow, i > 0 && styles.courtRowDivider, pressed && { opacity: 0.9 }]}
+              >
+                <Image source={{ uri: (v as any).imageUrl }} style={styles.courtThumb} resizeMode="cover" />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <YUiText size={15} weight={900} color={YColors.ink} numberOfLines={1}>{v.name}</YUiText>
+                  <YUiText size={11.5} weight={600} color={YColors.ink2} numberOfLines={1} style={{ marginTop: 2 }}>
+                    {[(v as any).neighbourhood, (v as any).city].filter(Boolean).join(', ') || 'Tap to book a slot'}
+                  </YUiText>
+                </View>
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Path d="M9 6l6 6-6 6" stroke={YColors.ink3} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </Pressable>
+            ))
+          ) : (
+            <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+              <YUiText size={12} color={YColors.ink2}>Courts coming soon to {user?.city || 'your city'}.</YUiText>
+            </View>
+          )}
         </View>
 
-        {/* VENUES NEARBY — live from /venues API */}
-        <>
-          <YSectionHead
-            eyebrow={user?.city ? user.city.toUpperCase() : 'NEAR YOU'}
-            title="VENUES NEARBY"
-            action={displayVenues.length > 0 ? 'ALL →' : undefined}
-            onActionPress={goBook}
-          />
-          <View style={styles.listWrap}>
-            {loading ? (
-              // Skeleton placeholders while fetching
-              [0, 1].map((i) => <View key={i} style={styles.venueSkeleton} />)
-            ) : displayVenues.length > 0 ? (
-              <>
-                {sponsoredVenues.map((v) => (
-                  <YVenueEditorial key={v.id} venue={v} onPress={() => openVenue(v.id)} style={{ marginBottom: 14 }} />
-                ))}
-                {normalVenues.map((v) => (
-                  <YVenueRow key={v.id} venue={v} onPress={() => openVenue(v.id)} style={{ marginBottom: 8 }} />
-                ))}
-              </>
-            ) : (
-              <View style={styles.emptyState}>
-                <YEyebrow color={YColors.ink3}>COMING SOON</YEyebrow>
-                <YUiText size={12} color={YColors.ink2} style={{ marginTop: 6 }}>
-                  Courts coming soon to {user?.city || 'your city'}.
-                </YUiText>
-              </View>
-            )}
-          </View>
-        </>
-
         {/* YOUR EVENTS — combined registrations + hosted */}
-        {(upcomingRegs.length > 0 || visibleHosted.length > 0) ? (
+        {yourEvents.length > 0 ? (
           <>
             <YSectionHead
-              eyebrow={`${upcomingRegs.length + visibleHosted.length} ACTIVE`}
+              eyebrow={`${yourEvents.length} ACTIVE`}
               title="YOUR EVENTS"
+              action={yourEvents.length > 3 ? 'VIEW ALL →' : undefined}
+              onActionPress={goPlay}
             />
             <View style={styles.listWrap}>
-              {upcomingRegs.slice(0, 3).map((t) => (
+              {yourEvents.slice(0, 3).map(({ t, hosting }) => (
                 <YTournamentRow
-                  key={`reg-${t.id}`}
+                  key={`${hosting ? 'host' : 'reg'}-${t.id}`}
                   tournament={t as any}
-                  onPress={() => openTournament(t.id)}
-                  style={{ marginBottom: 8 }}
-                />
-              ))}
-              {visibleHosted.slice(0, 3).map((t) => (
-                <YTournamentRow
-                  key={`host-${t.id}`}
-                  tournament={t as any}
-                  hosting
+                  hosting={hosting}
                   onPress={() => openTournament(t.id)}
                   style={{ marginBottom: 8 }}
                 />
@@ -546,7 +516,8 @@ export default function HomeScreen() {
         <YSectionHead
           eyebrow={user?.city ? user.city.toUpperCase() : 'INDIA'}
           title="UPCOMING NEARBY"
-          action={visibleNearby.length > 0 ? 'ALL →' : undefined}
+          action={visibleNearby.length > 3 ? 'VIEW ALL →' : undefined}
+          onActionPress={goPlay}
         />
         <View style={styles.listWrap}>
           {loading ? (
@@ -566,7 +537,7 @@ export default function HomeScreen() {
               </View>
             </View>
           ) : (
-            visibleNearby.slice(0, 4).map((t) => (
+            visibleNearby.slice(0, 3).map((t) => (
               <YTournamentRow
                 key={t.id}
                 tournament={t as any}
@@ -654,6 +625,41 @@ const styles = StyleSheet.create({
   },
 
   // ── Sport selector ────────────────────────────────────────────────
+  courtCard: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: YColors.line2,
+  },
+  courtCardHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  courtRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  courtRowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: YColors.line,
+  },
+  courtThumb: {
+    width: 54,
+    height: 54,
+    borderRadius: 12,
+    backgroundColor: YColors.bg3,
+  },
+  courtSkeleton: {
+    height: 74,
+    borderRadius: 12,
+    backgroundColor: YColors.bg3,
+  },
   sportSection: {
     paddingTop: 24,
     paddingBottom: 4,

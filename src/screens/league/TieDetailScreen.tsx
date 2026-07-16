@@ -740,7 +740,7 @@ const TieDetailScreen: React.FC = () => {
       {/* Standing Points — hero */}
       <View style={{ alignItems: 'center', marginTop: 2, marginBottom: 12 }}>
         <YEyebrow size={10} color={YColors.ink2}>STANDING POINTS</YEyebrow>
-        <YDisplay size={48} color={YColors.ink} style={{ marginTop: 4, lineHeight: 50 }}>{`${liveScores.homeSP} – ${liveScores.awaySP}`}</YDisplay>
+        <YDisplay size={48} color={YColors.ink} style={{ marginTop: 4, lineHeight: 60 }}>{`${liveScores.homeSP} – ${liveScores.awaySP}`}</YDisplay>
         <YUiText size={11} weight={600} color={YColors.ink3} style={{ marginTop: 4 }}>{`${liveScores.completed} of ${liveScores.total} matches played`}</YUiText>
       </View>
 
@@ -1375,7 +1375,7 @@ const TieDetailScreen: React.FC = () => {
           </View>
           <View style={styles.matchScoreCenter}>
             {scores ? (
-              <YDisplay size={26} color={isCompleted ? YColors.accent : YColors.ink} style={{ lineHeight: 28 }}>{`${scores.teamAScore}–${scores.teamBScore}`}</YDisplay>
+              <YDisplay size={26} color={isCompleted ? YColors.accent : YColors.ink} style={{ lineHeight: 32 }}>{`${scores.teamAScore}–${scores.teamBScore}`}</YDisplay>
             ) : (
               <YDisplay size={22} color={YColors.ink4} style={{ lineHeight: 24 }}>–</YDisplay>
             )}

@@ -11,6 +11,7 @@ import {
   Image,
   Linking,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
@@ -179,6 +180,17 @@ export default function VenueDetailScreen() {
   const [guestPhone, setGuestPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  // iOS: the Razorpay checkout is presented only AFTER the confirm sheet's
+  // native modal fully dismisses (via the Modal's onDismiss). iOS refuses to
+  // present the checkout over a dismissing modal's view controller, so we hold
+  // the created booking + order here and fire the checkout from onDismiss,
+  // which runs against the root view controller.
+  const [pendingPay, setPendingPay] = useState<{
+    booking: any;
+    payment: any;
+    prefill: { contact: string; name: string };
+    success: any;
+  } | null>(null);
 
   // ── Info section (new) — photo carousel + venue details, shown above the booking flow ──
   const outerScrollRef = useRef<ScrollView>(null);
@@ -288,6 +300,53 @@ export default function VenueDetailScreen() {
     }
   };
 
+  // Present Razorpay, verify the payment, then navigate (or cancel + free slots
+  // on failure). Called from the confirm sheet's onDismiss on iOS, or directly
+  // on Android where the checkout is a separate Activity.
+  const runPayment = async (p: {
+    booking: any;
+    payment: any;
+    prefill: { contact: string; name: string };
+    success: any;
+  }) => {
+    let confirmed = false;
+    try {
+      const rzpRes = await openRazorpay({
+        key: p.payment.key,
+        amount: p.payment.amount,
+        currency: p.payment.currency ?? 'INR',
+        order_id: p.payment.orderId,
+        name: venue?.name ?? 'Yoiden',
+        description: `Court booking · ${date}`,
+        prefill: p.prefill,
+        theme: { color: '#1B4FD8' },
+      });
+      await bookingsApi.confirmPayment(p.booking.id, {
+        razorpayOrderId: rzpRes.razorpay_order_id,
+        razorpayPaymentId: rzpRes.razorpay_payment_id,
+        razorpaySignature: rzpRes.razorpay_signature,
+      });
+      confirmed = true;
+    } catch (rzpErr: any) {
+      console.warn('[Razorpay]', rzpErr?.description ?? rzpErr);
+    }
+    if (!confirmed) {
+      try { await bookingsApi.cancel(p.booking.id); } catch (_) {}
+      await loadAvailability();
+      setSelected([]);
+      Alert.alert(
+        'Payment Cancelled',
+        'Your booking was not completed. The slots are now available again.',
+      );
+      return;
+    }
+    setSelected([]);
+    setGuestName('');
+    setGuestPhone('');
+    await loadAvailability();
+    nav.navigate('BookingSuccess', p.success);
+  };
+
   const submit = async (channel: 'online' | 'offline') => {
     if (cells.length === 0) return;
     setModalError(null);
@@ -310,44 +369,36 @@ export default function VenueDetailScreen() {
 
       // ── Online payment → open Razorpay checkout ──────────────────
       if (channel === 'online' && payment?.orderId) {
+        const pending = {
+          booking,
+          payment,
+          prefill: { contact: guestPhone.trim() || '', name: guestName.trim() || '' },
+          success: {
+            bookingId: booking.id,
+            venueName: venue?.name ?? '',
+            venueAddress: (venue as any)?.address ?? '',
+            date,
+            courts: cells.map((cell) => ({
+              name: courtById.get(cell.courtId)?.court.name ?? 'Court',
+              startTime: cell.startTime,
+              endTime: addMinutes(cell.startTime, courtById.get(cell.courtId)?.court.slotDurationMin ?? 60),
+              price: priceAt(cell.courtId, cell.startTime),
+            })),
+            total,
+          },
+        };
         setSheetOpen(false);
-        let paymentConfirmed = false;
-        try {
-          const rzpRes = await openRazorpay({
-            key: payment.key,
-            amount: payment.amount,
-            currency: payment.currency ?? 'INR',
-            order_id: payment.orderId,
-            name: venue?.name ?? 'Yoiden',
-            description: `Court booking · ${date}`,
-            prefill: {
-              contact: guestPhone.trim() || '',
-              name: guestName.trim() || '',
-            },
-            theme: { color: '#1B4FD8' },
-          });
-          // Verify signature on backend → marks booking confirmed
-          await bookingsApi.confirmPayment(booking.id, {
-            razorpayOrderId: rzpRes.razorpay_order_id,
-            razorpayPaymentId: rzpRes.razorpay_payment_id,
-            razorpaySignature: rzpRes.razorpay_signature,
-          });
-          paymentConfirmed = true;
-        } catch (rzpErr: any) {
-          console.warn('[Razorpay]', rzpErr?.description ?? rzpErr);
+        setSubmitting(false);
+        // iOS: present the checkout only after the confirm sheet's native modal
+        // has fully dismissed (onDismiss) — iOS won't present it over the
+        // dismissing modal VC, so nothing appears otherwise. Android's checkout
+        // is a separate Activity, so present immediately.
+        if (Platform.OS === 'ios') {
+          setPendingPay(pending);
+        } else {
+          runPayment(pending);
         }
-
-        if (!paymentConfirmed) {
-          // Cancel the pending booking so slots free up immediately
-          try { await bookingsApi.cancel(booking.id); } catch (_) {}
-          await loadAvailability();
-          setSelected([]);
-          Alert.alert(
-            'Payment Cancelled',
-            'Your booking was not completed. The slots are now available again.',
-          );
-          return;
-        }
+        return;
       }
 
       // ── Cleanup + navigate (offline always; online only if payment confirmed) ──
@@ -421,7 +472,6 @@ export default function VenueDetailScreen() {
         ref={outerScrollRef}
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[1]}
       >
       <View>
         {/* Photo carousel */}
@@ -570,9 +620,10 @@ export default function VenueDetailScreen() {
       )}
       </View>
 
-      {/* Court column headers — blue bar with lime capsules. Also doubles as the
-          "Book now" scroll-target anchor, and is the sticky header (index 1) for
-          the outer ScrollView so it pins to the top once scrolled past. */}
+      {/* Court column headers — lime capsules over each court's price column.
+          Also the "Book now" scroll-target anchor. Rendered inline (not a sticky
+          header): as a sticky header on iOS the flex row collapsed and the
+          capsules stacked vertically. */}
       <View
         style={styles.colHead}
         onLayout={(e) => { bookingSectionY.current = e.nativeEvent.layout.y; }}
@@ -704,7 +755,21 @@ export default function VenueDetailScreen() {
       <View style={{ height: tabBarSpace, backgroundColor: '#FFFFFF' }} />
 
       {/* Confirm sheet */}
-      <Modal visible={sheetOpen} transparent animationType="slide" onRequestClose={() => setSheetOpen(false)}>
+      <Modal
+        visible={sheetOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSheetOpen(false)}
+        onDismiss={() => {
+          // iOS: the sheet has fully dismissed — now safe to present Razorpay
+          // from the root view controller.
+          if (pendingPay) {
+            const p = pendingPay;
+            setPendingPay(null);
+            runPayment(p);
+          }
+        }}
+      >
         <Pressable style={styles.backdrop} onPress={() => !submitting && setSheetOpen(false)} />
         <View style={styles.sheet}>
           <View style={styles.sheetHandle} />
@@ -827,7 +892,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#D0DEFF',
   },
-  colHead: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: YColors.line },
+  // Full screen width so the two flex:1 court columns lay out side-by-side.
+  colHead: { width: SCREEN_WIDTH, flexDirection: 'row', alignItems: 'center', paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: YColors.line },
   colHeadCell: { flex: 1, alignItems: 'center' },
   courtCapsule: { backgroundColor: YColors.lime, paddingHorizontal: 22, paddingVertical: 7, borderRadius: 999 },
   row: { flexDirection: 'row', alignItems: 'center', paddingLeft: 12, paddingRight: 10 },

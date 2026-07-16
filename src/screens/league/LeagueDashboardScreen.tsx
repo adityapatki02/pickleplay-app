@@ -595,7 +595,7 @@ const LeagueDashboardScreen: React.FC = () => {
       <View style={{ flexDirection: 'row', paddingHorizontal: 20, marginTop: 20, marginBottom: 6 }}>
         {items.map((it, i) => (
           <View key={it.label} style={{ flex: 1, paddingRight: i < 2 ? 14 : 0 }}>
-            <YDisplay size={54} color={it.color} style={{ lineHeight: 54 }}>{String(it.value)}</YDisplay>
+            <YDisplay size={54} color={it.color} style={{ lineHeight: 66 }}>{String(it.value)}</YDisplay>
             <YEyebrow size={10} color={YColors.ink3} style={{ marginTop: 4 }}>{it.label}</YEyebrow>
           </View>
         ))}
@@ -1066,7 +1066,7 @@ const LeagueDashboardScreen: React.FC = () => {
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 24, marginBottom: 14 }}>
           <View>
             <YEyebrow size={10} color={YColors.ink3} style={{ marginBottom: 2 }}>LEAGUE</YEyebrow>
-            <YDisplay size={26} color={YColors.ink} style={{ lineHeight: 28 }}>Standings</YDisplay>
+            <YDisplay size={26} color={YColors.ink} style={{ lineHeight: 32 }}>Standings</YDisplay>
           </View>
           <TouchableOpacity onPress={() => setActiveTab('STANDINGS')}>
             <YUiText size={12} weight={800} color={YColors.accent}>VIEW ALL</YUiText>
@@ -1085,11 +1085,11 @@ const LeagueDashboardScreen: React.FC = () => {
               const qualifies = idx < 2;
               return (
                 <View key={row.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: idx === 0 ? 0 : 1, borderTopColor: YColors.line2, backgroundColor: qualifies ? '#F0FAF7' : '#fff' }}>
-                  <YDisplay size={24} color={qualifies ? YColors.accent : YColors.ink3} style={{ width: 38, lineHeight: 24 }}>{String(idx + 1)}</YDisplay>
+                  <YDisplay size={24} color={qualifies ? YColors.accent : YColors.ink3} style={{ width: 38, lineHeight: 30 }}>{String(idx + 1)}</YDisplay>
                   <View style={{ width: 4, height: 30, borderRadius: 2, backgroundColor: accent, marginRight: 12 }} />
                   <YUiText size={16} weight={800} color={YColors.ink} numberOfLines={1} style={{ flex: 1 }}>{teamName(row.franchiseId)}</YUiText>
                   <View style={{ alignItems: 'flex-end' }}>
-                    <YDisplay size={20} color={YColors.ink} style={{ lineHeight: 20 }}>{String(row.standingPoints)}</YDisplay>
+                    <YDisplay size={20} color={YColors.ink} style={{ lineHeight: 26 }}>{String(row.standingPoints)}</YDisplay>
                     <YEyebrow size={8} color={YColors.ink3} style={{ marginTop: 2 }}>{`SP · ${row.tiesPlayed}P ${row.tiesWon}W`}</YEyebrow>
                   </View>
                 </View>

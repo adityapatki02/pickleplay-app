@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { presentRazorpay } from './razorpay-host-bridge';
 
 export interface RazorpayOptions {
   key: string;
@@ -46,8 +47,14 @@ const openWeb = (opts: RazorpayOptions): Promise<RazorpayResult> =>
     rzp.open();
   });
 
-/** Opens Razorpay checkout on Android/iOS (native SDK). */
-const openNative = async (opts: RazorpayOptions): Promise<RazorpayResult> => {
+/**
+ * Native Razorpay SDK path — gives proper UPI-intent app selection
+ * (tap Google Pay / PhonePe / Paytm → opens that app). Requires the old
+ * architecture on iOS: under the New Architecture (Expo SDK 55 default) the
+ * SDK's checkout view controller does not present. This build ships with
+ * `newArchEnabled: false` so the SDK can present.
+ */
+const openNativeSdk = async (opts: RazorpayOptions): Promise<RazorpayResult> => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const RazorpayCheckout = require('react-native-razorpay').default;
   const res = await RazorpayCheckout.open({
@@ -66,6 +73,22 @@ const openNative = async (opts: RazorpayOptions): Promise<RazorpayResult> => {
     razorpay_signature: res.razorpay_signature,
   };
 };
+
+/**
+ * Native SDK is the shipping path (Razorpay's recommended integration; gives
+ * the real UPI-intent app list). react-native-razorpay's iOS VC lookup is
+ * patched (patches/react-native-razorpay+3.0.0.patch) to present from the
+ * active key window's top-most controller, which fixes the New-Architecture
+ * "checkout doesn't present" bug.
+ *
+ * The WebView checkout (<RazorpayCheckoutHost/>) remains bundled as an instant
+ * OTA fallback: flip this to `true` and publish an update to revert without a
+ * rebuild if the native SDK ever misbehaves on a device.
+ */
+const USE_WEBVIEW_CHECKOUT = false;
+
+const openNative = (opts: RazorpayOptions): Promise<RazorpayResult> =>
+  USE_WEBVIEW_CHECKOUT ? presentRazorpay(opts) : openNativeSdk(opts);
 
 /**
  * Cross-platform Razorpay checkout.

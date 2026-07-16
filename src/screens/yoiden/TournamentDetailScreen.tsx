@@ -233,7 +233,7 @@ export default function TournamentDetailScreen() {
             {t.city ? (
               <YEyebrow color="rgba(255,255,255,0.75)">{t.city.toUpperCase()}</YEyebrow>
             ) : null}
-            <YDisplay size={36} color="#fff" style={{ marginTop: 6, lineHeight: 34 }}>
+            <YDisplay size={36} color="#fff" style={{ marginTop: 6 }}>
               {t.name}
             </YDisplay>
             <YMono size={11} color="rgba(255,255,255,0.75)" style={{ marginTop: 10, letterSpacing: 1.2 }}>
