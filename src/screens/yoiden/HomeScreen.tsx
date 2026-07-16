@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Ellipse, Line } from 'react-native-svg';
+import { thumbUrl } from '../../utils/img';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 
@@ -470,7 +471,7 @@ export default function HomeScreen() {
                 onPress={() => openVenue(v.id)}
                 style={({ pressed }) => [styles.courtRow, i > 0 && styles.courtRowDivider, pressed && { opacity: 0.9 }]}
               >
-                <Image source={{ uri: (v as any).imageUrl }} style={styles.courtThumb} resizeMode="cover" />
+                <Image source={{ uri: thumbUrl((v as any).imageUrl, 160) }} style={styles.courtThumb} resizeMode="cover" />
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <YUiText size={15} weight={900} color={YColors.ink} numberOfLines={1}>{v.name}</YUiText>
                   <YUiText size={11.5} weight={600} color={YColors.ink2} numberOfLines={1} style={{ marginTop: 2 }}>
