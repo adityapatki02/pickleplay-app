@@ -18,4 +18,8 @@ export const bookingsApi = {
 
   cancel: (bookingId: string) =>
     apiClient.post<ApiResponse<Booking>>(`/bookings/${bookingId}/cancel`),
+
+  // Online payment failed/cancelled → keep the booking as confirmed pay-at-venue.
+  switchToOffline: (bookingId: string) =>
+    apiClient.post<ApiResponse<Booking>>(`/bookings/${bookingId}/switch-to-offline`),
 };

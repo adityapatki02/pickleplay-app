@@ -331,12 +331,37 @@ export default function VenueDetailScreen() {
       console.warn('[Razorpay]', rzpErr?.description ?? rzpErr);
     }
     if (!confirmed) {
-      try { await bookingsApi.cancel(p.booking.id); } catch (_) {}
-      await loadAvailability();
-      setSelected([]);
+      // Payment failed/cancelled — we also take offline payments, so offer to
+      // keep the booking and pay at the venue instead of just cancelling.
       Alert.alert(
-        'Payment Cancelled',
-        'Your booking was not completed. The slots are now available again.',
+        "Payment didn't go through",
+        'Keep your booking and pay at the venue? Your court stays reserved.',
+        [
+          {
+            text: 'Cancel booking',
+            style: 'destructive',
+            onPress: async () => {
+              try { await bookingsApi.cancel(p.booking.id); } catch (_) {}
+              await loadAvailability();
+              setSelected([]);
+            },
+          },
+          {
+            text: 'Pay at venue',
+            onPress: async () => {
+              try {
+                await bookingsApi.switchToOffline(p.booking.id);
+                setSelected([]);
+                setGuestName('');
+                setGuestPhone('');
+                await loadAvailability();
+                nav.navigate('BookingSuccess', p.success);
+              } catch (_) {
+                Alert.alert('Could not hold your booking', 'Please try again.');
+              }
+            },
+          },
+        ],
       );
       return;
     }
