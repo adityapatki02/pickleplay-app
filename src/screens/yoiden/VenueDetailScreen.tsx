@@ -373,7 +373,7 @@ export default function VenueDetailScreen() {
     nav.navigate('BookingSuccess', p.success);
   };
 
-  const submit = async (channel: 'online' | 'offline') => {
+  const submit = async (channel: 'online' | 'venue') => {
     if (cells.length === 0) return;
     setModalError(null);
     if (!isAuthed && (!guestName.trim() || !guestPhone.trim())) {
@@ -844,7 +844,7 @@ export default function VenueDetailScreen() {
 
           <View style={styles.sheetActions}>
             <View style={{ flex: 1 }}>
-              <YButton variant="primary" size="md" disabled={submitting} onPress={() => submit('offline')}>
+              <YButton variant="primary" size="md" disabled={submitting} onPress={() => submit('venue')}>
                 {submitting ? 'BOOKING…' : 'PAY AT VENUE'}
               </YButton>
             </View>

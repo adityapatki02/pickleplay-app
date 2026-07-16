@@ -72,7 +72,9 @@ export interface QuoteResponse {
   isPeak: boolean;
 }
 
-export type BookingChannel = 'online' | 'offline';
+// Must match the backend's accepted values (create-booking DTO @IsIn).
+// 'venue' = pay at venue (offline); 'complimentary' = comped booking.
+export type BookingChannel = 'online' | 'venue' | 'complimentary';
 export type BookingStatus =
   | 'pending'
   | 'confirmed'
