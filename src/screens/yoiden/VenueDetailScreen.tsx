@@ -28,6 +28,7 @@ import {
   YButton,
 } from '../../components/yoiden';
 import { openRazorpay } from '../../utils/razorpay';
+import { resizeUrl } from '../../utils/img';
 import { venuesApi } from '../../api/venues.api';
 import { bookingsApi } from '../../api/bookings.api';
 import { useAuthStore } from '../../store/authStore';
@@ -513,7 +514,12 @@ export default function VenueDetailScreen() {
               scrollEventThrottle={32}
             >
               {photos.map((p: any, i: number) => (
-                <Image key={p.url + i} source={{ uri: p.url }} style={styles.carouselImage} resizeMode="cover" />
+                <Image
+                  key={p.url + i}
+                  source={{ uri: resizeUrl(p.url, { w: 1000, h: 560 }) ?? p.url }}
+                  style={styles.carouselImage}
+                  resizeMode="cover"
+                />
               ))}
             </ScrollView>
           ) : (

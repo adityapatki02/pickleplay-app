@@ -1,19 +1,30 @@
 /**
- * On-the-fly image resizing for list thumbnails.
+ * On-the-fly image resizing for list thumbnails and banners.
  *
  * Venue photos can be raw full-res uploads (RallyHive's is a 12 MB JPG), which
- * are far too heavy to load into a small card thumbnail. Until the backend
- * generates real thumbnails (a `thumbUrl` per photo), we route card images
- * through the weserv.nl (Cloudflare-backed) image proxy, which returns a small
- * WebP (~4 KB). If the proxy is ever unavailable, the caller's placeholder /
- * background simply shows instead.
+ * are far too heavy to load into a card thumbnail or a full-width carousel.
+ * Until the backend generates real thumbnails (a `thumbUrl` per photo), we
+ * route images through the weserv.nl (Cloudflare-backed) image proxy, which
+ * returns a small WebP. If the proxy is ever unavailable, the caller's
+ * placeholder / background simply shows instead.
  *
  * TODO(backend): generate resized thumbnails on upload and use `thumbUrl`
  * directly, then this proxy can be dropped.
  */
-export const thumbUrl = (url: string | undefined | null, px = 200): string | undefined => {
+
+/** Route a URL through the resize proxy. `w`/`h` are the target box in px. */
+export const resizeUrl = (
+  url: string | undefined | null,
+  opts: { w?: number; h?: number; q?: number } = {},
+): string | undefined => {
   if (!url) return undefined;
   // Already small/local/proxied — leave as-is.
   if (url.startsWith('data:') || url.includes('images.weserv.nl')) return url;
-  return `https://images.weserv.nl/?url=${encodeURIComponent(url)}&w=${px}&h=${px}&fit=cover&output=webp&q=80`;
+  const { w = 400, h, q = 80 } = opts;
+  const hParam = h ? `&h=${h}` : '';
+  return `https://images.weserv.nl/?url=${encodeURIComponent(url)}&w=${w}${hParam}&fit=cover&output=webp&q=${q}`;
 };
+
+/** Square thumbnail for list rows / cards. */
+export const thumbUrl = (url: string | undefined | null, px = 200): string | undefined =>
+  resizeUrl(url, { w: px, h: px });
