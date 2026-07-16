@@ -595,7 +595,7 @@ const LeagueDashboardScreen: React.FC = () => {
       <View style={{ flexDirection: 'row', paddingHorizontal: 20, marginTop: 20, marginBottom: 6 }}>
         {items.map((it, i) => (
           <View key={it.label} style={{ flex: 1, paddingRight: i < 2 ? 14 : 0 }}>
-            <YDisplay size={54} color={it.color} style={{ lineHeight: 66 }}>{String(it.value)}</YDisplay>
+            <YDisplay size={54} color={it.color} italic={false} style={{ lineHeight: 78, paddingTop: 8 }}>{String(it.value)}</YDisplay>
             <YEyebrow size={10} color={YColors.ink3} style={{ marginTop: 4 }}>{it.label}</YEyebrow>
           </View>
         ))}
