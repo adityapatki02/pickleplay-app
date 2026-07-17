@@ -30,6 +30,8 @@ export interface Tournament {
   endDate: string;
   registrationDeadline: string;
   status: TournamentStatus;
+  /** true = listed in public discovery; false = unlisted (share-link only). */
+  isPublic?: boolean;
   bannerUrl?: string;
   rulesUrl?: string;
   refundPolicy?: string;
@@ -120,6 +122,10 @@ export interface CreateTournamentInput {
   contactEmail?: string;
   geofenceRadiusM?: number;
   initialStatus?: 'draft' | 'registration_open';
+  /** Discovery visibility (supersedes initialStatus): public | unlisted | draft. */
+  visibility?: 'public' | 'unlisted' | 'draft';
+  /** Direct toggle for PATCH (flip public/unlisted after creation). */
+  isPublic?: boolean;
 }
 
 export interface CreateCategoryInput {

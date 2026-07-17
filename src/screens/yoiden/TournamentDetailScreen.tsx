@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Pressable,
   RefreshControl,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -92,6 +93,29 @@ export default function TournamentDetailScreen() {
   }, [fetchDetail]);
 
   const isOrganizer = !!t && !!currentUser && t.organizerId === currentUser.id;
+
+  // ── Discovery visibility (organizer control) ──────────────────────────────
+  const [visBusy, setVisBusy] = useState(false);
+  // Public link that opens the viewer-facing tournament page (works for unlisted).
+  const shareUrl = t ? `https://console.yoiden.com/t/${t.slug}` : '';
+  const isDraft = t?.status === 'draft';
+  const changeVisibility = async (isPublic: boolean) => {
+    if (!t || visBusy) return;
+    setVisBusy(true);
+    try {
+      await tournamentsApi.update(t.id, { isPublic });
+      await fetchDetail();
+    } catch (e: any) {
+      // Non-fatal — surface briefly via the error banner path.
+      setError(e?.response?.data?.message || e?.message || 'Could not update visibility');
+    } finally {
+      setVisBusy(false);
+    }
+  };
+  const shareLink = () => {
+    if (!t) return;
+    Share.share({ message: `${t.name} — register here: ${shareUrl}`, url: shareUrl }).catch(() => {});
+  };
 
   const [bannerBusy, setBannerBusy] = useState(false);
 
@@ -263,6 +287,44 @@ export default function TournamentDetailScreen() {
             </>
           ) : null}
         </View>
+
+        {/* Organizer — discovery visibility control + share link */}
+        {isOrganizer && !isDraft ? (
+          <View style={styles.visCard}>
+            <YEyebrow color={YColors.ink3}>VISIBILITY</YEyebrow>
+            <View style={styles.visToggleRow}>
+              {([
+                { key: true, label: 'PUBLIC', hint: 'In discovery' },
+                { key: false, label: 'UNLISTED', hint: 'Link only' },
+              ] as const).map((opt) => {
+                const active = !!t?.isPublic === opt.key;
+                return (
+                  <Pressable
+                    key={String(opt.key)}
+                    onPress={() => changeVisibility(opt.key)}
+                    disabled={visBusy}
+                    style={[styles.visToggle, active && styles.visToggleActive]}
+                  >
+                    <YUiText size={12} weight={900} color={active ? '#000' : YColors.ink2} style={{ letterSpacing: 0.6 }}>
+                      {opt.label}
+                    </YUiText>
+                    <YUiText size={10} weight={600} color={active ? 'rgba(0,0,0,0.6)' : YColors.ink3} style={{ marginTop: 1 }}>
+                      {opt.hint}
+                    </YUiText>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <YUiText size={11.5} color={YColors.ink2} style={{ marginTop: 10, lineHeight: 17 }}>
+              {t?.isPublic
+                ? 'This event shows in discovery for everyone.'
+                : 'Hidden from discovery — only people you share the link with can find it.'}
+            </YUiText>
+            <Pressable onPress={shareLink} style={styles.shareBtn}>
+              <YUiText size={12} weight={900} color="#000" style={{ letterSpacing: 0.6 }}>SHARE LINK</YUiText>
+            </Pressable>
+          </View>
+        ) : null}
 
         {/* Organizer — Shadow Mode (priority path for AIPA event) */}
         {isOrganizer ? (
@@ -485,6 +547,41 @@ const styles = StyleSheet.create({
     backgroundColor: YColors.bg2,
     borderWidth: 1,
     borderColor: YColors.line,
+  },
+  visCard: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: YColors.bg2,
+    borderWidth: 1,
+    borderColor: YColors.line,
+  },
+  visToggleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  visToggle: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: YColors.bg3,
+    borderWidth: 1,
+    borderColor: YColors.line2,
+    alignItems: 'center',
+  },
+  visToggleActive: {
+    backgroundColor: YColors.lime,
+    borderColor: YColors.ink,
+  },
+  shareBtn: {
+    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: YColors.lime,
+    alignItems: 'center',
   },
   divider: {
     height: 1,

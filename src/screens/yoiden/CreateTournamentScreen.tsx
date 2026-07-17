@@ -408,6 +408,9 @@ export default function CreateTournamentScreen() {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [saving, setSaving] = useState(false);
+  // Discovery visibility for this event. Default 'unlisted' so a new event is
+  // live + share-link reachable but NOT broadcast into everyone's discovery.
+  const [visibility, setVisibility] = useState<'public' | 'unlisted' | 'draft'>('unlisted');
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [categoryDraft, setCategoryDraft] = useState<Omit<CategoryDraft, '_id'>>(INITIAL_CATEGORY);
@@ -511,7 +514,8 @@ export default function CreateTournamentScreen() {
 
   // ── Save ─────────────────────────────────────────────────────────────────────
 
-  const handleSave = async (asDraft = false) => {
+  const handleSave = async () => {
+    const asDraft = visibility === 'draft';
     setSaving(true);
     try {
       const createRes = await tournamentsApi.create({
@@ -526,7 +530,7 @@ export default function CreateTournamentScreen() {
         startDate: form.startDate,
         endDate: form.endDate,
         registrationDeadline: form.registrationDeadline,
-        initialStatus: asDraft ? 'draft' : 'registration_open',
+        visibility,
       });
 
       const tournament = createRes.data?.data;
@@ -553,9 +557,12 @@ export default function CreateTournamentScreen() {
 
       addTournament(tournament);
 
-      const statusMsg = asDraft
-        ? `"${form.name}" has been saved as a draft.`
-        : `"${form.name}" is now live and open for registrations!`;
+      const statusMsg =
+        visibility === 'draft'
+          ? `"${form.name}" has been saved as a draft.`
+          : visibility === 'unlisted'
+            ? `"${form.name}" is live — share the link to invite players. It won't appear in public discovery.`
+            : `"${form.name}" is now live and listed in discovery for everyone!`;
 
       xConfirm(
         'Tournament Created!',
@@ -912,6 +919,59 @@ export default function CreateTournamentScreen() {
             {step === 3 && renderStep3()}
           </View>
 
+          {/* Visibility selector — only on the final step */}
+          {step === TOTAL_STEPS && !saving && (
+            <View style={{ marginBottom: 14 }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748B', letterSpacing: 1, marginBottom: 8 }}>
+                WHO CAN FIND THIS EVENT?
+              </Text>
+              {([
+                { key: 'unlisted', title: 'Unlisted', hint: 'Live — only people with the share link can find it' },
+                { key: 'public', title: 'Public', hint: 'Listed in discovery for everyone to see' },
+                { key: 'draft', title: 'Draft', hint: 'Private — not live yet, publish later' },
+              ] as const).map((opt) => {
+                const active = visibility === opt.key;
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    onPress={() => setVisibility(opt.key)}
+                    activeOpacity={0.8}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 12,
+                      paddingVertical: 12,
+                      paddingHorizontal: 14,
+                      borderRadius: 12,
+                      borderWidth: 1.5,
+                      marginBottom: 8,
+                      backgroundColor: active ? '#ECFDF7' : '#F5F7FA',
+                      borderColor: active ? '#06D6A0' : '#E2E8F0',
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        borderWidth: 2,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderColor: active ? '#06D6A0' : '#CBD5E1',
+                      }}
+                    >
+                      {active ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#06D6A0' }} /> : null}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: active ? '#0F172A' : '#1A1D21' }}>{opt.title}</Text>
+                      <Text style={{ fontSize: 11.5, fontWeight: '500', color: '#64748B', marginTop: 2 }}>{opt.hint}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
           {/* Nav buttons */}
           <View style={styles.navRow}>
             <TouchableOpacity style={styles.backNavBtn} onPress={goBack}>
@@ -925,33 +985,11 @@ export default function CreateTournamentScreen() {
             ) : (
               <TouchableOpacity style={styles.nextBtn} onPress={goNext}>
                 <Text style={styles.nextBtnText}>
-                  {step < TOTAL_STEPS ? 'NEXT' : 'CREATE & OPEN REGISTRATION'}
+                  {step < TOTAL_STEPS ? 'NEXT' : visibility === 'draft' ? 'SAVE DRAFT' : 'CREATE EVENT'}
                 </Text>
               </TouchableOpacity>
             )}
           </View>
-
-          {/* Secondary "Save as Draft" link — only on final step */}
-          {step === TOTAL_STEPS && !saving && (
-            <TouchableOpacity
-              style={{ alignSelf: 'center', paddingVertical: 12, marginTop: 4 }}
-              onPress={() => {
-                if (validateStep3()) handleSave(true);
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: '700',
-                  color: '#64748B',
-                  letterSpacing: 0.5,
-                  textDecorationLine: 'underline',
-                }}
-              >
-                Save as Draft instead
-              </Text>
-            </TouchableOpacity>
-          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
