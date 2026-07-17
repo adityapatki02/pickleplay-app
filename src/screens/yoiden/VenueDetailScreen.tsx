@@ -428,6 +428,7 @@ export default function VenueDetailScreen() {
       }
 
       // ── Cleanup + navigate (offline always; online only if payment confirmed) ──
+      setSheetOpen(false); // close the confirm sheet so it isn't left over the success screen
       setSelected([]);
       setGuestName('');
       setGuestPhone('');
