@@ -70,7 +70,7 @@ export default function OrganizerTournamentsScreen() {
   const fetchTournaments = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
     try {
-      const res = await tournamentsApi.list();
+      const res = await tournamentsApi.getMyTournaments();
       const data = res.data?.data ?? [];
       setTournaments(Array.isArray(data) ? data : []);
     } catch (err: any) {

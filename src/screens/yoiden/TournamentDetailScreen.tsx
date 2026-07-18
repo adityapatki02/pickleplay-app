@@ -30,6 +30,7 @@ import type { Tournament, TournamentCategory } from '../../types/tournament.type
 import type { PlayStackParamList } from '../../navigation/YoidenTabNavigator';
 import { useAuthStore } from '../../store/authStore';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
 import { xAlert, xConfirm } from '../../utils/alert';
 
 type Route = RouteProp<PlayStackParamList, 'TournamentDetail'>;
@@ -115,6 +116,21 @@ export default function TournamentDetailScreen() {
   const shareLink = () => {
     if (!t) return;
     Share.share({ message: `${t.name} — register here: ${shareUrl}`, url: shareUrl }).catch(() => {});
+  };
+
+  // Copy-to-clipboard with inline "COPIED!" feedback — colleagues usually want
+  // to paste the link into WhatsApp/email themselves rather than go through the
+  // OS share sheet.
+  const [copied, setCopied] = useState(false);
+  const copyLink = async () => {
+    if (!shareUrl) return;
+    try {
+      await Clipboard.setStringAsync(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      xAlert('Could not copy', shareUrl);
+    }
   };
 
   const [bannerBusy, setBannerBusy] = useState(false);
@@ -294,8 +310,8 @@ export default function TournamentDetailScreen() {
             <YEyebrow color={YColors.ink3}>VISIBILITY</YEyebrow>
             <View style={styles.visToggleRow}>
               {([
-                { key: true, label: 'PUBLIC', hint: 'In discovery' },
-                { key: false, label: 'UNLISTED', hint: 'Link only' },
+                { key: true, label: 'PUBLIC', hint: 'Anyone can find & register' },
+                { key: false, label: 'PRIVATE', hint: 'Only via your link' },
               ] as const).map((opt) => {
                 const active = !!t?.isPublic === opt.key;
                 return (
@@ -317,12 +333,33 @@ export default function TournamentDetailScreen() {
             </View>
             <YUiText size={11.5} color={YColors.ink2} style={{ marginTop: 10, lineHeight: 17 }}>
               {t?.isPublic
-                ? 'This event shows in discovery for everyone.'
-                : 'Hidden from discovery — only people you share the link with can find it.'}
+                ? 'Listed in discovery — anyone can find this event and register from the app.'
+                : 'Hidden from discovery — only people you send the link to can open it.'}
             </YUiText>
-            <Pressable onPress={shareLink} style={styles.shareBtn}>
-              <YUiText size={12} weight={900} color="#000" style={{ letterSpacing: 0.6 }}>SHARE LINK</YUiText>
-            </Pressable>
+
+            {/* The share link itself, so it is visible and copyable either way */}
+            <YEyebrow color={YColors.ink3} style={{ marginTop: 14 }}>SHARE LINK</YEyebrow>
+            <View style={styles.linkRow}>
+              <YUiText
+                size={12}
+                color={YColors.ink2}
+                numberOfLines={1}
+                ellipsizeMode="middle"
+                style={{ flex: 1 }}
+              >
+                {shareUrl}
+              </YUiText>
+            </View>
+            <View style={styles.linkActions}>
+              <Pressable onPress={copyLink} style={[styles.shareBtn, styles.linkAction, copied && styles.copiedBtn]}>
+                <YUiText size={12} weight={900} color={copied ? '#fff' : '#000'} style={{ letterSpacing: 0.6 }}>
+                  {copied ? 'COPIED!' : 'COPY LINK'}
+                </YUiText>
+              </Pressable>
+              <Pressable onPress={shareLink} style={[styles.shareBtn, styles.linkAction, styles.shareAlt]}>
+                <YUiText size={12} weight={900} color={YColors.ink} style={{ letterSpacing: 0.6 }}>SHARE</YUiText>
+              </Pressable>
+            </View>
           </View>
         ) : null}
 
@@ -582,6 +619,32 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: YColors.lime,
     alignItems: 'center',
+  },
+  linkRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: YColors.bg3,
+    borderWidth: 1,
+    borderColor: YColors.line2,
+  },
+  linkActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  linkAction: {
+    flex: 1,
+  },
+  copiedBtn: {
+    backgroundColor: YColors.accent,
+  },
+  shareAlt: {
+    backgroundColor: YColors.bg3,
+    borderWidth: 1,
+    borderColor: YColors.line2,
   },
   divider: {
     height: 1,

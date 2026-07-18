@@ -54,7 +54,7 @@ export default function MyTournamentsScreen() {
   const fetchTournaments = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await tournamentsApi.list();
+      const res = await tournamentsApi.getMyTournaments();
       const data = res.data?.data ?? (res.data as any)?.tournaments ?? [];
       setTournaments(Array.isArray(data) ? data : []);
     } catch (err: any) {
@@ -71,7 +71,7 @@ export default function MyTournamentsScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const res = await tournamentsApi.list();
+      const res = await tournamentsApi.getMyTournaments();
       const data = res.data?.data ?? (res.data as any)?.tournaments ?? [];
       setTournaments(Array.isArray(data) ? data : []);
     } catch (err: any) {

@@ -15,6 +15,7 @@ import {
   Image,
 } from 'react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
+import * as Clipboard from 'expo-clipboard';
 import { xAlert, xConfirm } from '../../utils/alert';
 import { tournamentsApi } from '../../api/tournaments.api';
 import { useTournamentStore } from '../../store/tournamentStore';
@@ -557,16 +558,31 @@ export default function CreateTournamentScreen() {
 
       addTournament(tournament);
 
+      // Non-draft events get a shareable link straight away. Copy it to the
+      // clipboard now so the organizer can paste it to their group without
+      // hunting for the event again; the detail screen has a COPY LINK button
+      // for later.
+      const shareUrl = tournament.slug ? `https://console.yoiden.com/t/${tournament.slug}` : '';
+      let linkMsg = '';
+      if (!asDraft && shareUrl) {
+        try {
+          await Clipboard.setStringAsync(shareUrl);
+          linkMsg = `\n\nLink copied to your clipboard:\n${shareUrl}`;
+        } catch {
+          linkMsg = `\n\nShare link:\n${shareUrl}`;
+        }
+      }
+
       const statusMsg =
         visibility === 'draft'
           ? `"${form.name}" has been saved as a draft.`
           : visibility === 'unlisted'
-            ? `"${form.name}" is live — share the link to invite players. It won't appear in public discovery.`
-            : `"${form.name}" is now live and listed in discovery for everyone!`;
+            ? `"${form.name}" is live and private — only people you send the link to can open it.`
+            : `"${form.name}" is now live and listed in the app for everyone to find.`;
 
       xConfirm(
         'Tournament Created!',
-        `${statusMsg} Open it now?`,
+        `${statusMsg}${linkMsg}\n\nOpen it now?`,
         () => {
           // Replace Create with the detail screen so Back returns to Play
           navigation.dispatch(
@@ -926,9 +942,9 @@ export default function CreateTournamentScreen() {
                 WHO CAN FIND THIS EVENT?
               </Text>
               {([
-                { key: 'unlisted', title: 'Unlisted', hint: 'Live — only people with the share link can find it' },
-                { key: 'public', title: 'Public', hint: 'Listed in discovery for everyone to see' },
-                { key: 'draft', title: 'Draft', hint: 'Private — not live yet, publish later' },
+                { key: 'unlisted', title: 'Private', hint: 'Live — only people you send the link to can open it' },
+                { key: 'public', title: 'Public', hint: 'Listed in the app — anyone can find it and register' },
+                { key: 'draft', title: 'Draft', hint: 'Not live yet — finish and publish it later' },
               ] as const).map((opt) => {
                 const active = visibility === opt.key;
                 return (

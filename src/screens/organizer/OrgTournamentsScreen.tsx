@@ -54,7 +54,7 @@ export default function OrgTournamentsScreen() {
   const fetchTournaments = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await tournamentsApi.list();
+      const res = await tournamentsApi.getMyTournaments();
       if (res.data?.data) {
         setTournaments(res.data.data);
       }
@@ -72,7 +72,7 @@ export default function OrgTournamentsScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const res = await tournamentsApi.list();
+      const res = await tournamentsApi.getMyTournaments();
       if (res.data?.data) {
         setTournaments(res.data.data);
       }
