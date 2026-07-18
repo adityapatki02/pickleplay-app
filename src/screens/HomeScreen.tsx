@@ -62,9 +62,9 @@ const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
 
 // ─── Banner images ──────────────────────────────────────────────────────────
 const BANNER_IMAGES = [
-  require('../../assets/banners/1.png'),
-  require('../../assets/banners/2.png'),
-  require('../../assets/banners/3.png'),
+  require('../../assets/banners/1.jpg'),
+  require('../../assets/banners/2.jpg'),
+  require('../../assets/banners/3.jpg'),
 ];
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const BANNER_WIDTH = SCREEN_WIDTH - 32; // 16px padding each side

@@ -3,6 +3,7 @@ import { View, Image, Pressable, StyleSheet, ViewStyle } from 'react-native';
 import { YColors } from '../../config/yoiden';
 import { YDisplay, YEyebrow, YMono, YUiText } from './YText';
 import { YBadge } from './YTags';
+import { thumbUrl } from '../../utils/img';
 
 type TournamentLike = {
   id: string;
@@ -98,7 +99,9 @@ export const YTournamentRow: React.FC<YTournamentRowProps> = ({
         {tournament.bannerUrl ? (
           <>
             <Image
-              source={{ uri: tournament.bannerUrl }}
+              source={{
+                uri: thumbUrl(tournament.bannerUrl, 220) ?? tournament.bannerUrl,
+              }}
               style={StyleSheet.absoluteFill}
               resizeMode="cover"
             />

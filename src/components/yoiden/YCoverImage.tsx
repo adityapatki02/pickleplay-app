@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Image, StyleSheet, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { YColors } from '../../config/yoiden';
+import { resizeUrl } from '../../utils/img';
 import { YDisplay, YEyebrow, YUiText } from './YText';
 
 type YCoverImageProps = {
@@ -40,7 +41,13 @@ export const YCoverImage: React.FC<YCoverImageProps> = ({
     <View style={[containerStyle, style]}>
       {src ? (
         <>
-          <Image source={{ uri: src }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          {/* Covers are full-bleed; ask the proxy for a 2x-of-height crop rather
+              than pulling whatever full-res file was uploaded. */}
+          <Image
+            source={{ uri: resizeUrl(src, { w: 1200, h: height * 2 }) ?? src }}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+          />
           {/* Dark gradient at the bottom so overlaid text stays readable on any photo */}
           <LinearGradient
             colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.55)']}

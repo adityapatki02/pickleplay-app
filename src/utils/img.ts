@@ -18,8 +18,13 @@ export const resizeUrl = (
   opts: { w?: number; h?: number; q?: number } = {},
 ): string | undefined => {
   if (!url) return undefined;
-  // Already small/local/proxied — leave as-is.
-  if (url.startsWith('data:') || url.includes('images.weserv.nl')) return url;
+  // Already proxied — leave as-is.
+  if (url.includes('images.weserv.nl')) return url;
+  // The proxy can only fetch publicly reachable http(s) URLs. Local picker
+  // results (file://, content://, ph://, data:, blob:) and anything on
+  // localhost must be passed through untouched or the image breaks.
+  if (!/^https?:\/\//i.test(url)) return url;
+  if (/^https?:\/\/(localhost|127\.0\.0\.1|10\.0\.2\.2|192\.168\.)/i.test(url)) return url;
   const { w = 400, h, q = 80 } = opts;
   const hParam = h ? `&h=${h}` : '';
   return `https://images.weserv.nl/?url=${encodeURIComponent(url)}&w=${w}${hParam}&fit=cover&output=webp&q=${q}`;

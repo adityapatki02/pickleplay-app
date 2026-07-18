@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Image, Pressable, StyleSheet, ViewStyle } from 'react-native';
 import Svg, { Path, Circle, Ellipse, Line } from 'react-native-svg';
 import { YColors } from '../../config/yoiden';
+import { resizeUrl, thumbUrl } from '../../utils/img';
 import { YUiText, YDisplay } from './YText';
 
 // Sports a venue can offer. Drives the sport-icon chips on each card.
@@ -138,7 +139,11 @@ export const YVenueEditorial: React.FC<EditorialProps> = ({ venue, onPress, styl
   <Pressable onPress={onPress} style={({ pressed }) => [styles.eCard, pressed && { opacity: 0.96 }, style]}>
     <View style={styles.eImageWrap}>
       {venue.imageUrl ? (
-        <Image source={{ uri: venue.imageUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        <Image
+          source={{ uri: resizeUrl(venue.imageUrl, { w: 900, h: 380 }) ?? venue.imageUrl }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
       ) : (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: PLACEHOLDER }]} />
       )}
@@ -195,7 +200,11 @@ export const YVenueRow: React.FC<RowProps> = ({ venue, onPress, style }) => (
   <Pressable onPress={onPress} style={({ pressed }) => [styles.cRow, pressed && { opacity: 0.96 }, style]}>
     <View style={styles.cThumb}>
       {venue.imageUrl ? (
-        <Image source={{ uri: venue.imageUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        <Image
+          source={{ uri: thumbUrl(venue.imageUrl, 208) ?? venue.imageUrl }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
       ) : (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: PLACEHOLDER }]} />
       )}

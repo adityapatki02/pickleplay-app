@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ImageBackground, Image } from
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { Tournament } from '../../types/tournament.types';
+import { resizeUrl } from '../../utils/img';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -18,9 +19,9 @@ const GRAY = '#737780';
 
 // Card background images (tournament banners)
 const CARD_IMAGES = [
-  require('../../../assets/banners/1.png'),
-  require('../../../assets/banners/2.png'),
-  require('../../../assets/banners/3.png'),
+  require('../../../assets/banners/1.jpg'),
+  require('../../../assets/banners/2.jpg'),
+  require('../../../assets/banners/3.jpg'),
 ];
 
 // Branded gradient palette — fallback when no image
@@ -138,7 +139,11 @@ export default function TournamentTile({
       {/* Image section — top part of card */}
       <View style={s.imageSection}>
         {bannerUrl ? (
-          <Image source={{ uri: bannerUrl }} style={s.imageFill as any} resizeMode="cover" />
+          <Image
+            source={{ uri: resizeUrl(bannerUrl, { w: 800, h: 500 }) ?? bannerUrl }}
+            style={s.imageFill as any}
+            resizeMode="cover"
+          />
         ) : (
           <Image source={localImage} style={s.imageFill as any} resizeMode="cover" />
         )}
