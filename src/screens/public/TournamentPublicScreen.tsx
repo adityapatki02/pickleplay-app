@@ -24,6 +24,7 @@ import {
   YWordmark,
 } from '../../components/yoiden';
 import { tournamentsApi } from '../../api/tournaments.api';
+import { openRazorpay } from '../../utils/razorpay';
 import { matchesApi } from '../../api/matches.api';
 import type { Tournament, TournamentCategory } from '../../types/tournament.types';
 
@@ -611,13 +612,40 @@ function GuestRegisterBlock({
       if (data?.free) {
         setDone({ status: data.status, waitlistPosition: data.waitlistPosition });
         onRegistered();
-      } else {
-        // Paid categories still go through the app / venue until guest payment
-        // is wired up on the web page.
-        setErr('This category has an entry fee — please register in the Yoiden app or at the venue.');
+        return;
       }
+
+      // Paid category — the backend already created the Razorpay order (with the
+      // organizer's Route split). Open checkout; the payment webhook is what
+      // actually flips the registration to confirmed server-side.
+      if (!data?.orderId || !data?.key) {
+        setErr('Could not start payment. Please try again.');
+        return;
+      }
+      await openRazorpay({
+        key: data.key,
+        amount: data.amount as number,
+        currency: data.currency ?? 'INR',
+        order_id: data.orderId,
+        name: data.eventName ?? 'Yoiden',
+        description: data.categoryName ?? category.name,
+        prefill: { name: name.trim(), contact: phone.trim() },
+        theme: { color: YColors.accent },
+      });
+      setDone({ status: 'paid' });
+      onRegistered();
     } catch (e: any) {
-      setErr(e?.response?.data?.message || e?.message || 'Could not register. Please try again.');
+      // Razorpay rejects with { description } when the sheet is dismissed.
+      const msg =
+        e?.response?.data?.message ||
+        e?.description ||
+        e?.message ||
+        'Could not register. Please try again.';
+      setErr(
+        msg === 'Payment cancelled'
+          ? 'Payment cancelled — your spot is held for a few minutes if you want to retry.'
+          : msg,
+      );
     } finally {
       setBusy(false);
     }
@@ -632,8 +660,10 @@ function GuestRegisterBlock({
           {waitlisted
             ? `You're on the waitlist${done.waitlistPosition ? ` — position ${done.waitlistPosition}` : ''}.`
             : pendingPartner
-              ? "You're in — add your partner at the venue to complete the team."
-              : "You're registered!"}
+                ? "You're in — add your partner at the venue to complete the team."
+                : done.status === 'paid'
+                  ? "Payment received — you're registered!"
+                  : "You're registered!"}
         </YUiText>
         <YUiText size={10} color="rgba(0,0,0,0.65)" style={{ marginTop: 3 }}>
           We'll use your phone number to check you in at the venue.
@@ -646,7 +676,7 @@ function GuestRegisterBlock({
     return (
       <Pressable onPress={() => setOpen(true)} style={styles.regBtn}>
         <YUiText size={12} weight={900} color="#000" style={{ letterSpacing: 0.6 }}>
-          {full ? 'JOIN WAITLIST' : isPaid ? 'HOW TO REGISTER' : 'REGISTER'}
+          {full ? 'JOIN WAITLIST' : isPaid ? `REGISTER · ₹${category.entryFee}` : 'REGISTER'}
         </YUiText>
       </Pressable>
     );
@@ -704,7 +734,7 @@ function GuestRegisterBlock({
           style={[styles.regBtn, { flex: 1 }, !canSubmit && { opacity: 0.5 }]}
         >
           <YUiText size={12} weight={900} color="#000" style={{ letterSpacing: 0.6 }}>
-            {busy ? 'SUBMITTING…' : full ? 'JOIN WAITLIST' : 'CONFIRM'}
+            {busy ? (isPaid ? 'OPENING PAYMENT…' : 'SUBMITTING…') : full ? 'JOIN WAITLIST' : isPaid ? `PAY ₹${category.entryFee}` : 'CONFIRM'}
           </YUiText>
         </Pressable>
         <Pressable onPress={() => setOpen(false)} style={[styles.regBtn, styles.regCancel]}>
