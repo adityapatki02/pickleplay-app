@@ -22,4 +22,9 @@ export const bookingsApi = {
   // Online payment failed/cancelled → keep the booking as confirmed pay-at-venue.
   switchToOffline: (bookingId: string) =>
     apiClient.post<ApiResponse<Booking>>(`/bookings/${bookingId}/switch-to-offline`),
+
+  // Deliberate cancellation of a PAID booking with refund (only within the refund window —
+  // before the held venue transfer releases). Backend returns 400 REFUND_WINDOW_CLOSED otherwise.
+  refund: (bookingId: string) =>
+    apiClient.post<ApiResponse<Booking>>(`/bookings/${bookingId}/refund`),
 };

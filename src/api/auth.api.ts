@@ -34,21 +34,47 @@ export const authApi = {
   phoneLogin: (data: { phone: string; pin: string }) =>
     apiClient.post<ApiResponse<{ user: User; accessToken: string }>>('/auth/phone/login', data),
 
-  phoneRegister: (data: { phone: string; pin: string; name: string; role?: string }) =>
+  phoneRegister: (data: { phone: string; pin: string; name: string; role?: string; accessToken?: string; verificationToken?: string }) =>
     apiClient.post<ApiResponse<{ user: User; accessToken: string }>>('/auth/phone/register', data),
+
+  sendPhoneOtp: (data: { phone: string }) =>
+    apiClient.post<ApiResponse<void>>('/auth/phone/send-otp', data),
+
+  verifyPhoneOtp: (data: { phone: string; otp: string }) =>
+    apiClient.post<ApiResponse<{ verificationToken: string }>>('/auth/phone/verify-otp', data),
 
   verifyOtp: (data: VerifyOtpRequest) =>
     apiClient.post<ApiResponse<VerifyOtpResponse>>('/auth/verify-otp', data),
 
-  // Self-serve "Forgot PIN" — MSG91 widget. Single-shot:
-  //   1) Frontend opens MSG91 widget; user does phone + OTP entirely in
-  //      MSG91's modal; MSG91 hands us back an `accessToken`.
-  //   2) Post { accessToken, newPin } here → backend verifies the token
-  //      with MSG91, looks up the user by the verified phone, rotates the
-  //      PIN, and returns a Yoiden JWT.
+  // Legacy widget-based reset (kept for backward compat, web-only)
   resetPin: (data: { accessToken: string; newPin: string }) =>
     apiClient.post<ApiResponse<{ user: User; accessToken: string }>>(
       '/auth/forgot-pin/reset',
+      data,
+    ),
+
+  // Native OTP flow — step 1: send SMS OTP via MSG91
+  sendForgotPinOtp: (data: { phone: string }) =>
+    apiClient.post<ApiResponse<void>>('/auth/forgot-pin/send-otp', data),
+
+  // Native OTP flow — step 2 NEXT: verify OTP early, receive short-lived reset token
+  checkForgotPinOtp: (data: { phone: string; otp: string }) =>
+    apiClient.post<ApiResponse<{ resetToken: string }>>(
+      '/auth/forgot-pin/check-otp',
+      data,
+    ),
+
+  // Native OTP flow — step 3: reset PIN using the reset token
+  resetPinWithToken: (data: { resetToken: string; newPin: string }) =>
+    apiClient.post<ApiResponse<{ user: User; accessToken: string }>>(
+      '/auth/forgot-pin/reset-with-token',
+      data,
+    ),
+
+  // Legacy: single-shot verify+reset (kept, no longer used by native screen)
+  verifyAndResetPin: (data: { phone: string; otp: string; newPin: string }) =>
+    apiClient.post<ApiResponse<{ user: User; accessToken: string }>>(
+      '/auth/forgot-pin/verify-and-reset',
       data,
     ),
 

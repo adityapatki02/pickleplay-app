@@ -5,6 +5,7 @@ export interface VenueCourt {
   id: string;
   venueId: string;
   name: string;
+  sport?: string | null;
   surfaceType?: string | null;
   slotDurationMin: number;
   openTime: string;
@@ -42,6 +43,7 @@ export interface Venue {
   timezone: string;
   status: string;
   isFeatured: boolean;
+  isSponsored?: boolean;
   courts?: VenueCourt[];
 }
 
@@ -82,6 +84,13 @@ export type BookingStatus =
   | 'completed'
   | 'no_show';
 
+export interface BookingUser {
+  id: string;
+  displayName?: string | null;
+  fullName?: string | null;
+  phone?: string | null;
+}
+
 export interface Booking {
   id: string;
   venueId: string;
@@ -89,6 +98,7 @@ export interface Booking {
   courtCount: number;
   courtLabel?: string | null;
   userId?: string | null;
+  user?: BookingUser | null;
   guestName?: string | null;
   guestPhone?: string | null;
   bookingDate: string;

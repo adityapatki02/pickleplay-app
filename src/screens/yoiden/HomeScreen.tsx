@@ -27,10 +27,8 @@ import {
   YTopBar,
   YAvatar,
   YBadge,
-  YButton,
   YSectionHead,
   YTournamentRow,
-  YQuickAction,
   YStatTile,
   YVenueEditorial,
   YVenueRow,
@@ -40,8 +38,9 @@ import { useAuthStore } from '../../store/authStore';
 import { tournamentsApi } from '../../api/tournaments.api';
 import { registrationsApi } from '../../api/registrations.api';
 import { venuesApi } from '../../api/venues.api';
+import { bookingsApi } from '../../api/bookings.api';
 import type { Tournament } from '../../types/tournament.types';
-import type { Venue as ApiVenue } from '../../types/booking.types';
+import type { Venue as ApiVenue, Booking } from '../../types/booking.types';
 import { type YoidenTabParamList } from '../../navigation/nav-types';
 import { FEATURED_LEAGUES, liveLeagues, type FeaturedLeague } from '../../config/leagues';
 
@@ -87,6 +86,8 @@ export default function HomeScreen() {
   const [myHosted, setMyHosted] = useState<Tournament[]>([]);
   const [nearby, setNearby] = useState<Tournament[]>([]);
   const [apiVenues, setApiVenues] = useState<ApiVenue[]>([]);
+  const [myVenues, setMyVenues] = useState<ApiVenue[]>([]);
+  const [nextBooking, setNextBooking] = useState<Booking | null>(null);
   const [activeSport, setActiveSport] = useState<string | null>(null);
   // Fetched once on mount — null means not yet resolved, undefined means denied/unavailable
   const userCoords = useRef<{ lat: number; lng: number } | null>(null);
@@ -119,10 +120,12 @@ export default function HomeScreen() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [regsRes, hostedRes, discoverRes] = await Promise.allSettled([
+      const [regsRes, hostedRes, discoverRes, bookingsRes, myVenuesRes] = await Promise.allSettled([
         registrationsApi.getMyRegistrations(),
         tournamentsApi.getMyTournaments(),
         tournamentsApi.discover({ limit: 5 }),
+        bookingsApi.myBookings(),
+        venuesApi.getMyVenues(),
       ]);
 
       if (regsRes.status === 'fulfilled') {
@@ -136,6 +139,23 @@ export default function HomeScreen() {
       if (discoverRes.status === 'fulfilled') {
         const data = unwrap<Tournament[]>(discoverRes.value);
         setNearby(Array.isArray(data) ? data : []);
+      }
+      if (myVenuesRes.status === 'fulfilled') {
+        const data = (myVenuesRes.value as any)?.data?.data ?? (myVenuesRes.value as any)?.data ?? [];
+        setMyVenues(Array.isArray(data) ? data : []);
+      }
+      if (bookingsRes.status === 'fulfilled') {
+        const data = unwrap<Booking[]>(bookingsRes.value);
+        const all = Array.isArray(data) ? data : [];
+        const now = new Date().toISOString().slice(0, 10);
+        const upcoming = all
+          .filter(b => (b.status === 'confirmed' || b.status === 'pending') && b.bookingDate >= now)
+          .sort((a, b) =>
+            a.bookingDate !== b.bookingDate
+              ? a.bookingDate.localeCompare(b.bookingDate)
+              : a.startTime.localeCompare(b.startTime),
+          );
+        setNextBooking(upcoming[0] ?? null);
       }
       await loadVenues(null);
     } finally {
@@ -185,8 +205,10 @@ export default function HomeScreen() {
     fetchAll();
   }, [fetchAll]);
 
-  const goPlay = () => nav.navigate('PlayTab', { screen: 'Play' });
+  const goVenueAdmin = (venueId: string) =>
+    nav.navigate('MeTab', { screen: 'VenueAdmin', params: { venueId } });
   const goHost = () => nav.navigate('PlayTab', { screen: 'CreateTournament' });
+  const goPlay = () => nav.navigate('PlayTab', { screen: 'Play' });
   const goBook = () => nav.navigate('BookTab', { screen: 'Book' });
   const openVenue = (venueId: string) =>
     nav.navigate('BookTab', { screen: 'VenueDetail', params: { venueId } });
@@ -260,7 +282,7 @@ export default function HomeScreen() {
       reviews: v.reviewCount ?? 0,
       sports: (v.sports ?? []) as unknown as Venue['sports'],
       imageUrl: firstPhoto ?? `https://picsum.photos/seed/${v.id}/640/400`,
-      sponsored: false,
+      sponsored: v.isSponsored ?? false,
       topRated: (v.rating ?? 0) >= 4.5,
     };
   };
@@ -328,11 +350,85 @@ export default function HomeScreen() {
               </Pressable>
             }
           />
+
+
+          {/* Upcoming booking card — nearest confirmed booking */}
+          {nextBooking && (() => {
+            const b = nextBooking;
+            const dateLabel = new Date(`${b.bookingDate}T00:00:00`).toLocaleDateString('en-IN', {
+              weekday: 'short', day: 'numeric', month: 'short',
+            });
+            const to12 = (t: string) => {
+              const [h, m] = t.split(':').map(Number);
+              return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+            };
+            const venueName = b.venue?.name ?? 'Your booking';
+            const courtName = b.court?.name ?? b.courtLabel ?? '';
+            return (
+              <Pressable
+                style={styles.upcomingCard}
+                onPress={() => nav.navigate('BookTab', { screen: 'MyBookings' })}
+              >
+                <View style={styles.upcomingCardInner}>
+                  <View style={{ flex: 1 }}>
+                    <YEyebrow color={YColors.accent} style={{ marginBottom: 4 }}>
+                      UPCOMING BOOKING
+                    </YEyebrow>
+                    <YDisplay size={15} color={YColors.ink} numberOfLines={1}>
+                      {venueName}
+                    </YDisplay>
+                    <YUiText size={12} color={YColors.ink2} style={{ marginTop: 3 }}>
+                      {dateLabel} · {to12(b.startTime)}–{to12(b.endTime)}{courtName ? ` · ${courtName}` : ''}
+                    </YUiText>
+                  </View>
+                  <View style={styles.upcomingArrow}>
+                    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                      <Path d="M9 18l6-6-6-6" stroke={YColors.ink3} strokeWidth={2} strokeLinecap="round" />
+                    </Svg>
+                  </View>
+                </View>
+              </Pressable>
+            );
+          })()}
+
         </View>
 
+        {/* Venue admin card — only for venue owners */}
+        {myVenues.length > 0 && (
+          <Pressable
+            style={styles.adminCard}
+            onPress={() => goVenueAdmin(myVenues[0].id)}
+          >
+            <View style={styles.adminIconCircle}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M3 21h18M5 21V8l7-4 7 4v13M9 12h2M13 12h2M9 16h2M13 16h2"
+                  stroke="#fff"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                />
+              </Svg>
+            </View>
+            <YDisplay size={18} color="#fff" style={{ flex: 1, marginHorizontal: 12 }}>
+              VENUE ADMIN
+            </YDisplay>
+            <View style={styles.adminIconCircle}>
+              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M7 17L17 7M17 7H9M17 7v8"
+                  stroke="#fff"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </View>
+          </Pressable>
+        )}
+
         {/* FEATURED LEAGUES — horizontal slider of live/featured league banners.
-            One card today (SPPL); swipes between many when more go live, with
-            a "See all live leagues" link into the full LiveLeagues page. */}
+            Swipes between many when more go live, with a "See all live leagues"
+            link into the full LiveLeagues page. */}
         <View style={styles.leagueSection}>
           <View style={styles.leagueHeadRow}>
             <YUiText size={10} weight={900} color={YColors.ink3} style={{ letterSpacing: 1.4 }}>
@@ -529,13 +625,8 @@ export default function HomeScreen() {
             <View style={styles.emptyState}>
               <YEyebrow color={YColors.ink3}>NOTHING YET</YEyebrow>
               <YUiText size={12} color={YColors.ink2} style={{ marginTop: 6 }}>
-                No tournaments in your city right now. Be the first to host.
+                No tournaments in your city right now.
               </YUiText>
-              <View style={{ marginTop: 14 }}>
-                <YButton size="sm" variant="primary" onPress={goHost}>
-                  HOST A TOURNAMENT
-                </YButton>
-              </View>
             </View>
           ) : (
             visibleNearby.slice(0, 3).map((t) => (
@@ -604,10 +695,39 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
   },
+  upcomingCard: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  upcomingCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  upcomingArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 999,
+    backgroundColor: YColors.bg2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
+  },
   searchWrap: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 20,
+  },
+  hostNudge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 10,
   },
   searchBar: {
     flexDirection: 'row',
@@ -821,6 +941,24 @@ const styles = StyleSheet.create({
     marginTop: 18,
     marginBottom: -6,
     marginLeft: 20,
+  },
+  adminCard: {
+    marginTop: 14,
+    marginHorizontal: 16,
+    backgroundColor: YColors.accent,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  adminIconCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bookCardWrap: {
     marginTop: 14,

@@ -342,7 +342,20 @@ export default function VenueDetailScreen() {
             text: 'Cancel booking',
             style: 'destructive',
             onPress: async () => {
-              try { await bookingsApi.cancel(p.booking.id); } catch (_) {}
+              // If the backend says PAYMENT_ALREADY_CAPTURED the webhook got there
+              // first — the booking IS confirmed and paid, so show it instead of
+              // leaving the user thinking it was cancelled.
+              try {
+                await bookingsApi.cancel(p.booking.id);
+              } catch (cancelErr: any) {
+                const msg = cancelErr?.response?.data?.message ?? cancelErr?.message ?? '';
+                if (msg === 'PAYMENT_ALREADY_CAPTURED') {
+                  await loadAvailability();
+                  setSelected([]);
+                  nav.navigate('MyBookings', undefined);
+                  return;
+                }
+              }
               await loadAvailability();
               setSelected([]);
             },

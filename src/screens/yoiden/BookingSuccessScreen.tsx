@@ -100,15 +100,6 @@ export default function BookingSuccessScreen() {
               VIEW BOOKING
             </YUiText>
           </Pressable>
-
-          <Pressable
-            style={styles.btnGhost}
-            onPress={() => nav.navigate('HomeTab', { screen: 'Home' })}
-          >
-            <YUiText size={14} color={YColors.ink2} style={{ letterSpacing: 1 }}>
-              GO HOME
-            </YUiText>
-          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -122,7 +113,7 @@ const styles = StyleSheet.create({
   },
   scroll: {
     paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingTop: 36,
     paddingBottom: 32,
   },
   hero: {
@@ -130,8 +121,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   heroImage: {
-    width: 180,
-    height: 160,
+    width: 220,
+    height: 200,
   },
   card: {
     backgroundColor: '#fff',
@@ -164,11 +155,6 @@ const styles = StyleSheet.create({
     backgroundColor: YColors.accent,
     borderRadius: 12,
     height: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnGhost: {
-    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
