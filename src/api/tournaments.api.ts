@@ -45,6 +45,34 @@ export const tournamentsApi = {
     }),
 
   /**
+   * Guest registration from a shared event link — no account needed.
+   * Free categories confirm immediately; paid ones come back with a Razorpay
+   * order to complete (`free` is absent/false in that case).
+   */
+  guestRegister: (
+    slug: string,
+    body: {
+      name: string;
+      phone: string;
+      categoryId?: string;
+      partnerName?: string;
+      partnerPhone?: string;
+    },
+  ) =>
+    apiClient.post<ApiResponse<{
+      free?: boolean;
+      registrationId?: string;
+      status?: string;
+      waitlistPosition?: number | null;
+      eventName?: string;
+      categoryName?: string;
+      orderId?: string;
+      amount?: number;
+      currency?: string;
+      key?: string;
+    }>>(`/public/events/${slug}/register`, body),
+
+  /**
    * Multipart banner upload. Uses fetch (not the axios instance) so the
    * runtime sets the multipart boundary itself — axios's instance-level
    * `Content-Type: application/json` default would corrupt FormData posts.

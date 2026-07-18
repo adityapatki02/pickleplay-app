@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Pressable,
+  TextInput,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -218,6 +219,13 @@ export default function TournamentPublicScreen() {
     [t],
   );
 
+  // After a guest registers, pull fresh counts so the spots-left meter and the
+  // players tab reflect the new entry without waiting for the 30s poll.
+  const onRegistered = useCallback(() => {
+    fetchTournament();
+    if (playersCategoryId) fetchEntrants(playersCategoryId);
+  }, [fetchTournament, fetchEntrants, playersCategoryId]);
+
   if (loading) {
     return (
       <SafeAreaView style={styles.center}>
@@ -360,6 +368,8 @@ export default function TournamentPublicScreen() {
               formatFilter={formatFilter}
               onGender={setGenderFilter}
               onFormat={setFormatFilter}
+              slug={t.slug}
+              onRegistered={onRegistered}
             />
           ) : null}
 
@@ -429,6 +439,8 @@ function EventsSection({
   formatFilter,
   onGender,
   onFormat,
+  slug,
+  onRegistered,
 }: {
   categories: TournamentCategory[];
   registrationOpen: boolean;
@@ -436,6 +448,8 @@ function EventsSection({
   formatFilter: string;
   onGender: (v: string) => void;
   onFormat: (v: string) => void;
+  slug?: string;
+  onRegistered: () => void;
 }) {
   const filtered = categories.filter(
     (c) =>
@@ -464,7 +478,13 @@ function EventsSection({
         <EmptyBox text="No categories match these filters." />
       ) : (
         filtered.map((c) => (
-          <PublicCategoryCard key={c.id} c={c} registrationOpen={registrationOpen} />
+          <PublicCategoryCard
+            key={c.id}
+            c={c}
+            registrationOpen={registrationOpen}
+            slug={slug}
+            onRegistered={onRegistered}
+          />
         ))
       )}
     </View>
@@ -474,9 +494,13 @@ function EventsSection({
 function PublicCategoryCard({
   c,
   registrationOpen,
+  slug,
+  onRegistered,
 }: {
   c: TournamentCategory;
   registrationOpen: boolean;
+  slug?: string;
+  onRegistered: () => void;
 }) {
   const registered = c.registeredTeams ?? 0;
   const waitlisted = c.waitlistedCount ?? 0;
@@ -531,12 +555,164 @@ function PublicCategoryCard({
         </View>
       </View>
       {registrationOpen ? (
-        <View style={styles.catNote}>
-          <YUiText size={10} color={YColors.ink3}>
-            Register on the Yoiden app or at the venue{full ? ' — new entries join the waitlist' : ''}.
-          </YUiText>
-        </View>
+        <GuestRegisterBlock
+          slug={slug}
+          category={c}
+          full={full}
+          onRegistered={onRegistered}
+        />
       ) : null}
+    </View>
+  );
+}
+
+/**
+ * Guest registration straight from a shared event link — the person opening the
+ * link has no account and, for a private event, no way to find it in the app.
+ * Collapsed to a button until tapped so the category list stays scannable.
+ */
+function GuestRegisterBlock({
+  slug,
+  category,
+  full,
+  onRegistered,
+}: {
+  slug?: string;
+  category: TournamentCategory;
+  full: boolean;
+  onRegistered: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [partnerName, setPartnerName] = useState('');
+  const [partnerPhone, setPartnerPhone] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [done, setDone] = useState<{ status?: string; waitlistPosition?: number | null } | null>(null);
+
+  const isDoubles = category.format === 'doubles';
+  const isPaid = Number(category.entryFee) > 0;
+  const canSubmit = name.trim().length >= 2 && phone.replace(/\D/g, '').length >= 8 && !busy;
+
+  const submit = async () => {
+    if (!slug || !canSubmit) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await tournamentsApi.guestRegister(slug, {
+        name: name.trim(),
+        phone: phone.trim(),
+        categoryId: category.id,
+        partnerName: partnerName.trim() || undefined,
+        partnerPhone: partnerPhone.trim() || undefined,
+      });
+      const data = res.data?.data;
+      if (data?.free) {
+        setDone({ status: data.status, waitlistPosition: data.waitlistPosition });
+        onRegistered();
+      } else {
+        // Paid categories still go through the app / venue until guest payment
+        // is wired up on the web page.
+        setErr('This category has an entry fee — please register in the Yoiden app or at the venue.');
+      }
+    } catch (e: any) {
+      setErr(e?.response?.data?.message || e?.message || 'Could not register. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (done) {
+    const waitlisted = done.status === 'waitlisted';
+    const pendingPartner = done.status === 'pending_partner';
+    return (
+      <View style={[styles.catNote, { backgroundColor: YColors.lime }]}>
+        <YUiText size={11} weight={900} color="#000">
+          {waitlisted
+            ? `You're on the waitlist${done.waitlistPosition ? ` — position ${done.waitlistPosition}` : ''}.`
+            : pendingPartner
+              ? "You're in — add your partner at the venue to complete the team."
+              : "You're registered!"}
+        </YUiText>
+        <YUiText size={10} color="rgba(0,0,0,0.65)" style={{ marginTop: 3 }}>
+          We'll use your phone number to check you in at the venue.
+        </YUiText>
+      </View>
+    );
+  }
+
+  if (!open) {
+    return (
+      <Pressable onPress={() => setOpen(true)} style={styles.regBtn}>
+        <YUiText size={12} weight={900} color="#000" style={{ letterSpacing: 0.6 }}>
+          {full ? 'JOIN WAITLIST' : isPaid ? 'HOW TO REGISTER' : 'REGISTER'}
+        </YUiText>
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={styles.regForm}>
+      <TextInput
+        style={styles.regInput}
+        placeholder="Your name"
+        placeholderTextColor={YColors.ink3}
+        value={name}
+        onChangeText={setName}
+        autoCapitalize="words"
+      />
+      <TextInput
+        style={styles.regInput}
+        placeholder="Phone number"
+        placeholderTextColor={YColors.ink3}
+        value={phone}
+        onChangeText={setPhone}
+        keyboardType="phone-pad"
+      />
+      {isDoubles ? (
+        <>
+          <TextInput
+            style={styles.regInput}
+            placeholder="Partner name (optional)"
+            placeholderTextColor={YColors.ink3}
+            value={partnerName}
+            onChangeText={setPartnerName}
+            autoCapitalize="words"
+          />
+          {partnerName.trim() ? (
+            <TextInput
+              style={styles.regInput}
+              placeholder="Partner phone (optional)"
+              placeholderTextColor={YColors.ink3}
+              value={partnerPhone}
+              onChangeText={setPartnerPhone}
+              keyboardType="phone-pad"
+            />
+          ) : null}
+        </>
+      ) : null}
+      {err ? (
+        <YUiText size={10.5} color={YColors.live} style={{ marginBottom: 8 }}>
+          {err}
+        </YUiText>
+      ) : null}
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Pressable
+          onPress={submit}
+          disabled={!canSubmit}
+          style={[styles.regBtn, { flex: 1 }, !canSubmit && { opacity: 0.5 }]}
+        >
+          <YUiText size={12} weight={900} color="#000" style={{ letterSpacing: 0.6 }}>
+            {busy ? 'SUBMITTING…' : full ? 'JOIN WAITLIST' : 'CONFIRM'}
+          </YUiText>
+        </Pressable>
+        <Pressable onPress={() => setOpen(false)} style={[styles.regBtn, styles.regCancel]}>
+          <YUiText size={12} weight={900} color={YColors.ink2} style={{ letterSpacing: 0.6 }}>
+            CANCEL
+          </YUiText>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -756,6 +932,33 @@ const styles = StyleSheet.create({
   progressBg: { height: 4, borderRadius: 2, backgroundColor: YColors.bg3, overflow: 'hidden' },
   progressFill: { height: 4, borderRadius: 2 },
   catNote: { paddingVertical: 9, paddingHorizontal: 14, backgroundColor: YColors.bg3 },
+  regBtn: {
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: YColors.lime,
+    alignItems: 'center',
+  },
+  regCancel: {
+    flex: 1,
+    backgroundColor: YColors.bg3,
+    borderWidth: 1,
+    borderColor: YColors.line2,
+  },
+  regForm: {
+    padding: 12,
+    backgroundColor: YColors.bg3,
+    gap: 8,
+  },
+  regInput: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: YColors.line2,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: YColors.ink,
+  },
   entrantRow: {
     flexDirection: 'row',
     alignItems: 'center',
