@@ -24,6 +24,7 @@ import {
   YSectionHead,
 } from '../../components/yoiden';
 import { venuesApi } from '../../api/venues.api';
+import { resizeUrl } from '../../utils/img';
 import type { Venue } from '../../types/booking.types';
 import type { BookStackParamList } from '../../navigation/YoidenTabNavigator';
 
@@ -43,11 +44,15 @@ const priceRange = (venue: Venue): string => {
   return min === max ? `₹${min}` : `₹${min}–₹${max}`;
 };
 
-// First photo of a venue (lightweight thumb when the backend provides one).
+// First photo of a venue. Prefer a backend-generated thumb; otherwise route the
+// raw upload (can be a 12 MB JPG) through the resize proxy — a full-bleed card
+// image is only ~150px tall, so the original is wildly oversized.
 const venuePhoto = (v: Venue): string | undefined => {
   const p = Array.isArray(v.photos) ? v.photos[0] : undefined;
   if (!p) return undefined;
-  return typeof p === 'string' ? p : ((p as { thumbUrl?: string; url: string }).thumbUrl ?? p.url);
+  if (typeof p === 'string') return resizeUrl(p, { w: 800, h: 300 });
+  const thumb = (p as { thumbUrl?: string; url: string }).thumbUrl;
+  return thumb ?? resizeUrl(p.url, { w: 800, h: 300 });
 };
 
 export default function BookScreen() {
