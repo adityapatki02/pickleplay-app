@@ -914,16 +914,19 @@ export default function CreateTournamentScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor={YColors.bg} />
-      <YTopBar eyebrow="HOST" title="CREATE TOURNAMENT" onBack={goBack} />
 
-      {/* Step indicator */}
-      <StepIndicator current={step} total={TOTAL_STEPS} />
-
+      {/* The avoider wraps the header too, so its frame starts at the top of the
+          safe area and needs no vertical offset. Offsetting by a guessed header
+          height (it was 90) over-pads on iOS and leaves a dead strip of
+          background between the form and the keyboard. */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
       >
+        <YTopBar eyebrow="HOST" title="CREATE TOURNAMENT" onBack={goBack} />
+
+        {/* Step indicator */}
+        <StepIndicator current={step} total={TOTAL_STEPS} />
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
