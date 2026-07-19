@@ -46,6 +46,16 @@ interface Registration {
   /** Set when the entry came from a shared event link (guest registration). */
   guestName?: string | null;
   guestPhone?: string | null;
+  /** Latest payment for this entry, attached by the registrations endpoint. */
+  payment?: {
+    amount: number;
+    currency?: string;
+    status: string;
+    method?: string | null;
+    paidAt?: string | null;
+    razorpayPaymentId?: string | null;
+    refundAmount?: number;
+  } | null;
   user?: { fullName?: string; displayName?: string; phone?: string };
   player?: { name?: string; displayName?: string; phone?: string };
   partnerUser?: { fullName?: string; displayName?: string; phone?: string };
@@ -92,6 +102,8 @@ export default function RegistrationManagementScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  // Registration whose payment receipt is open (null = closed).
+  const [paymentFor, setPaymentFor] = useState<Registration | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [csvText, setCsvText] = useState('');
@@ -321,6 +333,7 @@ export default function RegistrationManagementScreen() {
     const isConfirmed = item.status === 'confirmed';
     const isUpdating = updatingId === item.id;
 
+    const paid = item.payment?.status === 'captured';
     const isDoubles = item.category?.format === 'doubles' ||
       categories.find((c) => c.id === item.categoryId)?.format === 'doubles';
     const partnerName = item.partnerUser?.displayName ?? item.partnerUser?.fullName ??
@@ -356,7 +369,16 @@ export default function RegistrationManagementScreen() {
               {getCategoryName(item)}  ·  {formatDate(item.createdAt)}
             </Text>
           </View>
-          <StatusBadge status={item.status} size="sm" />
+          <View style={{ alignItems: 'flex-end', gap: 4 }}>
+            <StatusBadge status={item.status} size="sm" />
+            {paid ? (
+              <TouchableOpacity onPress={() => setPaymentFor(item)} style={styles.paidPill} activeOpacity={0.7}>
+                <Text style={styles.paidPillText}>
+                  PAID · ₹{Number(item.payment?.amount ?? 0).toFixed(0)}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
 
         {(isPending || isConfirmed || item.status === 'cancelled' || item.status === 'pending_partner') && (
@@ -797,11 +819,149 @@ export default function RegistrationManagementScreen() {
         </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Payment receipt — opened from the PAID badge */}
+      <Modal
+        visible={!!paymentFor}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPaymentFor(null)}
+      >
+        <TouchableOpacity
+          style={styles.payBackdrop}
+          activeOpacity={1}
+          onPress={() => setPaymentFor(null)}
+        >
+          <View style={styles.paySheet}>
+            <Text style={styles.payTitle}>PAYMENT</Text>
+            <Text style={styles.payName}>
+              {paymentFor ? getPlayerName(paymentFor) : ''}
+            </Text>
+
+            <View style={styles.payRow}>
+              <Text style={styles.payLabel}>Amount</Text>
+              <Text style={styles.payValueStrong}>
+                ₹{Number(paymentFor?.payment?.amount ?? 0).toFixed(2)}
+              </Text>
+            </View>
+            <View style={styles.payRow}>
+              <Text style={styles.payLabel}>Status</Text>
+              <Text style={styles.payValue}>
+                {(paymentFor?.payment?.status ?? '—').toUpperCase()}
+              </Text>
+            </View>
+            {paymentFor?.payment?.method ? (
+              <View style={styles.payRow}>
+                <Text style={styles.payLabel}>Method</Text>
+                <Text style={styles.payValue}>
+                  {paymentFor.payment.method.toUpperCase()}
+                </Text>
+              </View>
+            ) : null}
+            {paymentFor?.payment?.paidAt ? (
+              <View style={styles.payRow}>
+                <Text style={styles.payLabel}>Paid on</Text>
+                <Text style={styles.payValue}>
+                  {formatDate(paymentFor.payment.paidAt)}
+                </Text>
+              </View>
+            ) : null}
+            {Number(paymentFor?.payment?.refundAmount ?? 0) > 0 ? (
+              <View style={styles.payRow}>
+                <Text style={styles.payLabel}>Refunded</Text>
+                <Text style={styles.payValue}>
+                  ₹{Number(paymentFor?.payment?.refundAmount).toFixed(2)}
+                </Text>
+              </View>
+            ) : null}
+            {paymentFor?.payment?.razorpayPaymentId ? (
+              <View style={styles.payRow}>
+                <Text style={styles.payLabel}>Reference</Text>
+                <Text style={styles.payRef}>
+                  {paymentFor.payment.razorpayPaymentId}
+                </Text>
+              </View>
+            ) : null}
+
+            <TouchableOpacity
+              style={styles.payClose}
+              onPress={() => setPaymentFor(null)}
+            >
+              <Text style={styles.payCloseText}>CLOSE</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  paidPill: {
+    backgroundColor: '#06D6A0',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  paidPillText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#04352A',
+    letterSpacing: 0.4,
+  },
+  payBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  paySheet: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+  },
+  payTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.4,
+    color: '#64748B',
+  },
+  payName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: NAVY,
+    marginTop: 2,
+    marginBottom: 14,
+  },
+  payRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#EEF1F5',
+    gap: 12,
+  },
+  payLabel: { fontSize: 12, color: '#64748B' },
+  payValue: { fontSize: 13, fontWeight: '700', color: NAVY },
+  payValueStrong: { fontSize: 18, fontWeight: '900', color: NAVY },
+  payRef: { fontSize: 11, color: NAVY, flexShrink: 1, textAlign: 'right' },
+  payClose: {
+    marginTop: 16,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+  },
+  payCloseText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: NAVY,
+    letterSpacing: 0.6,
+  },
   safeArea: {
     flex: 1,
     backgroundColor: YColors.bg,
