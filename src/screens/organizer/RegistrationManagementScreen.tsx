@@ -42,6 +42,9 @@ interface Registration {
   playerName?: string;
   teamName?: string;
   partnerName?: string;
+  /** Set when the entry came from a shared event link (guest registration). */
+  guestName?: string | null;
+  guestPhone?: string | null;
   user?: { fullName?: string; displayName?: string; phone?: string };
   player?: { name?: string; displayName?: string; phone?: string };
   partnerUser?: { fullName?: string; displayName?: string; phone?: string };
@@ -71,7 +74,10 @@ function formatDate(dateStr: string): string {
 }
 
 function getPlayerName(reg: Registration): string {
-  return reg.user?.displayName ?? reg.user?.fullName ?? reg.playerName ?? reg.player?.displayName ?? reg.player?.name ?? reg.teamName ?? 'Unknown Player';
+  // guestName comes first for link registrations: a guest may have no user
+  // row at all (older paid entries), and even when one exists the name they
+  // typed on the registration is the truth for this event.
+  return reg.guestName ?? reg.user?.displayName ?? reg.user?.fullName ?? reg.playerName ?? reg.player?.displayName ?? reg.player?.name ?? reg.teamName ?? 'Unknown Player';
 }
 
 export default function RegistrationManagementScreen() {

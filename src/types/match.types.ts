@@ -58,6 +58,9 @@ export interface Registration {
   paymentId?: string;
   registeredAt: string;
   confirmedAt?: string;
+  /** Name/phone captured when someone registers from a shared event link. */
+  guestName?: string | null;
+  guestPhone?: string | null;
 }
 
 export interface Group {

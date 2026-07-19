@@ -27,6 +27,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { YColors, YFonts } from '../../config/yoiden';
+import { useTickr, TickrSlot } from '../../hooks/useTickr';
 
 type ScorerParams = {
   homeName?: string;
@@ -94,6 +95,20 @@ export default function ScorerDemoScreen() {
     setHistory([]);
   };
 
+  /**
+   * Tickr — physical BLE clickers, one assigned per team.
+   *
+   * A press arrives as a counter delta, so `points` can be >1 when a
+   * notification was dropped in flight. Replaying it through addPoint keeps
+   * the win/undo logic identical to a human tapping +, which is the whole
+   * reason the button is a dumb press-notifier: scoring rules stay here.
+   */
+  const tickr = useTickr({
+    onPress: (slot, points) => {
+      for (let i = 0; i < points; i++) addPoint(slot);
+    },
+  });
+
   return (
     <SafeAreaView style={s.screen}>
       <StatusBar barStyle="dark-content" backgroundColor={YColors.bg} />
@@ -116,6 +131,31 @@ export default function ScorerDemoScreen() {
         <Text style={s.eyebrow}>{matchNo} · {court}</Text>
         <Text style={s.slotLabel}>{slotLabel}</Text>
       </View>
+
+      {/* ── Tickr strip — hidden entirely where Web Bluetooth is absent ── */}
+      {tickr.supported && (
+        <View style={s.tickrBar}>
+          <Text style={s.tickrLabel}>TICKR</Text>
+          {(['home', 'away'] as TickrSlot[]).map((slot) => {
+            const conn = tickr.connectionFor(slot);
+            const teamLabel = slot === 'home' ? homeName : awayName;
+            return (
+              <TouchableOpacity
+                key={slot}
+                style={[s.tickrChip, conn && s.tickrChipOn]}
+                onPress={() => (conn ? tickr.disconnect(slot) : tickr.connect(slot))}
+                activeOpacity={0.8}
+              >
+                <View style={[s.tickrDot, conn && s.tickrDotOn]} />
+                <Text style={[s.tickrChipText, conn && s.tickrChipTextOn]} numberOfLines={1}>
+                  {conn ? conn.name : `PAIR ${teamLabel.toUpperCase()}`}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+      {!!tickr.error && <Text style={s.tickrError}>{tickr.error}</Text>}
 
       {/* ── Score zone — explicit +/- buttons beneath each score ── */}
       <View style={s.scoreZone}>
@@ -345,6 +385,65 @@ const s = StyleSheet.create({
     color: YColors.ink,
     letterSpacing: 0.5,
     marginTop: 4,
+  },
+
+  // ─── Tickr pairing strip ───────────────────────────────────────
+  tickrBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 28,
+    paddingTop: 4,
+    paddingBottom: 10,
+  },
+  tickrLabel: {
+    fontFamily: YFonts.uiBlack,
+    fontSize: 10,
+    color: YColors.ink3,
+    letterSpacing: 2,
+  },
+  tickrChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: YColors.bg2,
+    borderWidth: 1.5,
+    borderColor: YColors.line2,
+  },
+  tickrChipOn: {
+    backgroundColor: YColors.ink,
+    borderColor: YColors.ink,
+  },
+  tickrDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: YColors.ink3,
+  },
+  tickrDotOn: {
+    backgroundColor: YColors.lime,
+  },
+  tickrChipText: {
+    flex: 1,
+    fontFamily: YFonts.uiExtrabold,
+    fontSize: 10,
+    color: YColors.ink2,
+    letterSpacing: 1.2,
+  },
+  tickrChipTextOn: {
+    color: '#FFFFFF',
+  },
+  tickrError: {
+    fontFamily: YFonts.uiSemibold,
+    fontSize: 10,
+    color: YColors.live,
+    paddingHorizontal: 28,
+    paddingBottom: 8,
+    letterSpacing: 0.5,
   },
 
   // ─── Big score zone ────────────────────────────────────────────
