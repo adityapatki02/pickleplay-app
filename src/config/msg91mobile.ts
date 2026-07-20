@@ -24,8 +24,12 @@
  * rotates the PIN. No backend changes needed.
  */
 
+// NOTE: tokenAuth is rotated in the MSG91 dashboard (Widgets → yoidenmobile →
+// Client Side Integration). When it is regenerated there, OTP sending fails
+// auth silently until this value is updated and an OTA is published — so
+// re-check it here first if OTPs stop arriving.
 export const MSG91_MOBILE_WIDGET_ID = '366676663557333236373131';
-export const MSG91_MOBILE_TOKEN_AUTH = '490820TZa5ZJv76a38e307P1';
+export const MSG91_MOBILE_TOKEN_AUTH = '490820T5Gn1OBW36a55d9eaP1';
 
 const BASE = 'https://control.msg91.com/api/v5/widget';
 
