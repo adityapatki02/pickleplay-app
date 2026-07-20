@@ -254,11 +254,23 @@ export default function HomeScreen() {
 
   const upcomingRegs = onlyFeatured(allUpcomingRegs);
   const visibleHosted = onlyFeatured(myHosted);
-  // "Your events" = registrations + hosted, combined; Home shows max 3 then View all.
-  const yourEvents = [
-    ...upcomingRegs.map((t) => ({ t, hosting: false })),
-    ...visibleHosted.map((t) => ({ t, hosting: true })),
-  ];
+
+  // "Your events" = registrations + hosted, combined; Home shows max 3 then
+  // View all. Drop events that have already finished and order by start date,
+  // otherwise the three slots fill with whatever the APIs happened to return
+  // first — which meant months-old events hid the one just created. Bookings
+  // above are filtered the same way.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const eventDay = (t: Tournament) => (t.endDate || t.startDate || '').slice(0, 10);
+  const yourEvents = (() => {
+    const byId = new Map<string, { t: Tournament; hosting: boolean }>();
+    for (const t of upcomingRegs) byId.set(t.id, { t, hosting: false });
+    // Hosting wins when the organiser is also registered — same event, one row.
+    for (const t of visibleHosted) byId.set(t.id, { t, hosting: true });
+    return [...byId.values()]
+      .filter(({ t }) => !eventDay(t) || eventDay(t) >= todayIso)
+      .sort((a, b) => (a.t.startDate || '').localeCompare(b.t.startDate || ''));
+  })();
   const visibleNearby = onlyFeatured(nearby);
 
   // Transform API venues → display shape for YVenueEditorial / YVenueRow.
