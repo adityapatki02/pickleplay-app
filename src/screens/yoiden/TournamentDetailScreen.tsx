@@ -431,6 +431,28 @@ export default function TournamentDetailScreen() {
             {t.id !== AIPA_TOURNAMENT_ID ? (
               <>
                 <YSectionHead eyebrow="ORGANIZER · FULL FLOW" title="RUN TOURNAMENT" />
+
+                {/* Scoring is the most-used action once an event is live, but it
+                    lived behind a tile labelled "BRACKET". Surface it directly. */}
+                <Pressable
+                  onPress={() =>
+                    firstCategory &&
+                    openManage('Bracket', { tournamentId: t.id, categoryId: firstCategory.id })
+                  }
+                  disabled={!firstCategory}
+                  style={[styles.scoreCta, !firstCategory && { opacity: 0.5 }]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <YUiText size={14} weight={900} color="#fff" style={{ letterSpacing: 0.6 }}>
+                      SCORE A GAME
+                    </YUiText>
+                    <YUiText size={11} color="rgba(255,255,255,0.75)" style={{ marginTop: 2 }}>
+                      Pick a match from the draw and enter the score
+                    </YUiText>
+                  </View>
+                  <YUiText size={18} color="#fff">→</YUiText>
+                </Pressable>
+
                 <View style={styles.manageGrid}>
                   <ManageTile
                     label="REGISTRATIONS"
@@ -453,7 +475,7 @@ export default function TournamentDetailScreen() {
                   />
                   <ManageTile
                     label="BRACKET"
-                    sub="View / advance"
+                    sub="Score games, view fixtures"
                     onPress={() =>
                       firstCategory &&
                       openManage('Bracket', { tournamentId: t.id, categoryId: firstCategory.id })
@@ -468,7 +490,7 @@ export default function TournamentDetailScreen() {
 
         {/* Categories */}
         <YSectionHead
-          eyebrow={`${t.categories?.length ?? 0} EVENTS`}
+          eyebrow={`${t.categories?.length ?? 0} ${(t.categories?.length ?? 0) === 1 ? 'EVENT' : 'EVENTS'}`}
           title="CATEGORIES"
         />
         <View style={{ paddingHorizontal: 16 }}>
@@ -659,6 +681,18 @@ const CategoryRow: React.FC<{
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: YColors.bg },
+
+  scoreCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: YColors.accent,
+  },
 
   catEditBtn: {
     marginTop: 8,
