@@ -49,10 +49,11 @@ const openWeb = (opts: RazorpayOptions): Promise<RazorpayResult> =>
 
 /**
  * Native Razorpay SDK path — gives proper UPI-intent app selection
- * (tap Google Pay / PhonePe / Paytm → opens that app). Requires the old
- * architecture on iOS: under the New Architecture (Expo SDK 55 default) the
- * SDK's checkout view controller does not present. This build ships with
- * `newArchEnabled: false` so the SDK can present.
+ * (tap Google Pay / PhonePe / Paytm → opens that app).
+ *
+ * Works under the New Architecture: the iOS presentation bug is fixed by
+ * patches/react-native-razorpay+3.0.0.patch, not by an architecture flag —
+ * see the note on USE_WEBVIEW_CHECKOUT below.
  */
 const openNativeSdk = async (opts: RazorpayOptions): Promise<RazorpayResult> => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
