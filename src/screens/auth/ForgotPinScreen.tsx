@@ -33,7 +33,9 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // Shared state
   const [accessToken, setAccessToken] = useState('');
-  const [resetToken, setResetToken]   = useState('');
+  // MSG91 mobile-widget request id, returned by sendOtpMobile and needed to
+  // verify/retry. Native only; web uses the browser widget's access token.
+  const [reqId, setReqId]             = useState('');
   const [newPin, setNewPin]           = useState('');
   const [confirmPin, setConfirmPin]   = useState('');
   const [loading, setLoading]         = useState(false);
@@ -88,13 +90,14 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
     setError('');
     setLoading(true);
     try {
-      await authApi.sendForgotPinOtp({ phone: normalizedPhone });
+      const id = await sendMobileOtp(phone.trim());
+      setReqId(id);
       setOtpDigits(Array(OTP_LENGTH).fill(''));
       setStep(2);
       setResendTimer(30);
       setTimeout(() => otpRefs.current[0]?.focus(), 300);
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Could not send OTP. Please try again.');
+      setError(err?.message ?? 'Could not send OTP. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -105,12 +108,13 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
     setError('');
     setLoading(true);
     try {
-      await authApi.sendForgotPinOtp({ phone: normalizedPhone });
+      if (reqId) await retryMobileOtp(reqId);
+      else setReqId(await sendMobileOtp(phone.trim()));
       setOtpDigits(Array(OTP_LENGTH).fill(''));
       setResendTimer(30);
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Could not resend OTP.');
+      setError(err?.message ?? 'Could not resend OTP.');
     } finally {
       setLoading(false);
     }
@@ -141,13 +145,11 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
     setError('');
     setLoading(true);
     try {
-      const res = await authApi.checkForgotPinOtp({ phone: normalizedPhone, otp });
-      const token = res.data.data?.resetToken;
-      if (!token) throw new Error('Verification failed. Please try again.');
-      setResetToken(token);
+      const token = await verifyMobileOtp(reqId, otp);
+      setAccessToken(token);
       setStep(3);
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Invalid OTP. Please try again.');
+      setError(err?.message ?? 'Invalid OTP. Please try again.');
       setOtpDigits(Array(OTP_LENGTH).fill(''));
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
     } finally {
@@ -159,7 +161,7 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const pinOk    = newPin.length === 6 && /^[0-9]+$/.test(newPin);
   const confirmOk = confirmPin === newPin && confirmPin.length === 6;
-  const hasToken  = IS_WEB ? !!accessToken : !!resetToken;
+  const hasToken  = !!accessToken;
   const canReset  = hasToken && pinOk && confirmOk && !loading;
 
   // On web: show PIN form once we have the access token
@@ -171,18 +173,15 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
     setError('');
     setLoading(true);
     try {
-      let res;
-      if (IS_WEB) {
-        res = await authApi.resetPin({ accessToken, newPin });
-      } else {
-        res = await authApi.resetPinWithToken({ resetToken, newPin });
-      }
+      // Both flows end with an MSG91 access token; the backend verifies it
+      // via verifyAccessToken and rotates the PIN.
+      const res = await authApi.resetPin({ accessToken, newPin });
       login(res.data.data.user, res.data.data.accessToken);
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? 'Could not reset PIN. Please try again.';
       setError(Array.isArray(msg) ? msg[0] : msg);
       if (err?.response?.status === 401) {
-        setResetToken('');
+        setReqId('');
         setAccessToken('');
         if (!IS_WEB) setStep(1);
       }
