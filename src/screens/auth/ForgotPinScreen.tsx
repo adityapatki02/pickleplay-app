@@ -423,12 +423,6 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
               </>
             )}
 
-            {!!notice && !error && (
-              <View style={s.noticeBox}>
-                <Text style={s.noticeText}>{notice}</Text>
-              </View>
-            )}
-
             {!!error && (
               <View style={s.errorBox}>
                 <Text style={s.errorText}>⚠ {error}</Text>
@@ -545,22 +539,6 @@ const s = StyleSheet.create({
     fontSize: 16,
     color: YColors.ink,
   },
-  phoneRow: { flexDirection: 'row', gap: 10 },
-  ccBox: {
-    backgroundColor: YColors.bg2,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: YColors.line2,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-  },
-  ccText: {
-    fontFamily: YFonts.uiSemibold,
-    fontSize: 16,
-    color: YColors.ink,
-  },
-  phoneInput: { flex: 1 },
-  otpInput: { letterSpacing: 8, textAlign: 'center', fontSize: 22 },
 
   warnHint: {
     fontFamily: YFonts.uiSemibold,
