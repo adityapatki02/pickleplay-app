@@ -7,6 +7,8 @@ import {
   Pressable,
   RefreshControl,
   Share,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -130,6 +132,51 @@ export default function TournamentDetailScreen() {
       setTimeout(() => setCopied(false), 1800);
     } catch {
       xAlert('Could not copy', shareUrl);
+    }
+  };
+
+  // ── Category editor (organiser) ───────────────────────────────────────────
+  // Entry fee, capacity and match settings were previously fixed at creation —
+  // a typo meant an SQL fix. PUT /categories/:id already existed; nothing used it.
+  const [editCat, setEditCat] = useState<TournamentCategory | null>(null);
+  const [catName, setCatName] = useState('');
+  const [catFee, setCatFee] = useState('');
+  const [catMaxTeams, setCatMaxTeams] = useState('');
+  const [catBusy, setCatBusy] = useState(false);
+  const [catErr, setCatErr] = useState<string | null>(null);
+
+  const openCategoryEditor = (c: TournamentCategory) => {
+    setEditCat(c);
+    setCatName(c.name);
+    setCatFee(String(Number(c.entryFee ?? 0)));
+    setCatMaxTeams(String(c.maxTeams ?? 0));
+    setCatErr(null);
+  };
+
+  const registeredInCat = editCat?.registeredTeams ?? 0;
+  const catFeeNum = Number(catFee);
+  const catMaxNum = Number(catMaxTeams);
+  const catValid =
+    catName.trim().length >= 2 &&
+    Number.isFinite(catFeeNum) && catFeeNum >= 0 &&
+    Number.isFinite(catMaxNum) && catMaxNum >= 1;
+
+  const saveCategory = async () => {
+    if (!editCat || !catValid || catBusy) return;
+    setCatBusy(true);
+    setCatErr(null);
+    try {
+      await tournamentsApi.updateCategory(editCat.id, {
+        name: catName.trim(),
+        entryFee: catFeeNum,
+        maxTeams: catMaxNum,
+      });
+      setEditCat(null);
+      await fetchDetail();
+    } catch (e: any) {
+      setCatErr(e?.response?.data?.message || e?.message || 'Could not save changes.');
+    } finally {
+      setCatBusy(false);
     }
   };
 
@@ -438,6 +485,7 @@ export default function TournamentDetailScreen() {
                 isOrganizer={isOrganizer}
                 canRegister={canRegister}
                 onRegister={() => openRegister(c.id)}
+                onEdit={() => openCategoryEditor(c)}
               />
             ))
           ) : (
@@ -455,6 +503,84 @@ export default function TournamentDetailScreen() {
           ) : null}
         </View>
       </ScrollView>
+
+      {/* Category editor — organiser only */}
+      <Modal
+        visible={!!editCat}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditCat(null)}
+      >
+        <View style={styles.catModalBackdrop}>
+          <View style={styles.catSheet}>
+            <YEyebrow color={YColors.ink3}>EDIT CATEGORY</YEyebrow>
+            <YUiText size={16} weight={900} color={YColors.ink} style={{ marginTop: 2, marginBottom: 14 }}>
+              {editCat?.name}
+            </YUiText>
+
+            <YUiText size={10} weight={900} color={YColors.ink3} style={styles.catFieldLabel}>NAME</YUiText>
+            <TextInput
+              style={styles.catInput}
+              value={catName}
+              onChangeText={setCatName}
+              placeholder="e.g. Men's Doubles"
+              placeholderTextColor={YColors.ink3}
+            />
+
+            <YUiText size={10} weight={900} color={YColors.ink3} style={styles.catFieldLabel}>ENTRY FEE (₹)</YUiText>
+            <TextInput
+              style={styles.catInput}
+              value={catFee}
+              onChangeText={(v) => setCatFee(v.replace(/[^0-9]/g, ''))}
+              keyboardType="number-pad"
+              placeholder="0 for free entry"
+              placeholderTextColor={YColors.ink3}
+            />
+
+            <YUiText size={10} weight={900} color={YColors.ink3} style={styles.catFieldLabel}>MAX TEAMS</YUiText>
+            <TextInput
+              style={styles.catInput}
+              value={catMaxTeams}
+              onChangeText={(v) => setCatMaxTeams(v.replace(/[^0-9]/g, ''))}
+              keyboardType="number-pad"
+              placeholder="e.g. 16"
+              placeholderTextColor={YColors.ink3}
+            />
+
+            {/* Changing the fee does not retro-bill or refund anyone already in. */}
+            {registeredInCat > 0 ? (
+              <YUiText size={11} color={YColors.ink2} style={{ marginTop: 10, lineHeight: 16 }}>
+                {registeredInCat} {registeredInCat === 1 ? 'entry is' : 'entries are'} already registered. Changing
+                the fee only affects new registrations — existing entries are not charged or refunded.
+              </YUiText>
+            ) : null}
+            {catMaxNum > 0 && catMaxNum < registeredInCat ? (
+              <YUiText size={11} color={YColors.live} style={{ marginTop: 8, lineHeight: 16 }}>
+                Max teams is below the {registeredInCat} already registered — they stay in, but the category will
+                show as over capacity.
+              </YUiText>
+            ) : null}
+            {catErr ? (
+              <YUiText size={11} color={YColors.live} style={{ marginTop: 10 }}>{catErr}</YUiText>
+            ) : null}
+
+            <View style={styles.catSheetActions}>
+              <Pressable
+                onPress={saveCategory}
+                disabled={!catValid || catBusy}
+                style={[styles.catSaveBtn, (!catValid || catBusy) && { opacity: 0.5 }]}
+              >
+                <YUiText size={12} weight={900} color="#000" style={{ letterSpacing: 0.6 }}>
+                  {catBusy ? 'SAVING…' : 'SAVE'}
+                </YUiText>
+              </Pressable>
+              <Pressable onPress={() => setEditCat(null)} style={[styles.catSaveBtn, styles.catCancelBtn]}>
+                <YUiText size={12} weight={900} color={YColors.ink2} style={{ letterSpacing: 0.6 }}>CANCEL</YUiText>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -495,7 +621,8 @@ const CategoryRow: React.FC<{
   isOrganizer: boolean;
   canRegister: boolean;
   onRegister: () => void;
-}> = ({ category: c, isOrganizer, canRegister, onRegister }) => (
+  onEdit: () => void;
+}> = ({ category: c, isOrganizer, canRegister, onRegister, onEdit }) => (
   <View style={styles.catRow}>
     <View style={styles.catTop}>
       <View style={{ flex: 1 }}>
@@ -525,11 +652,66 @@ const CategoryRow: React.FC<{
         </YUiText>
       </Pressable>
     ) : null}
+    {isOrganizer ? (
+      <Pressable onPress={onEdit} style={styles.catEditBtn}>
+        <YUiText size={11} weight={900} color={YColors.ink} style={{ letterSpacing: 0.8 }}>
+          EDIT CATEGORY
+        </YUiText>
+      </Pressable>
+    ) : null}
   </View>
 );
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: YColors.bg },
+
+  catEditBtn: {
+    marginTop: 8,
+    paddingVertical: 9,
+    borderRadius: 9,
+    alignItems: 'center',
+    backgroundColor: YColors.bg3,
+    borderWidth: 1,
+    borderColor: YColors.line2,
+  },
+  catModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 22,
+  },
+  catSheet: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+  },
+  catFieldLabel: { letterSpacing: 1, marginTop: 12, marginBottom: 5 },
+  catInput: {
+    backgroundColor: YColors.bg3,
+    borderWidth: 1,
+    borderColor: YColors.line2,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontSize: 14,
+    color: YColors.ink,
+  },
+  catSheetActions: { flexDirection: 'row', gap: 10, marginTop: 18 },
+  catSaveBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: YColors.lime,
+  },
+  catCancelBtn: {
+    backgroundColor: YColors.bg3,
+    borderWidth: 1,
+    borderColor: YColors.line2,
+  },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: YColors.bg },
 
   coverBack: {
