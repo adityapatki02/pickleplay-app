@@ -1609,9 +1609,12 @@ const LeagueDashboardScreen: React.FC = () => {
     // rows, sequential 1-N rank within each group, footer rules block).
     // Beats the previous flat CSV which surfaced confusing per-pool ranks.
     const onDownloadStandingsXlsx = () => {
+      // resolvedSeasonId is what the rest of the screen uses; a bare `seasonId`
+      // is not in scope here and threw ReferenceError on click.
+      if (!resolvedSeasonId) return;
       const url =
         API_BASE_URL.replace(/\/$/, '') +
-        `/scoreboard/standings-export/${seasonId}.xlsx`;
+        `/scoreboard/standings-export/${resolvedSeasonId}.xlsx`;
       // Open in a new tab so the browser handles the download. Works on
       // mobile web + desktop without juggling blob fetches in the bundle.
       if (typeof window !== 'undefined') {

@@ -433,11 +433,6 @@ export default function TournamentDetailScreen() {
                 <YSectionHead eyebrow="ORGANIZER · FULL FLOW" title="RUN TOURNAMENT" />
                 <View style={styles.manageGrid}>
                   <ManageTile
-                    label="SCORE LOG"
-                    sub="Pick teams, punch score"
-                    onPress={() => openManage('ScoreLogger', { tournamentId: t.id })}
-                  />
-                  <ManageTile
                     label="REGISTRATIONS"
                     sub="Players & teams"
                     onPress={() => openManage('RegistrationManage', { tournamentId: t.id })}

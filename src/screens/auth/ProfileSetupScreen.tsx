@@ -164,10 +164,10 @@ export const ProfileSetupScreen: React.FC<Props> = () => {
         <TouchableOpacity
           style={[
             s.ctaButton,
-            (!fullName.trim() || !city.trim() || !skill) && s.ctaButtonDisabled,
+            (!fullName.trim() || !skill) && s.ctaButtonDisabled,
           ]}
           onPress={handleSubmit}
-          disabled={!fullName.trim() || !city.trim() || !skill || loading}
+          disabled={!fullName.trim() || !skill || loading}
           activeOpacity={0.85}
         >
           <Text style={s.ctaText}>

@@ -153,14 +153,16 @@ export default function RosterManagementScreen() {
 
     setSaving(true);
     setAddError('');
+    // Declared outside the try so the catch can log what was actually sent —
+    // a const inside the try is block-scoped and throws ReferenceError there.
+    const input: AddRosterPlayerInput = {
+      seasonId,
+      playerName: playerName.trim() || undefined,
+      playerPhone: playerPhone.trim() || undefined,
+      categorySlug: playerCategory,
+      jerseyNumber: playerJersey ? parseInt(playerJersey, 10) : undefined,
+    };
     try {
-      const input: AddRosterPlayerInput = {
-        seasonId,
-        playerName: playerName.trim() || undefined,
-        playerPhone: playerPhone.trim() || undefined,
-        categorySlug: playerCategory,
-        jerseyNumber: playerJersey ? parseInt(playerJersey, 10) : undefined,
-      };
       const entry = await addRosterPlayer(franchiseId, input);
       setRoster((prev) => [...prev, entry]);
       setShowAddModal(false);
