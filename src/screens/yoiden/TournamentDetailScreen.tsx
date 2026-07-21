@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import {
@@ -86,9 +86,15 @@ export default function TournamentDetailScreen() {
     }
   }, [tournamentId]);
 
-  useEffect(() => {
-    fetchDetail();
-  }, [fetchDetail]);
+  // Re-fetch every time the screen regains focus, not just on first mount.
+  // React Navigation keeps this screen mounted, so navigating back from
+  // Register / Score / the category editor otherwise showed stale counts until
+  // a manual pull-to-refresh.
+  useFocusEffect(
+    useCallback(() => {
+      fetchDetail();
+    }, [fetchDetail]),
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

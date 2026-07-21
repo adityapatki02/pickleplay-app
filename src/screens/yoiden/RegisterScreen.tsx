@@ -54,12 +54,21 @@ export default function RegisterScreen({ navigation, route }: Props) {
       try {
         const response = await tournamentsApi.listCategories(tournamentId);
         const cats: TournamentCategory[] = response.data.data;
-        const found = cats.find((c) => c.id === categoryId) ?? null;
+        // The generic REGISTER button navigates without a categoryId. When the
+        // event has a single category, fall back to it rather than erroring;
+        // only a genuinely unknown id is "not found".
+        const found = categoryId
+          ? cats.find((c) => c.id === categoryId) ?? null
+          : cats.length === 1
+            ? cats[0]
+            : null;
         if (!cancelled) {
           if (found) {
             setCategory(found);
           } else {
-            setError('Category not found.');
+            setError(
+              categoryId ? 'Category not found.' : 'Please choose a category to register.',
+            );
           }
         }
       } catch {
