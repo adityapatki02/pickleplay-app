@@ -19,6 +19,7 @@ import { AuthStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
 import { authApi } from '../../api/auth.api';
 import { openMsg91Widget } from '../../config/msg91';
+import { sendMobileOtp, verifyMobileOtp, retryMobileOtp } from '../../config/msg91mobile';
 import { YColors, YFonts } from '../../config/yoiden';
 
 
@@ -45,6 +46,8 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
   // OTP (native register only)
   const [otpDigits, setOtpDigits]   = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [resendTimer, setResendTimer] = useState(0);
+  // MSG91 mobile-widget request id — needed to verify/retry the OTP.
+  const [reqId, setReqId]           = useState('');
   const otpRefs = useRef<(TextInput | null)[]>([]);
 
   const [loading, setLoading] = useState(false);
@@ -127,21 +130,25 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
-  // ─── Register: native — send OTP via backend ─────────────────────────────
+  // ─── Register: native — send OTP via the MSG91 mobile widget ─────────────
+  // The backend /api/v5/otp path (authApi.sendPhoneOtp) returns type:success
+  // but never delivers an SMS — no DLT template is configured. Registration
+  // OTP therefore never arrived. Use the mobile widget (same as Forgot PIN),
+  // then create the account with the resulting access token.
 
   const handleSendOtp = async () => {
     if (!formOk || loading) return;
     setError('');
     setLoading(true);
     try {
-      await authApi.sendPhoneOtp({ phone: fullPhone });
+      const id = await sendMobileOtp(phone.trim());
+      setReqId(id);
       setOtpDigits(Array(OTP_LENGTH).fill(''));
       setRegStep('otp');
       setResendTimer(30);
       setTimeout(() => otpRefs.current[0]?.focus(), 300);
     } catch (err: any) {
-      const msg = err?.response?.data?.message ?? 'Could not send OTP. Please try again.';
-      setError(Array.isArray(msg) ? msg[0] : msg);
+      setError(err?.message ?? 'Could not send OTP. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -152,13 +159,13 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
     setError('');
     setLoading(true);
     try {
-      await authApi.sendPhoneOtp({ phone: fullPhone });
+      if (reqId) await retryMobileOtp(reqId);
+      else setReqId(await sendMobileOtp(phone.trim()));
       setOtpDigits(Array(OTP_LENGTH).fill(''));
       setResendTimer(30);
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
     } catch (err: any) {
-      const msg = err?.response?.data?.message ?? 'Could not resend OTP.';
-      setError(Array.isArray(msg) ? msg[0] : msg);
+      setError(err?.message ?? 'Could not resend OTP.');
     } finally {
       setLoading(false);
     }
@@ -189,12 +196,12 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
     setError('');
     setLoading(true);
     try {
-      const res = await authApi.verifyPhoneOtp({ phone: fullPhone, otp });
-      const verificationToken = res.data.data.verificationToken;
-      await createAccount({ verificationToken });
+      // Widget verify returns an MSG91 access token; the backend verifies it
+      // (verifyAccessToken) and creates the account — same shape as web.
+      const token = await verifyMobileOtp(reqId, otp);
+      await createAccount({ accessToken: token });
     } catch (err: any) {
-      const msg = err?.response?.data?.message ?? 'Invalid OTP. Please try again.';
-      setError(Array.isArray(msg) ? msg[0] : msg);
+      setError(err?.message ?? 'Invalid OTP. Please try again.');
       setOtpDigits(Array(OTP_LENGTH).fill(''));
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
       setLoading(false);
@@ -210,6 +217,7 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
     setPin('');
     setName('');
     setOtpDigits(Array(OTP_LENGTH).fill(''));
+    setReqId('');
   };
 
   // ─── Derived header text ─────────────────────────────────────────────────
@@ -231,7 +239,7 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
     <SafeAreaView style={s.screen}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
           contentContainerStyle={s.scroll}
@@ -453,7 +461,9 @@ export default PhoneInputScreen;
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: YColors.bg },
-  scroll: { flexGrow: 1 },
+  // Bottom padding so a focused field (PIN, or the OTP row lower down) can
+  // scroll clear of the keyboard instead of sitting behind it on Android.
+  scroll: { flexGrow: 1, paddingBottom: 40 },
 
   logoHeader: {
     flexDirection: 'row',
