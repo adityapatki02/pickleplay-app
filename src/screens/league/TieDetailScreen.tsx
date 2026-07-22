@@ -29,12 +29,14 @@ import {
   adminFinalizeMatch,
   adminDeclareWinner,
   getLeague,
+  getSeasons,
   listScorers,
   resetLeagueTie,
   substitutePlayer,
   adminSwapSlotPlayer,
 } from '../../api/leagues.api';
 import { matchesApi } from '../../api/matches.api';
+import { computeMatchBonus, bonusToSides, SeasonBonusRules } from '../../utils/bonus';
 import { useLeagueStore } from '../../store/leagueStore';
 import { useAuthStore } from '../../store/authStore';
 import { IS_LEAGUE_KIOSK } from '../../config/appMode';
@@ -111,6 +113,9 @@ const TieDetailScreen: React.FC = () => {
   const store = useLeagueStore();
   const authUser = useAuthStore((s) => s.user);
   const [league, setLeague] = useState(store.currentLeague);
+  // Season bonus bands for the live overlay (SBPL narrows the close-loss band).
+  // Null → the util uses SPPL defaults, so other leagues are unaffected.
+  const [bonusRules, setBonusRules] = useState<SeasonBonusRules | null>(null);
   const isOwner = !!authUser?.id && league?.organizerId === authUser.id;
   // Owner OR co-admin (league_admins) — resolved via the shared hook so
   // backend-granted admins get score/management access, not just the organizer.
@@ -251,6 +256,17 @@ const TieDetailScreen: React.FC = () => {
             setLeague(leagueData as any);
             store.setCurrentLeague(leagueData as any);
           }
+        } catch {}
+      }
+
+      // Resolve this season's bonus bands for the live overlay (SBPL differs
+      // from SPPL). Best-effort — on failure the util falls back to SPPL.
+      if (effectiveLeagueId && tieData?.seasonId) {
+        try {
+          const seasons = await getSeasons(effectiveLeagueId).catch(() => []);
+          const arr = Array.isArray(seasons) ? seasons : [];
+          const season = arr.find((s: any) => s.id === tieData.seasonId);
+          setBonusRules(((season as any)?.bonusRules ?? null) as SeasonBonusRules | null);
         } catch {}
       }
 
@@ -681,27 +697,14 @@ const TieDetailScreen: React.FC = () => {
       // Rally Point Game: no bonus per SPPL rulebook § 15
       if ((tm as any).isRallyPointGame) continue;
 
-      // Bonus rules branch on scoringMode.
-      // rally_21 (knockout): loser≤7 / 14-19+win=21 / 20+win=21
-      // rally_15 (default):  loser≤4 / 11-13+win=15 / 14
-      const mode = (m as any).scoringMode;
-      if (mode === 'rally_21') {
-        if (loserScore <= 7) {
-          if (homeWon) homeBonus += 2; else awayBonus += 2;
-        } else if (loserScore >= 14 && loserScore <= 19 && winnerScore === 21) {
-          if (homeWon) awayBonus += 1; else homeBonus += 1;
-        } else if (loserScore === 20 && winnerScore === 21) {
-          if (homeWon) awayBonus += 2; else homeBonus += 2;
-        }
-      } else {
-        if (loserScore <= 4) {
-          if (homeWon) homeBonus += 2; else awayBonus += 2;
-        } else if (loserScore >= 11 && loserScore <= 13 && winnerScore === 15) {
-          if (homeWon) awayBonus += 1; else homeBonus += 1;
-        } else if (loserScore === 14) {
-          if (homeWon) awayBonus += 2; else homeBonus += 2;
-        }
-      }
+      // Bonus via the shared util (honors season.bonusRules — SBPL narrows the
+      // close-loss band; defaults to SPPL when bonusRules is absent).
+      const sides = bonusToSides(
+        computeMatchBonus(winnerScore, loserScore, (m as any).scoringMode, bonusRules),
+        homeWon,
+      );
+      homeBonus += sides.home;
+      awayBonus += sides.away;
     }
     return {
       homeMP, awayMP, homeBonus, awayBonus,
@@ -710,7 +713,7 @@ const TieDetailScreen: React.FC = () => {
       completed: tieMatches.filter((tm: any) => tm.match?.status === 'completed').length,
       total: tieMatches.length,
     };
-  }, [tie]);
+  }, [tie, bonusRules]);
 
   // ─── RENDERS ──────────────────────────────────────────────────────────────
 
@@ -1404,26 +1407,14 @@ const TieDetailScreen: React.FC = () => {
           // Winner gets match points
           const homeMatchPts = homeWon ? tm.pointValue : 0;
           const awayMatchPts = homeWon ? 0 : tm.pointValue;
-          // Bonus — branch on scoringMode (rally_21 knockouts vs rally_15 league)
-          let homeBonusPts = 0, awayBonusPts = 0;
-          const matchMode = (tm.match as any)?.scoringMode;
-          if (matchMode === 'rally_21') {
-            if (loserScore <= 7) {
-              if (homeWon) homeBonusPts = 2; else awayBonusPts = 2;
-            } else if (loserScore >= 14 && loserScore <= 19 && winnerScore === 21) {
-              if (homeWon) awayBonusPts = 1; else homeBonusPts = 1;
-            } else if (loserScore === 20 && winnerScore === 21) {
-              if (homeWon) awayBonusPts = 2; else homeBonusPts = 2;
-            }
-          } else {
-            if (loserScore <= 4) {
-              if (homeWon) homeBonusPts = 2; else awayBonusPts = 2;
-            } else if (loserScore >= 11 && loserScore <= 13 && winnerScore === 15) {
-              if (homeWon) awayBonusPts = 1; else homeBonusPts = 1;
-            } else if (loserScore === 14) {
-              if (homeWon) awayBonusPts = 2; else homeBonusPts = 2;
-            }
-          }
+          // Bonus via the shared util (honors season.bonusRules — SBPL narrows
+          // the close-loss band; defaults to SPPL when bonusRules is absent).
+          const _sides = bonusToSides(
+            computeMatchBonus(winnerScore, loserScore, (tm.match as any)?.scoringMode, bonusRules),
+            homeWon,
+          );
+          const homeBonusPts = _sides.home;
+          const awayBonusPts = _sides.away;
           return (
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
               {/* Home points */}
