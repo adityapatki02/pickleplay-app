@@ -398,6 +398,11 @@ export type TieConfigUpdate = {
   gamesPerMatch?: number; // 1, 3, 5
   /** Court number (1, 2, 3...) — drives persistent overlay URLs for streaming. null clears. */
   courtNumber?: number | null;
+  /** Second court for two-court (SBPL) ties. null clears. */
+  courtNumber2?: number | null;
+  /** Two authorized scorers for two-court (SBPL) ties. null to unassign. */
+  scorer1Id?: string | null;
+  scorer2Id?: string | null;
   /** Manually set home/away team on a tie (used for knockout stage confirmations). null to clear. */
   homeTeamId?: string | null;
   awayTeamId?: string | null;

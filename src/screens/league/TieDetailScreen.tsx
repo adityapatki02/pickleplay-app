@@ -116,6 +116,8 @@ const TieDetailScreen: React.FC = () => {
   // Season bonus bands for the live overlay (SBPL narrows the close-loss band).
   // Null → the util uses SPPL defaults, so other leagues are unaffected.
   const [bonusRules, setBonusRules] = useState<SeasonBonusRules | null>(null);
+  // Season format — drives the two-court UI (sbpl_15game ties play on 2 courts).
+  const [seasonFormat, setSeasonFormat] = useState<string | null>(null);
   const isOwner = !!authUser?.id && league?.organizerId === authUser.id;
   // Owner OR co-admin (league_admins) — resolved via the shared hook so
   // backend-granted admins get score/management access, not just the organizer.
@@ -267,6 +269,7 @@ const TieDetailScreen: React.FC = () => {
           const arr = Array.isArray(seasons) ? seasons : [];
           const season = arr.find((s: any) => s.id === tieData.seasonId);
           setBonusRules(((season as any)?.bonusRules ?? null) as SeasonBonusRules | null);
+          setSeasonFormat(((season as any)?.format ?? null) as string | null);
         } catch {}
       }
 
@@ -810,9 +813,16 @@ const TieDetailScreen: React.FC = () => {
   const renderTieControls = () => {
     if (!tie) return null;
     const currentCourt = (tie as any).courtNumber ?? null;
+    const currentCourt2 = (tie as any).courtNumber2 ?? null;
     const currentScorerId = (tie as any).scorerId ?? null;
+    // SBPL ties play across two courts; other formats use a single court.
+    const twoCourt = seasonFormat === 'sbpl_15game';
 
-    const updateTie = async (patch: { courtNumber?: number | null; scorerId?: string | null }) => {
+    const updateTie = async (patch: {
+      courtNumber?: number | null;
+      courtNumber2?: number | null;
+      scorerId?: string | null;
+    }) => {
       try {
         setActionLoading(true);
         await bulkUpdateTies('', [{ tieId, ...patch }]);
@@ -825,19 +835,21 @@ const TieDetailScreen: React.FC = () => {
     };
 
     const COURTS = [1, 2, 3, 4];
-    return (
-      <View style={styles.tieSheetBar}>
-        <Text style={styles.tieSheetTitle}>Tie Controls</Text>
-
-        {/* Court picker */}
-        <Text style={{ fontSize: 11, fontWeight: '800', color: NAVY, letterSpacing: 1, marginTop: 8, marginBottom: 6 }}>COURT</Text>
+    // One selectable court row bound to a field (courtNumber or courtNumber2).
+    const courtRow = (
+      label: string,
+      current: number | null,
+      field: 'courtNumber' | 'courtNumber2',
+    ) => (
+      <>
+        <Text style={{ fontSize: 11, fontWeight: '800', color: NAVY, letterSpacing: 1, marginTop: 8, marginBottom: 6 }}>{label}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
           {COURTS.map((c) => {
-            const selected = currentCourt === c;
+            const selected = current === c;
             return (
               <TouchableOpacity
                 key={c}
-                onPress={() => updateTie({ courtNumber: selected ? null : c })}
+                onPress={() => updateTie({ [field]: selected ? null : c } as any)}
                 disabled={actionLoading}
                 style={{
                   paddingHorizontal: 14, paddingVertical: 8,
@@ -853,9 +865,9 @@ const TieDetailScreen: React.FC = () => {
               </TouchableOpacity>
             );
           })}
-          {currentCourt !== null && (
+          {current !== null && (
             <TouchableOpacity
-              onPress={() => updateTie({ courtNumber: null })}
+              onPress={() => updateTie({ [field]: null } as any)}
               disabled={actionLoading}
               style={{
                 paddingHorizontal: 12, paddingVertical: 8,
@@ -867,6 +879,22 @@ const TieDetailScreen: React.FC = () => {
             </TouchableOpacity>
           )}
         </View>
+      </>
+    );
+
+    return (
+      <View style={styles.tieSheetBar}>
+        <Text style={styles.tieSheetTitle}>Tie Controls</Text>
+
+        {/* Court picker(s) — SBPL ties run on two courts in parallel */}
+        {twoCourt ? (
+          <>
+            {courtRow('COURT 1', currentCourt, 'courtNumber')}
+            {courtRow('COURT 2', currentCourt2, 'courtNumber2')}
+          </>
+        ) : (
+          courtRow('COURT', currentCourt, 'courtNumber')
+        )}
 
         {/* Scorer picker */}
         <Text style={{ fontSize: 11, fontWeight: '800', color: NAVY, letterSpacing: 1, marginTop: 14, marginBottom: 6 }}>SCORER</Text>
