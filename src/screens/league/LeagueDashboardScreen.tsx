@@ -654,6 +654,7 @@ const LeagueDashboardScreen: React.FC = () => {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1 }}>
             {timeLabel ? <YBadge color="#92400E" bg="#FEF3C7">{timeLabel}</YBadge> : null}
             {(tie as any).courtNumber ? <YBadge color="#0369A1" bg="#E0F2FE">{`COURT ${(tie as any).courtNumber}`}</YBadge> : null}
+            {(tie as any).courtNumber2 ? <YBadge color="#0369A1" bg="#E0F2FE">{`COURT ${(tie as any).courtNumber2}`}</YBadge> : null}
             {tie.notes ? <YBadge color="#7C3AED" bg="#EDE9FE">{tie.notes}</YBadge> : null}
             {isMyAssignedTie ? <YBadge color="#fff" bg="#06D6A0">MY TIE</YBadge> : null}
             {stageLabel ? <YBadge color="#1D4ED8" bg="#DBEAFE">{stageLabel}</YBadge> : null}
