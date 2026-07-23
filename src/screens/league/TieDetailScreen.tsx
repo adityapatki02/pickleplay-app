@@ -73,7 +73,8 @@ const ORANGE = '#F97316';
 const PINK = '#EC4899';
 
 // ─── Category colors ────────────────────────────────────────────────────────
-const CATEGORY_COLORS: Record<CategorySlug, { color: string; bg: string; label: string }> = {
+const CATEGORY_COLORS: Record<string, { color: string; bg: string; label: string }> = {
+  // SPPL
   kids: { color: PURPLE, bg: '#EDE9FE', label: 'Kids' },
   teen: { color: ORANGE, bg: '#FFF7ED', label: 'Teen' },
   women1: { color: PINK, bg: '#FCE7F3', label: 'Women 1' },
@@ -81,6 +82,12 @@ const CATEGORY_COLORS: Record<CategorySlug, { color: string; bg: string; label: 
   men1: { color: BLUE, bg: '#DBEAFE', label: 'Men 1' },
   men2: { color: BLUE, bg: '#DBEAFE', label: 'Men 2' },
   men3: { color: BLUE, bg: '#DBEAFE', label: 'Men 3' },
+  // SBPL (rulebook §2)
+  women13: { color: PINK, bg: '#FCE7F3', label: 'Women 1-3' },
+  women45: { color: PINK, bg: '#FCE7F3', label: 'Women 4-5' },
+  menA: { color: BLUE, bg: '#DBEAFE', label: 'Men A' },
+  menB: { color: BLUE, bg: '#DBEAFE', label: 'Men B' },
+  menC: { color: BLUE, bg: '#DBEAFE', label: 'Men C' },
 };
 
 // ─── Status chip colors ─────────────────────────────────────────────────────
@@ -662,14 +669,26 @@ const TieDetailScreen: React.FC = () => {
       .filter((tm) => !tm.isRallyPointGame && tm.slotNumber > 0)
       .slice()
       .sort((a, b) => a.slotNumber - b.slotNumber);
+    const SPPL_SLUGS = ['kids', 'teen', 'women1', 'women2', 'men1', 'men2', 'men3'];
     return tms.map((tm) => {
+      const slug = tm.categorySlug as string;
+      const isOpen = !slug || slug === 'open';
       const sppl = SPPL_MATCH_SLOTS.find((s) => s.slotNumber === tm.slotNumber);
-      const generic = tm.categorySlug === ('open' as any) || !sppl;
+      // SPPL keeps its slot-number-based label + eligibility (unchanged).
+      // SBPL (and any format with real category slugs) labels from the game's
+      // own category via CATEGORY_COLORS; eligibility stays open for now
+      // (group → auction sub-category mapping is a follow-up).
+      const useSppl = !isOpen && !!sppl && SPPL_SLUGS.includes(slug);
+      const label = isOpen
+        ? `Game ${tm.slotNumber}`
+        : useSppl
+          ? sppl!.label
+          : CATEGORY_COLORS[slug]?.label || `Game ${tm.slotNumber}`;
       return {
         slotNumber: tm.slotNumber,
         categorySlug: tm.categorySlug,
-        allowedCategories: generic ? [] : sppl!.allowedCategories,
-        label: generic ? `Game ${tm.slotNumber}` : sppl!.label,
+        allowedCategories: useSppl ? sppl!.allowedCategories : [],
+        label,
         pointValue: tm.pointValue,
       };
     });
@@ -815,7 +834,9 @@ const TieDetailScreen: React.FC = () => {
     const currentCourt = (tie as any).courtNumber ?? null;
     const currentCourt2 = (tie as any).courtNumber2 ?? null;
     const currentScorerId = (tie as any).scorerId ?? null;
-    // SBPL ties play across two courts; other formats use a single court.
+    const currentScorer1Id = (tie as any).scorer1Id ?? null;
+    const currentScorer2Id = (tie as any).scorer2Id ?? null;
+    // SBPL ties play across two courts with two scorers; other formats use one.
     const twoCourt = seasonFormat === 'sbpl_15game';
 
     const updateTie = async (patch: {
@@ -882,6 +903,53 @@ const TieDetailScreen: React.FC = () => {
       </>
     );
 
+    // One selectable scorer row bound to a field (scorerId / scorer1Id / scorer2Id).
+    const scorerRow = (
+      label: string,
+      current: string | null,
+      field: 'scorerId' | 'scorer1Id' | 'scorer2Id',
+    ) => (
+      <>
+        <Text style={{ fontSize: 11, fontWeight: '800', color: NAVY, letterSpacing: 1, marginTop: 14, marginBottom: 6 }}>{label}</Text>
+        {scorersList.length === 0 ? (
+          <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>
+            No scorers added yet. Add from League Dashboard → Scorers.
+          </Text>
+        ) : (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {scorersList.map((s) => {
+              const selected = current === s.userId;
+              return (
+                <TouchableOpacity
+                  key={s.userId}
+                  onPress={() => updateTie({ [field]: selected ? null : s.userId } as any)}
+                  disabled={actionLoading}
+                  style={{
+                    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
+                    backgroundColor: selected ? '#06D6A0' : '#F1F5F9',
+                    borderWidth: 1, borderColor: selected ? '#06D6A0' : '#E2E8F0',
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: selected ? WHITE : NAVY }}>
+                    {s.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+            {current && (
+              <TouchableOpacity
+                onPress={() => updateTie({ [field]: null } as any)}
+                disabled={actionLoading}
+                style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FCA5A5' }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '800', color: RED }}>Unassign</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </>
+    );
+
     return (
       <View style={styles.tieSheetBar}>
         <Text style={styles.tieSheetTitle}>Tie Controls</Text>
@@ -896,49 +964,14 @@ const TieDetailScreen: React.FC = () => {
           courtRow('COURT', currentCourt, 'courtNumber')
         )}
 
-        {/* Scorer picker */}
-        <Text style={{ fontSize: 11, fontWeight: '800', color: NAVY, letterSpacing: 1, marginTop: 14, marginBottom: 6 }}>SCORER</Text>
-        {scorersList.length === 0 ? (
-          <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>
-            No scorers added yet. Add from League Dashboard → Scorers.
-          </Text>
+        {/* Scorer picker(s) — SBPL ties have two scorers (either scores any game) */}
+        {twoCourt ? (
+          <>
+            {scorerRow('SCORER 1', currentScorer1Id, 'scorer1Id')}
+            {scorerRow('SCORER 2', currentScorer2Id, 'scorer2Id')}
+          </>
         ) : (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            {scorersList.map((s) => {
-              const selected = currentScorerId === s.userId;
-              return (
-                <TouchableOpacity
-                  key={s.userId}
-                  onPress={() => updateTie({ scorerId: selected ? null : s.userId })}
-                  disabled={actionLoading}
-                  style={{
-                    paddingHorizontal: 12, paddingVertical: 8,
-                    borderRadius: 8,
-                    backgroundColor: selected ? '#06D6A0' : '#F1F5F9',
-                    borderWidth: 1,
-                    borderColor: selected ? '#06D6A0' : '#E2E8F0',
-                  }}
-                >
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: selected ? WHITE : NAVY }}>
-                    {s.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-            {currentScorerId && (
-              <TouchableOpacity
-                onPress={() => updateTie({ scorerId: null })}
-                disabled={actionLoading}
-                style={{
-                  paddingHorizontal: 12, paddingVertical: 8,
-                  borderRadius: 8, backgroundColor: '#FEF2F2',
-                  borderWidth: 1, borderColor: '#FCA5A5',
-                }}
-              >
-                <Text style={{ fontSize: 12, fontWeight: '800', color: RED }}>Unassign</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          scorerRow('SCORER', currentScorerId, 'scorerId')
         )}
       </View>
     );
