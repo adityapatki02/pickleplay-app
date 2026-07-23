@@ -37,6 +37,13 @@ import {
 } from '../../api/leagues.api';
 import { matchesApi } from '../../api/matches.api';
 import { computeMatchBonus, bonusToSides, SeasonBonusRules } from '../../utils/bonus';
+import {
+  foldServe,
+  ServeConfig,
+  ServeEvent,
+  Positions,
+  Side,
+} from '../../utils/serveState';
 import { useLeagueStore } from '../../store/leagueStore';
 import { useAuthStore } from '../../store/authStore';
 import { IS_LEAGUE_KIOSK } from '../../config/appMode';
@@ -234,6 +241,11 @@ const TieDetailScreen: React.FC = () => {
 
   // Score modal +/- counters (replace old text inputs)
   const [scoreVals, setScoreVals] = useState<{ a: number; b: number }>({ a: 0, b: 0 });
+  // Serve tracking (SBPL): config (first server/positions) + the rally-winner
+  // sequence fed from the +/- taps. Whose-serve is derived by folding these.
+  const [serveConfig, setServeConfig] = useState<ServeConfig | null>(null);
+  const [serveEvents, setServeEvents] = useState<ServeEvent[]>([]);
+  const [serveSetupServer, setServeSetupServer] = useState<string | null>(null);
   const [livePushStatus, setLivePushStatus] = useState<'idle' | 'syncing' | 'live' | 'error'>('idle');
   const [winnerPickerVisible, setWinnerPickerVisible] = useState(false);
   // When true, the winner-confirm panel flips its presumed winner to the
@@ -422,6 +434,9 @@ const TieDetailScreen: React.FC = () => {
     setScoreVals({ a, b });
     setLivePushStatus('idle');
     setWinnerPickerVisible(false);
+    setServeConfig(null);
+    setServeEvents([]);
+    setServeSetupServer(null);
     setScoreModal({ visible: true, tieMatch: tm });
   };
 
@@ -456,13 +471,104 @@ const TieDetailScreen: React.FC = () => {
     const tm = scoreModal.tieMatch;
     if (!tm) return;
     const cap = getTargetPoints(tm);
-    setScoreVals((prev) => {
-      const next = { ...prev };
-      if (side === 'a') next.a = Math.max(0, Math.min(cap, next.a + delta));
-      else next.b = Math.max(0, Math.min(cap, next.b + delta));
-      schedulePush(tm, next.a, next.b);
-      return next;
-    });
+    const before = side === 'a' ? scoreVals.a : scoreVals.b;
+    const after = Math.max(0, Math.min(cap, before + delta));
+    if (after === before) return; // no change at floor/cap
+    const next = side === 'a' ? { ...scoreVals, a: after } : { ...scoreVals, b: after };
+    setScoreVals(next);
+    schedulePush(tm, next.a, next.b);
+    // Feed the serve reducer: +1 = a rally win for that side; -1 = undo the
+    // last rally if it was that side's (out-of-order edits leave the log,
+    // which the "out of sync" guard surfaces in the panel).
+    const winner: Side = side === 'a' ? 'home' : 'away';
+    if (delta > 0) {
+      setServeEvents((ev) => ev.concat({ type: 'rally', winner }));
+    } else {
+      setServeEvents((ev) => {
+        const last = ev[ev.length - 1];
+        return last && last.type === 'rally' && last.winner === winner ? ev.slice(0, -1) : ev;
+      });
+    }
+  };
+
+  // Build a ServeConfig from the chosen first server + receiver. The server's
+  // partner takes the Left court; the receiver + partner mirror on the other side.
+  const buildServeConfig = (tm: TieMatch, serverId: string, receiverId: string): ServeConfig => {
+    const home = [(tm as any).homePlayer1Id, (tm as any).homePlayer2Id] as string[];
+    const away = [(tm as any).awayPlayer1Id, (tm as any).awayPlayer2Id] as string[];
+    const serverSide: Side = home.includes(serverId) ? 'home' : 'away';
+    const serverPair = serverSide === 'home' ? home : away;
+    const recvPair = serverSide === 'home' ? away : home;
+    const serverPartner = serverPair.find((id) => id !== serverId) || serverId;
+    const recvPartner = recvPair.find((id) => id !== receiverId) || receiverId;
+    const serving = { R: serverId, L: serverPartner };
+    const receiving = { R: receiverId, L: recvPartner };
+    const positions: Positions =
+      serverSide === 'home' ? { home: serving, away: receiving } : { home: receiving, away: serving };
+    return { firstServingSide: serverSide, positions };
+  };
+
+  // Serve indicator inside the score modal (SBPL games only). Setup (first
+  // server + receiver) → then whose-serve derived from the +/- rally taps.
+  const renderServePanel = (tm: TieMatch) => {
+    if (seasonFormat !== 'sbpl_15game') return null;
+    const h1 = (tm as any).homePlayer1Id, h2 = (tm as any).homePlayer2Id;
+    const a1 = (tm as any).awayPlayer1Id, a2 = (tm as any).awayPlayer2Id;
+    const ids = [h1, h2, a1, a2];
+    const nameOf = (id?: string | null) => (id ? playerMap[id] || 'Player' : '—');
+    const box = { marginTop: 10, padding: 10, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' };
+    const chip = (id: string) => (
+      <TouchableOpacity
+        key={id}
+        onPress={() =>
+          serveSetupServer
+            ? (setServeConfig(buildServeConfig(tm, serveSetupServer, id)), setServeEvents([]))
+            : setServeSetupServer(id)
+        }
+        style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#EEF2FF', borderWidth: 1, borderColor: '#C7D2FE', margin: 3 }}
+      >
+        <Text style={{ fontSize: 12, fontWeight: '800', color: NAVY }}>{nameOf(id)}</Text>
+      </TouchableOpacity>
+    );
+
+    if (ids.some((x) => !x)) {
+      return (
+        <View style={box}>
+          <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>Submit lineups to track serve.</Text>
+        </View>
+      );
+    }
+    if (serveConfig) {
+      const st = foldServe(serveConfig, serveEvents);
+      const inSync = serveEvents.length === scoreVals.a + scoreVals.b;
+      return (
+        <View style={box}>
+          {inSync ? (
+            <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>
+              🏸 Serving: {nameOf(st.serverId)} ({st.serviceCourt === 'R' ? 'Right' : 'Left'})  ·  Receiving: {nameOf(st.receiverId)}
+            </Text>
+          ) : (
+            <Text style={{ fontSize: 12, color: ORANGE, fontWeight: '700' }}>
+              Serve tracking out of sync — tap “Reset server”.
+            </Text>
+          )}
+          <TouchableOpacity onPress={() => { setServeConfig(null); setServeSetupServer(null); }} style={{ marginTop: 6, alignSelf: 'flex-start' }}>
+            <Text style={{ fontSize: 11, fontWeight: '800', color: BLUE }}>Reset server</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    // Setup
+    const serverSide = !serveSetupServer ? null : [h1, h2].includes(serveSetupServer) ? 'home' : 'away';
+    const setupIds = !serveSetupServer ? ids : serverSide === 'home' ? [a1, a2] : [h1, h2];
+    return (
+      <View style={box}>
+        <Text style={{ fontSize: 11, fontWeight: '800', color: NAVY, marginBottom: 6 }}>
+          {serveSetupServer ? `Server: ${nameOf(serveSetupServer)} — WHO RECEIVES?` : 'WHO SERVES FIRST?'}
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{setupIds.map((id) => chip(id))}</View>
+      </View>
+    );
   };
 
   /** SAVE SCORE → validate target → open winner picker. */
@@ -1810,6 +1916,8 @@ const TieDetailScreen: React.FC = () => {
                 </View>
               </View>
             </View>
+
+            {scoreModal.tieMatch ? renderServePanel(scoreModal.tieMatch) : null}
 
             {/* Winner picker (shown after SAVE validates target).
                 Redesigned to show ONLY the winning team prominently, with
