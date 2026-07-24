@@ -44,6 +44,7 @@ import {
   Positions,
   Side,
 } from '../../utils/serveState';
+import { sbplGroupForCategory } from '../../utils/sbplCategory';
 import { useLeagueStore } from '../../store/leagueStore';
 import { useAuthStore } from '../../store/authStore';
 import { IS_LEAGUE_KIOSK } from '../../config/appMode';
@@ -1657,21 +1658,34 @@ const TieDetailScreen: React.FC = () => {
                 // and [1] is for Player 2 (matches the slot label order, e.g.,
                 // "Women1 & Men1" → P1=women1, P2=men1). Same-category slots
                 // share one pool across both players.
-                const p1Cats =
-                  slot.allowedCategories.length === 2
-                    ? [slot.allowedCategories[0]]
-                    : slot.allowedCategories;
-                const p2Cats =
-                  slot.allowedCategories.length === 2
-                    ? [slot.allowedCategories[1]]
-                    : slot.allowedCategories;
-                const p1CatPlayers = p1Cats.flatMap((cat) => playersByCategory[cat] || []);
-                const p2CatPlayers = p2Cats.flatMap((cat) => playersByCategory[cat] || []);
                 const picks = lineupSlots[slot.slotNumber] || { player1Id: '', player2Id: '' };
-                // Fallback to full roster only if no eligible players configured at all
-                const allPlayers = rosterPlayers;
-                const p1Players = p1CatPlayers.length > 0 ? p1CatPlayers : allPlayers;
-                const p2Players = p2CatPlayers.length > 0 ? p2CatPlayers : allPlayers;
+                let p1Players: FranchiseRoster[];
+                let p2Players: FranchiseRoster[];
+                if (seasonFormat === 'sbpl_15game') {
+                  // SBPL: both players must belong to the slot's category group
+                  // (map each roster player's sub-category to its group).
+                  const eligible = rosterPlayers.filter(
+                    (r) => sbplGroupForCategory(r.categorySlug) === slot.categorySlug,
+                  );
+                  p1Players = eligible;
+                  p2Players = eligible;
+                } else {
+                  // Mixed-gender SPPL slots have TWO categories in
+                  // allowedCategories — [0] for Player 1, [1] for Player 2.
+                  const p1Cats =
+                    slot.allowedCategories.length === 2
+                      ? [slot.allowedCategories[0]]
+                      : slot.allowedCategories;
+                  const p2Cats =
+                    slot.allowedCategories.length === 2
+                      ? [slot.allowedCategories[1]]
+                      : slot.allowedCategories;
+                  const p1CatPlayers = p1Cats.flatMap((cat) => playersByCategory[cat] || []);
+                  const p2CatPlayers = p2Cats.flatMap((cat) => playersByCategory[cat] || []);
+                  // Fallback to full roster only if no eligible players configured at all
+                  p1Players = p1CatPlayers.length > 0 ? p1CatPlayers : rosterPlayers;
+                  p2Players = p2CatPlayers.length > 0 ? p2CatPlayers : rosterPlayers;
+                }
 
                 // SPPL Season 1 rule: each player plays at most 1 match per
                 // tie. Build a set of every playerId already picked in any
