@@ -3,6 +3,7 @@ import * as Clipboard from 'expo-clipboard';
 import {
   View,
   Text,
+  Image,
   ScrollView,
   FlatList,
   StyleSheet,
@@ -90,6 +91,20 @@ const WHITE = '#FFFFFF';
 const WARN = '#FFB300';
 const RED = '#EF4444';
 const PURPLE = '#8B5CF6';
+
+// ── SBPL S2 branded header: league logo (centre) + 4 sponsors (2 either side).
+// Shown only for the SBPL league. Labels are editable placeholders derived from
+// the booklet asset names (title / co / t-shirt / trophy).
+const SBPL_LEAGUE_ID = '5fc20913-c637-4ebd-8a11-398c68173334';
+const SBPL_LOGO = require('../../../assets/sbpl/sbpl-s2-logo.png');
+const SBPL_SPONSORS_LEFT = [
+  { img: require('../../../assets/sbpl/sbpl-sponsor-title-cut.png'), label: 'TITLE SPONSOR' },
+  { img: require('../../../assets/sbpl/sbpl-sponsor-co-cut.png'), label: 'CO-SPONSOR' },
+];
+const SBPL_SPONSORS_RIGHT = [
+  { img: require('../../../assets/sbpl/sbpl-sponsor-tshirt-cut.png'), label: 'T-SHIRT SPONSOR' },
+  { img: require('../../../assets/sbpl/sbpl-sponsor-trophy-cut.png'), label: 'TROPHY SPONSOR' },
+];
 const ORANGE = '#F97316';
 const PINK = '#EC4899';
 
@@ -2801,12 +2816,30 @@ const LeagueDashboardScreen: React.FC = () => {
         ) : (
           <View style={{ width: 40 }} />
         )}
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {store.currentLeague?.name || 'League'}
-          </Text>
-          <Text style={styles.headerSubtitle}>{season?.name || 'Season'}</Text>
-        </View>
+        {store.currentLeague?.id === SBPL_LEAGUE_ID ? (
+          <View style={styles.sbplBar}>
+            {SBPL_SPONSORS_LEFT.map((s) => (
+              <View key={s.label} style={styles.sbplSponsor}>
+                <Image source={s.img} style={styles.sbplSponsorImg} resizeMode="contain" />
+                <Text style={styles.sbplSponsorLbl} numberOfLines={1}>{s.label}</Text>
+              </View>
+            ))}
+            <Image source={SBPL_LOGO} style={styles.sbplLogo} resizeMode="contain" />
+            {SBPL_SPONSORS_RIGHT.map((s) => (
+              <View key={s.label} style={styles.sbplSponsor}>
+                <Image source={s.img} style={styles.sbplSponsorImg} resizeMode="contain" />
+                <Text style={styles.sbplSponsorLbl} numberOfLines={1}>{s.label}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {store.currentLeague?.name || 'League'}
+            </Text>
+            <Text style={styles.headerSubtitle}>{season?.name || 'Season'}</Text>
+          </View>
+        )}
         {/* Header gear opens the admin-only Setup panel (CSV import, scorers,
             admins, captain links, reset, etc.). Hidden for non-admins so
             viewers don't see a dead-end icon that opens an empty panel. */}
@@ -4521,6 +4554,11 @@ const styles = StyleSheet.create({
   backBtn: { width: 36, height: 36, borderRadius: 999, borderWidth: 1, borderColor: YColors.line2, justifyContent: 'center', alignItems: 'center' },
   backBtnText: { color: YColors.ink, fontSize: 18, fontWeight: '700' },
   headerCenter: { flex: 1, alignItems: 'center' },
+  sbplBar: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'nowrap' },
+  sbplSponsor: { alignItems: 'center', maxWidth: 92 },
+  sbplSponsorImg: { width: 62, height: 34 },
+  sbplSponsorLbl: { fontSize: 7, fontWeight: '800', color: YColors.ink2, letterSpacing: 0.5, marginTop: 2 },
+  sbplLogo: { width: 74, height: 52, marginHorizontal: 4 },
   headerTitle: { color: YColors.ink, fontSize: 18, fontWeight: '900', letterSpacing: 0.3 },
   headerSubtitle: { color: YColors.ink2, fontSize: 11, marginTop: 2, letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: '700' },
 
