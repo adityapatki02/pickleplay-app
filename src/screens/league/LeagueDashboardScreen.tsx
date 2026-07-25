@@ -4554,11 +4554,12 @@ const styles = StyleSheet.create({
   backBtn: { width: 36, height: 36, borderRadius: 999, borderWidth: 1, borderColor: YColors.line2, justifyContent: 'center', alignItems: 'center' },
   backBtnText: { color: YColors.ink, fontSize: 18, fontWeight: '700' },
   headerCenter: { flex: 1, alignItems: 'center' },
-  sbplBar: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'nowrap' },
-  sbplSponsor: { alignItems: 'center', maxWidth: 92 },
-  sbplSponsorImg: { width: 62, height: 34 },
-  sbplSponsorLbl: { fontSize: 7, fontWeight: '800', color: YColors.ink2, letterSpacing: 0.5, marginTop: 2 },
-  sbplLogo: { width: 74, height: 52, marginHorizontal: 4 },
+  sbplBar: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, flexWrap: 'nowrap', paddingHorizontal: 8 },
+  // Fixed, generous item width so the centered category label never clips.
+  sbplSponsor: { alignItems: 'center', width: 108 },
+  sbplSponsorImg: { width: 80, height: 44 },
+  sbplSponsorLbl: { fontSize: 8, fontWeight: '800', color: YColors.ink2, letterSpacing: 0.3, marginTop: 3, textAlign: 'center' },
+  sbplLogo: { width: 96, height: 66, marginHorizontal: 6 },
   headerTitle: { color: YColors.ink, fontSize: 18, fontWeight: '900', letterSpacing: 0.3 },
   headerSubtitle: { color: YColors.ink2, fontSize: 11, marginTop: 2, letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: '700' },
 
