@@ -98,12 +98,12 @@ const PURPLE = '#8B5CF6';
 const SBPL_LEAGUE_ID = '5fc20913-c637-4ebd-8a11-398c68173334';
 const SBPL_LOGO = require('../../../assets/sbpl/sbpl-s2-logo.png');
 const SBPL_SPONSORS_LEFT = [
-  { img: require('../../../assets/sbpl/sbpl-sponsor-title-cut.png'), label: 'TITLE SPONSOR' },
-  { img: require('../../../assets/sbpl/sbpl-sponsor-co-cut.png'), label: 'CO-SPONSOR' },
+  { img: require('../../../assets/sbpl/rr-group.png'), label: 'TITLE SPONSOR' },
+  { img: require('../../../assets/sbpl/realestiq.png'), label: 'CO-SPONSOR' },
 ];
 const SBPL_SPONSORS_RIGHT = [
-  { img: require('../../../assets/sbpl/sbpl-sponsor-tshirt-cut.png'), label: 'T-SHIRT SPONSOR' },
-  { img: require('../../../assets/sbpl/sbpl-sponsor-trophy-cut.png'), label: 'TROPHY SPONSOR' },
+  { img: require('../../../assets/sbpl/globald2c.png'), label: 'T-SHIRT SPONSOR' },
+  { img: require('../../../assets/sbpl/kamakhya.png'), label: 'TROPHY SPONSOR' },
 ];
 const ORANGE = '#F97316';
 const PINK = '#EC4899';
@@ -2820,15 +2820,21 @@ const LeagueDashboardScreen: React.FC = () => {
           <View style={styles.sbplBar}>
             {SBPL_SPONSORS_LEFT.map((s) => (
               <View key={s.label} style={styles.sbplSponsor}>
-                <Image source={s.img} style={styles.sbplSponsorImg} resizeMode="contain" />
-                <Text style={styles.sbplSponsorLbl} numberOfLines={1}>{s.label}</Text>
+                <View style={styles.sbplTile}>
+                  <Image source={s.img} style={styles.sbplSponsorImg} resizeMode="contain" />
+                </View>
+                <Text style={styles.sbplSponsorLbl} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{s.label}</Text>
               </View>
             ))}
-            <Image source={SBPL_LOGO} style={styles.sbplLogo} resizeMode="contain" />
+            <View style={styles.sbplLogoWrap}>
+              <Image source={SBPL_LOGO} style={styles.sbplLogoImg} resizeMode="contain" />
+            </View>
             {SBPL_SPONSORS_RIGHT.map((s) => (
               <View key={s.label} style={styles.sbplSponsor}>
-                <Image source={s.img} style={styles.sbplSponsorImg} resizeMode="contain" />
-                <Text style={styles.sbplSponsorLbl} numberOfLines={1}>{s.label}</Text>
+                <View style={styles.sbplTile}>
+                  <Image source={s.img} style={styles.sbplSponsorImg} resizeMode="contain" />
+                </View>
+                <Text style={styles.sbplSponsorLbl} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{s.label}</Text>
               </View>
             ))}
           </View>
@@ -4554,12 +4560,17 @@ const styles = StyleSheet.create({
   backBtn: { width: 36, height: 36, borderRadius: 999, borderWidth: 1, borderColor: YColors.line2, justifyContent: 'center', alignItems: 'center' },
   backBtnText: { color: YColors.ink, fontSize: 18, fontWeight: '700' },
   headerCenter: { flex: 1, alignItems: 'center' },
-  sbplBar: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, flexWrap: 'nowrap', paddingHorizontal: 8 },
-  // Fixed, generous item width so the centered category label never clips.
-  sbplSponsor: { alignItems: 'center', width: 108 },
-  sbplSponsorImg: { width: 80, height: 44 },
+  // Fully responsive: 4 sponsors + logo each take a flex share so they always
+  // fit (no clipping) on any width; images/labels scale down within their share.
+  sbplBar: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 4 },
+  sbplSponsor: { flex: 1, minWidth: 0, alignItems: 'center', maxWidth: 120 },
+  // Dark tile — the original sponsor logos are on dark backgrounds, so a uniform
+  // near-black tile makes the strip look consistent on the light header.
+  sbplTile: { width: '100%', maxWidth: 108, height: 48, backgroundColor: '#0A0A12', borderRadius: 8, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', paddingHorizontal: 6, paddingVertical: 4 },
+  sbplSponsorImg: { width: '100%', height: '100%' },
   sbplSponsorLbl: { fontSize: 8, fontWeight: '800', color: YColors.ink2, letterSpacing: 0.3, marginTop: 3, textAlign: 'center' },
-  sbplLogo: { width: 96, height: 66, marginHorizontal: 6 },
+  sbplLogoWrap: { flex: 1.15, minWidth: 0, maxWidth: 130, alignItems: 'center', justifyContent: 'center', marginHorizontal: 2 },
+  sbplLogoImg: { width: '100%', height: 66 },
   headerTitle: { color: YColors.ink, fontSize: 18, fontWeight: '900', letterSpacing: 0.3 },
   headerSubtitle: { color: YColors.ink2, fontSize: 11, marginTop: 2, letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: '700' },
 
