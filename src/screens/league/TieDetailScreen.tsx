@@ -45,6 +45,7 @@ import {
   Side,
 } from '../../utils/serveState';
 import { sbplGroupForCategory } from '../../utils/sbplCategory';
+import { ShuttleIcon, RacketIcon } from '../../components/ServeIcons';
 import { useLeagueStore } from '../../store/leagueStore';
 import { useAuthStore } from '../../store/authStore';
 import { IS_LEAGUE_KIOSK } from '../../config/appMode';
@@ -548,7 +549,9 @@ const TieDetailScreen: React.FC = () => {
         const isReceiver = inSync && st.receiverId === id;
         return (
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 3 }}>
-            <Text style={{ width: 20, fontSize: 15 }}>{isServer ? '🏸' : isReceiver ? '🎯' : ''}</Text>
+            <View style={{ width: 22, alignItems: 'center' }}>
+              {isServer ? <ShuttleIcon size={16} color="#0369A1" /> : isReceiver ? <RacketIcon size={16} color="#B45309" /> : null}
+            </View>
             <Text
               numberOfLines={1}
               style={{
@@ -581,7 +584,10 @@ const TieDetailScreen: React.FC = () => {
             </View>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
-            <Text style={{ fontSize: 10, color: '#64748B' }}>🏸 Server   🎯 Receiver</Text>
+            <ShuttleIcon size={12} color="#64748B" />
+            <Text style={{ fontSize: 10, color: '#64748B' }}> Server   </Text>
+            <RacketIcon size={12} color="#64748B" />
+            <Text style={{ fontSize: 10, color: '#64748B' }}> Receiver</Text>
             {!inSync && (
               <Text style={{ fontSize: 10, color: ORANGE, fontWeight: '700', marginLeft: 8 }}>· out of sync</Text>
             )}
