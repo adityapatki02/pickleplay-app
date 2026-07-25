@@ -542,20 +542,54 @@ const TieDetailScreen: React.FC = () => {
     if (serveConfig) {
       const st = foldServe(serveConfig, serveEvents);
       const inSync = serveEvents.length === scoreVals.a + scoreVals.b;
+      // Fixed 4-name display; only the 🏸 (server) and 🎯 (receiver) icons move.
+      const playerLine = (id?: string | null) => {
+        const isServer = inSync && st.serverId === id;
+        const isReceiver = inSync && st.receiverId === id;
+        return (
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 3 }}>
+            <Text style={{ width: 20, fontSize: 15 }}>{isServer ? '🏸' : isReceiver ? '🎯' : ''}</Text>
+            <Text
+              numberOfLines={1}
+              style={{
+                flex: 1, fontSize: 13,
+                fontWeight: isServer ? '900' : isReceiver ? '800' : '600',
+                color: isServer ? '#0369A1' : isReceiver ? '#B45309' : NAVY,
+              }}
+            >
+              {nameOf(id)}
+            </Text>
+          </View>
+        );
+      };
       return (
         <View style={box}>
-          {inSync ? (
-            <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>
-              🏸 Serving: {nameOf(st.serverId)} ({st.serviceCourt === 'R' ? 'Right' : 'Left'})  ·  Receiving: {nameOf(st.receiverId)}
-            </Text>
-          ) : (
-            <Text style={{ fontSize: 12, color: ORANGE, fontWeight: '700' }}>
-              Serve tracking out of sync — tap “Reset server”.
-            </Text>
-          )}
-          <TouchableOpacity onPress={() => { setServeConfig(null); setServeSetupServer(null); }} style={{ marginTop: 6, alignSelf: 'flex-start' }}>
-            <Text style={{ fontSize: 11, fontWeight: '800', color: BLUE }}>Reset server</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: BLUE, letterSpacing: 1, marginBottom: 2 }} numberOfLines={1}>
+                {homeName.toUpperCase()}
+              </Text>
+              {playerLine(h1)}
+              {playerLine(h2)}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: RED, letterSpacing: 1, marginBottom: 2 }} numberOfLines={1}>
+                {awayName.toUpperCase()}
+              </Text>
+              {playerLine(a1)}
+              {playerLine(a2)}
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
+            <Text style={{ fontSize: 10, color: '#64748B' }}>🏸 Server   🎯 Receiver</Text>
+            {!inSync && (
+              <Text style={{ fontSize: 10, color: ORANGE, fontWeight: '700', marginLeft: 8 }}>· out of sync</Text>
+            )}
+            <View style={{ flex: 1 }} />
+            <TouchableOpacity onPress={() => { setServeConfig(null); setServeSetupServer(null); }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: BLUE }}>Reset</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       );
     }
