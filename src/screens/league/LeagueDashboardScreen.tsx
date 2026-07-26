@@ -599,6 +599,25 @@ const LeagueDashboardScreen: React.FC = () => {
   };
 
   const renderQuickStats = () => {
+    // SBPL: use this prime slot to showcase the four sponsors instead of counts.
+    if (store.currentLeague?.id === SBPL_LEAGUE_ID) {
+      const all = [...SBPL_SPONSORS_LEFT, ...SBPL_SPONSORS_RIGHT];
+      return (
+        <View style={{ paddingHorizontal: 20, marginTop: 18, marginBottom: 6 }}>
+          <YEyebrow size={10} color={YColors.ink3} style={{ marginBottom: 10 }}>OUR SPONSORS</YEyebrow>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {all.map((s) => (
+              <View key={s.label} style={{ flex: 1, minWidth: 0, alignItems: 'center' }}>
+                <View style={styles.sbplTileBig}>
+                  <Image source={s.img} style={styles.sbplSponsorImg} resizeMode="contain" />
+                </View>
+                <Text style={styles.sbplShowcaseLbl} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{s.label}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      );
+    }
     const played = completedTies.length;
     const remaining = ties.length - played;
     const items = [
@@ -2817,26 +2836,8 @@ const LeagueDashboardScreen: React.FC = () => {
           <View style={{ width: 40 }} />
         )}
         {store.currentLeague?.id === SBPL_LEAGUE_ID ? (
-          <View style={styles.sbplBar}>
-            {SBPL_SPONSORS_LEFT.map((s) => (
-              <View key={s.label} style={styles.sbplSponsor}>
-                <View style={styles.sbplTile}>
-                  <Image source={s.img} style={styles.sbplSponsorImg} resizeMode="contain" />
-                </View>
-                <Text style={styles.sbplSponsorLbl} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{s.label}</Text>
-              </View>
-            ))}
-            <View style={styles.sbplLogoWrap}>
-              <Image source={SBPL_LOGO} style={styles.sbplLogoImg} resizeMode="contain" />
-            </View>
-            {SBPL_SPONSORS_RIGHT.map((s) => (
-              <View key={s.label} style={styles.sbplSponsor}>
-                <View style={styles.sbplTile}>
-                  <Image source={s.img} style={styles.sbplSponsorImg} resizeMode="contain" />
-                </View>
-                <Text style={styles.sbplSponsorLbl} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{s.label}</Text>
-              </View>
-            ))}
+          <View style={styles.headerCenter}>
+            <Image source={SBPL_LOGO} style={styles.sbplHeaderLogo} resizeMode="contain" />
           </View>
         ) : (
           <View style={styles.headerCenter}>
@@ -4571,6 +4572,11 @@ const styles = StyleSheet.create({
   sbplSponsorLbl: { fontSize: 8, fontWeight: '800', color: YColors.ink2, letterSpacing: 0.3, marginTop: 3, textAlign: 'center' },
   sbplLogoWrap: { flex: 1.15, minWidth: 0, maxWidth: 130, alignItems: 'center', justifyContent: 'center', marginHorizontal: 2 },
   sbplLogoImg: { width: '100%', height: 66 },
+  // Top bar: league logo only.
+  sbplHeaderLogo: { width: 132, height: 56 },
+  // Overview sponsor showcase (replaces the count stats for SBPL).
+  sbplTileBig: { width: '100%', maxWidth: 220, height: 88, backgroundColor: '#0A0A12', borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', paddingHorizontal: 12, paddingVertical: 10 },
+  sbplShowcaseLbl: { fontSize: 11, fontWeight: '800', color: YColors.ink2, letterSpacing: 0.4, marginTop: 6, textAlign: 'center' },
   headerTitle: { color: YColors.ink, fontSize: 18, fontWeight: '900', letterSpacing: 0.3 },
   headerSubtitle: { color: YColors.ink2, fontSize: 11, marginTop: 2, letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: '700' },
 
