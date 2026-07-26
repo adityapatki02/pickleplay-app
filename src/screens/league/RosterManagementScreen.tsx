@@ -15,7 +15,7 @@ import {
   Platform,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { getRoster, addRosterPlayer, getFranchise, removeRosterPlayer } from '../../api/leagues.api';
+import { getRoster, addRosterPlayer, getFranchise, removeRosterPlayer, updateRosterEntry } from '../../api/leagues.api';
 import { xAlert, xConfirm } from '../../utils/alert';
 import { useLeagueStore } from '../../store/leagueStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../config/theme';
@@ -87,6 +87,53 @@ export default function RosterManagementScreen() {
   const [playerCategory, setPlayerCategory] = useState<CategorySlug>('men1');
   const [playerJersey, setPlayerJersey] = useState('');
   const [addError, setAddError] = useState('');
+
+  // Edit player form
+  const [editRosterId, setEditRosterId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editJersey, setEditJersey] = useState('');
+  const [editError, setEditError] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+
+  const openEditPlayer = (item: FranchiseRoster) => {
+    setEditRosterId(item.id);
+    setEditName(item.player?.fullName ?? (item.player as any)?.displayName ?? '');
+    setEditPhone(item.player?.phone ?? '');
+    setEditJersey(item.jerseyNumber != null ? String(item.jerseyNumber) : '');
+    setEditError('');
+  };
+
+  const handleUpdatePlayer = async () => {
+    if (!editRosterId) return;
+    if (!editName.trim()) { setEditError('Name is required'); return; }
+    setEditSaving(true);
+    try {
+      const data: any = {
+        playerName: editName.trim(),
+        playerPhone: editPhone.trim() || '',
+        jerseyNumber: editJersey.trim() ? parseInt(editJersey, 10) : null,
+      };
+      await updateRosterEntry(franchiseId, editRosterId, data);
+      // Reflect locally without a full refetch.
+      setRoster((prev) =>
+        prev.map((r) =>
+          r.id === editRosterId
+            ? {
+                ...r,
+                jerseyNumber: data.jerseyNumber,
+                player: { ...(r.player as any), fullName: data.playerName, phone: data.playerPhone || null },
+              }
+            : r,
+        ),
+      );
+      setEditRosterId(null);
+    } catch (err: any) {
+      setEditError(err?.response?.data?.message || err?.message || 'Failed to update player');
+    } finally {
+      setEditSaving(false);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -285,6 +332,15 @@ export default function RosterManagementScreen() {
                 {item.status.toUpperCase()}
               </Text>
             </View>
+            {/* Edit player name / phone / jersey */}
+            <TouchableOpacity
+              onPress={() => openEditPlayer(item)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.editBtn}
+              activeOpacity={0.6}
+            >
+              <Text style={styles.editBtnText}>✎</Text>
+            </TouchableOpacity>
             {/* Remove player — admin only; confirmation prevents accidental deletion */}
             <TouchableOpacity
               onPress={() => {
@@ -443,6 +499,77 @@ export default function RosterManagementScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Edit player — name / phone / jersey */}
+      <Modal visible={!!editRosterId} animationType="slide" transparent>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>EDIT PLAYER</Text>
+
+            <View style={styles.modalField}>
+              <Text style={styles.modalLabel}>PLAYER NAME</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Full name"
+                placeholderTextColor="#94A3B8"
+                value={editName}
+                onChangeText={setEditName}
+                maxLength={60}
+              />
+            </View>
+
+            <View style={styles.modalField}>
+              <Text style={styles.modalLabel}>PHONE NUMBER</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Phone (optional)"
+                placeholderTextColor="#94A3B8"
+                value={editPhone}
+                onChangeText={setEditPhone}
+                keyboardType="phone-pad"
+                maxLength={15}
+              />
+            </View>
+
+            <View style={styles.modalField}>
+              <Text style={styles.modalLabel}>JERSEY NUMBER</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. 7"
+                placeholderTextColor="#94A3B8"
+                value={editJersey}
+                onChangeText={setEditJersey}
+                keyboardType="numeric"
+                maxLength={3}
+              />
+            </View>
+
+            {editError ? <Text style={styles.modalError}>{editError}</Text> : null}
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setEditRosterId(null)}>
+                <Text style={styles.modalCancelText}>CANCEL</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={handleUpdatePlayer}
+                disabled={editSaving}
+                activeOpacity={0.85}
+              >
+                {editSaving ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.modalSaveText}>SAVE</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -575,6 +702,21 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  editBtn: {
+    marginLeft: spacing.sm,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editBtnText: {
+    fontSize: 14,
+    lineHeight: 16,
+    fontWeight: '700',
+    color: '#0369A1',
   },
   removeBtn: {
     marginLeft: spacing.sm,
