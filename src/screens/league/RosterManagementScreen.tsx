@@ -26,6 +26,7 @@ import type {
   RosterStatus,
 } from '../../types/league.types';
 import { CATEGORY_LABELS } from '../../types/league.types';
+import { sbplGroupForCategory } from '../../utils/sbplCategory';
 import type { LeagueStackParamList } from '../../navigation/types';
 
 import { YColors, YTopBar } from '../../components/yoiden';
@@ -119,21 +120,44 @@ export default function RosterManagementScreen() {
   // ── Build sections ──
 
   const safeRoster = Array.isArray(roster) ? roster : [];
-  const sections: RosterSection[] = CATEGORY_ORDER.map((slug) => ({
-    title: CATEGORY_LABELS[slug],
-    slug,
-    data: safeRoster.filter((r) => r.categorySlug === slug),
-  })).filter((s) => s.data.length > 0);
 
-  // If no players at all, show all categories empty for context
-  const displaySections =
-    sections.length > 0
-      ? sections
-      : CATEGORY_ORDER.map((slug) => ({
-          title: CATEGORY_LABELS[slug],
-          slug,
-          data: [] as FranchiseRoster[],
-        }));
+  // SBPL rosters use auction sub-categories (a1/w4/k1/…). Detect them and group
+  // by the SBPL category groups instead of the SPPL slug buckets.
+  const SPPL_SLUGS = ['kids', 'teen', 'women1', 'women2', 'men1', 'men2', 'men3'];
+  const isSbpl = safeRoster.some(
+    (r) => !SPPL_SLUGS.includes(r.categorySlug as string) && !!sbplGroupForCategory(r.categorySlug),
+  );
+  const SBPL_ORDER: { slug: string; title: string }[] = [
+    { slug: 'kids', title: 'Kids' },
+    { slug: 'women13', title: 'Women 1-3' },
+    { slug: 'women45', title: 'Women 4-5' },
+    { slug: 'menA', title: 'Men A' },
+    { slug: 'menB', title: 'Men B' },
+    { slug: 'menC', title: 'Men C' },
+  ];
+
+  let displaySections: RosterSection[];
+  if (isSbpl) {
+    displaySections = SBPL_ORDER.map((c) => ({
+      title: c.title,
+      slug: c.slug as any,
+      data: safeRoster.filter((r) => sbplGroupForCategory(r.categorySlug) === c.slug),
+    }));
+  } else {
+    const sections: RosterSection[] = CATEGORY_ORDER.map((slug) => ({
+      title: CATEGORY_LABELS[slug],
+      slug,
+      data: safeRoster.filter((r) => r.categorySlug === slug),
+    })).filter((s) => s.data.length > 0);
+    displaySections =
+      sections.length > 0
+        ? sections
+        : CATEGORY_ORDER.map((slug) => ({
+            title: CATEGORY_LABELS[slug],
+            slug,
+            data: [] as FranchiseRoster[],
+          }));
+  }
 
   // ── Add player ──
 
