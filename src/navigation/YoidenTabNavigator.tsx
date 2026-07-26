@@ -56,6 +56,9 @@ import LeagueTieDetailScreen from '../screens/league/TieDetailScreen';
 import LeaguePlayerProfileScreen from '../screens/league/PlayerProfileScreen';
 import LeagueFantasyScreen from '../screens/league/FantasyScreen';
 import ScorerDemoScreen from '../screens/league/ScorerDemoScreen';
+import FranchiseManagementScreen from '../screens/league/FranchiseManagementScreen';
+import RosterManagementScreen from '../screens/league/RosterManagementScreen';
+import GroupManagementScreen from '../screens/league/GroupManagementScreen';
 
 // Location picker — reused from onboarding, now opened as a modal from the Home header
 import { CityPickerScreen } from '../screens/auth/CityPickerScreen';
@@ -98,6 +101,9 @@ function registerDetailAndManageScreens<T extends DetailAndManageRoutes>(
       <S name="Standings" component={LeagueStandingsScreen} />
       <S name="LeagueStats" component={LeagueStatsScreen} />
       <S name="TieDetail" component={LeagueTieDetailScreen} />
+      <S name="FranchiseManagement" component={FranchiseManagementScreen} />
+      <S name="RosterManagement" component={RosterManagementScreen} />
+      <S name="GroupManagement" component={GroupManagementScreen} />
       <S name="PlayerProfile" component={LeaguePlayerProfileScreen} />
       <S name="LeagueFantasy" component={LeagueFantasyScreen} />
       <S name="ScorerDemo" component={ScorerDemoScreen} />
