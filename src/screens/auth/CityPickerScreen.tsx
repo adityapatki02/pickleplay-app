@@ -22,6 +22,8 @@ import {
   ActivityIndicator,
   SafeAreaView,
   Platform,
+  Keyboard,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { YColors } from '../../components/yoiden';
@@ -137,6 +139,7 @@ export const CityPickerScreen: React.FC = () => {
       if (!result) {
         setLocError("Couldn't detect your city. Try picking manually below.");
       } else {
+        Keyboard.dismiss();
         setSelected(result);
       }
     } catch (e: any) {
@@ -152,6 +155,9 @@ export const CityPickerScreen: React.FC = () => {
 
   // ── Pick a suggestion from search ─────────────────────────────────
   const pickSuggestion = async (sug: Suggestion) => {
+    // Drop the keyboard immediately — the input keeps focus after picking
+    // otherwise, leaving the keyboard covering the CONTINUE button.
+    Keyboard.dismiss();
     const main = sug.structured_formatting?.main_text ?? sug.description.split(',')[0];
     const secondary = sug.structured_formatting?.secondary_text;
     // Fetch lat/lng via details for better data quality
@@ -205,7 +211,15 @@ export const CityPickerScreen: React.FC = () => {
           <Text style={s.closeIcon}>✕</Text>
         </TouchableOpacity>
       )}
-      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView
+        style={s.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+      <ScrollView
+        contentContainerStyle={s.scroll}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
         <Text style={s.eyebrow}>ONE MORE STEP</Text>
         <Text style={s.title}>Where do you play?</Text>
         <Text style={s.subtitle}>
@@ -290,12 +304,14 @@ export const CityPickerScreen: React.FC = () => {
         </TouchableOpacity>
         {saveError && <Text style={s.errorText}>{saveError}</Text>}
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: YColors.bg },
+  flex: { flex: 1 },
   scroll: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 180 },
 
   closeBtn: { position: 'absolute', top: 16, right: 20, zIndex: 20, elevation: 6, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: YColors.bg2, borderWidth: 1, borderColor: YColors.line },

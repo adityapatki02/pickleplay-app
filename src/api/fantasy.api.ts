@@ -30,15 +30,11 @@ export type FantasyForm1 = {
   champion?: string;
 };
 
+// Dream Team picks keyed by bucket. Bucket set is season-specific: SPPL uses
+// kids/teenBoys/teenGirls/m1/w1/m2/w2/m3; SBPL uses kids/women13/women45/
+// menA/menB/menC. Values are player-id arrays (or a single id for 1-pick buckets).
 export type FantasyForm2 = {
-  kids?: string[];
-  teenBoys?: string;
-  teenGirls?: string;
-  m1?: string[];
-  w1?: string[];
-  m2?: string[];
-  w2?: string[];
-  m3?: string[];
+  [bucket: string]: string[] | string | undefined;
 };
 
 export type FantasyEntry = {

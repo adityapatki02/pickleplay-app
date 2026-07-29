@@ -52,6 +52,19 @@ const CATEGORY_ORDER: CategorySlug[] = [
   'men3',
 ];
 
+// SBPL rosters store auction-style sub-category slugs (k1/w1/w4/a1/b1/c1). The
+// grouping mapper (sbplGroupForCategory) keys off the FIRST LETTER, so a player
+// added into "Men A" must be stored as an 'a…' slug — not 'menA'. These are the
+// representative slugs the Add-Player picker writes for each SBPL group.
+const SBPL_ADD_CATEGORIES: { slug: string; label: string }[] = [
+  { slug: 'k1', label: 'Kids' },
+  { slug: 'w1', label: 'Women 1-3' },
+  { slug: 'w4', label: 'Women 4-5' },
+  { slug: 'a1', label: 'Men A' },
+  { slug: 'b1', label: 'Men B' },
+  { slug: 'c1', label: 'Men C' },
+];
+
 const STATUS_COLORS: Record<RosterStatus, { bg: string; text: string }> = {
   active: { bg: '#E6FFF5', text: GREEN },
   injured: { bg: '#FFF7E6', text: ORANGE },
@@ -384,7 +397,10 @@ export default function RosterManagementScreen() {
       {/* FAB */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => setShowAddModal(true)}
+        onPress={() => {
+          setPlayerCategory((isSbpl ? 'a1' : 'men1') as any);
+          setShowAddModal(true);
+        }}
         activeOpacity={0.85}
       >
         <Text style={styles.fabText}>+</Text>
@@ -431,7 +447,13 @@ export default function RosterManagementScreen() {
             <View style={styles.modalField}>
               <Text style={styles.modalLabel}>CATEGORY</Text>
               <View style={styles.categoryPicker}>
-                {CATEGORY_ORDER.map((slug) => {
+                {(isSbpl
+                  ? SBPL_ADD_CATEGORIES
+                  : CATEGORY_ORDER.map((slug) => ({
+                      slug,
+                      label: CATEGORY_LABELS[slug],
+                    }))
+                ).map(({ slug, label }) => {
                   const active = playerCategory === slug;
                   return (
                     <TouchableOpacity
@@ -440,7 +462,7 @@ export default function RosterManagementScreen() {
                         styles.categoryChip,
                         active && styles.categoryChipActive,
                       ]}
-                      onPress={() => setPlayerCategory(slug)}
+                      onPress={() => setPlayerCategory(slug as any)}
                     >
                       <Text
                         style={[
@@ -448,7 +470,7 @@ export default function RosterManagementScreen() {
                           active && styles.categoryChipTextActive,
                         ]}
                       >
-                        {CATEGORY_LABELS[slug]}
+                        {label}
                       </Text>
                     </TouchableOpacity>
                   );

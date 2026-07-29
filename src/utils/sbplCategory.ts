@@ -18,3 +18,17 @@ export function sbplGroupForCategory(sub?: string | null): string | null {
   }
   return null;
 }
+
+// The rulebook splits a tie's 15 games across its two courts by slot: slots 1–7
+// (Kids/Women) on the first court, 8–15 (Men A/B/C) on the second. Mirrors the
+// backend courtForSlot. Single-court ties (no courtNumber2) put every game on
+// the one court. Returns null when no court is assigned.
+export const SBPL_COURT_SPLIT_SLOT = 7;
+export function courtForSlot(
+  tie: { courtNumber?: number | null; courtNumber2?: number | null },
+  slotNumber: number,
+  boundary: number = SBPL_COURT_SPLIT_SLOT,
+): number | null {
+  if (tie.courtNumber2 == null) return tie.courtNumber ?? null;
+  return slotNumber <= boundary ? (tie.courtNumber ?? null) : tie.courtNumber2;
+}

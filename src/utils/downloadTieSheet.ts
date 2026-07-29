@@ -29,6 +29,8 @@ export type TieSheetSlot = {
 };
 
 export type TieSheetInput = {
+  /** League name shown in the header, e.g. "SPPL", "SBPL S2". Defaults to "SPPL". */
+  leagueName?: string;
   /** Match number / tie number printed in the header. Use the tie's slot index in the season or just the round name. */
   matchNo: string | number;
   /** Display date, e.g., "1 May 2026". */
@@ -262,7 +264,7 @@ export function buildTieSheetHTML(input: TieSheetInput): string {
 <body>
   <div class="hdr">
     <div class="title">
-      SPPL — SEASON 2026
+      ${escape(input.leagueName || 'SPPL')} — SEASON 2026
       <span class="sub">TIE SHEET</span>
     </div>
     <div class="match">${escape(input.matchNo)}</div>

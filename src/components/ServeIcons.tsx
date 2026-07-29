@@ -1,5 +1,5 @@
 import React from 'react';
-import Svg, { Path, Circle, Line, Ellipse } from 'react-native-svg';
+import Svg, { Path, Circle, Line } from 'react-native-svg';
 
 // Shuttlecock — server marker. Feather cone + cork base.
 export function ShuttleIcon({ size = 16, color = '#0369A1' }: { size?: number; color?: string }) {
@@ -14,14 +14,14 @@ export function ShuttleIcon({ size = 16, color = '#0369A1' }: { size?: number; c
   );
 }
 
-// Badminton racket — receiver marker. Oval strung head + handle.
-export function RacketIcon({ size = 16, color = '#B45309' }: { size?: number; color?: string }) {
+// Target / bullseye — receiver marker. Clearly distinct from the shuttle at
+// small sizes (concentric rings read instantly as "the receiving end").
+export function TargetIcon({ size = 16, color = '#B45309' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Ellipse cx="10.5" cy="8" rx="5.2" ry="6.2" fill="none" stroke={color} strokeWidth={1.5} />
-      <Line x1="6.5" y1="8" x2="14.5" y2="8" stroke={color} strokeWidth={0.6} />
-      <Line x1="10.5" y1="2" x2="10.5" y2="14" stroke={color} strokeWidth={0.6} />
-      <Line x1="14" y1="12.6" x2="20" y2="21" stroke={color} strokeWidth={1.9} strokeLinecap="round" />
+      <Circle cx="12" cy="12" r="9" fill="none" stroke={color} strokeWidth={1.7} />
+      <Circle cx="12" cy="12" r="5" fill="none" stroke={color} strokeWidth={1.7} />
+      <Circle cx="12" cy="12" r="2" fill={color} />
     </Svg>
   );
 }

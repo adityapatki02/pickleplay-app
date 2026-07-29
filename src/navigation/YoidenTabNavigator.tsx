@@ -56,6 +56,7 @@ import LeagueTieDetailScreen from '../screens/league/TieDetailScreen';
 import LeaguePlayerProfileScreen from '../screens/league/PlayerProfileScreen';
 import LeagueFantasyScreen from '../screens/league/FantasyScreen';
 import ScorerDemoScreen from '../screens/league/ScorerDemoScreen';
+import ScorerMatchesScreen from '../screens/league/ScorerMatchesScreen';
 import FranchiseManagementScreen from '../screens/league/FranchiseManagementScreen';
 import RosterManagementScreen from '../screens/league/RosterManagementScreen';
 import GroupManagementScreen from '../screens/league/GroupManagementScreen';
@@ -106,6 +107,7 @@ function registerDetailAndManageScreens<T extends DetailAndManageRoutes>(
       <S name="GroupManagement" component={GroupManagementScreen} />
       <S name="PlayerProfile" component={LeaguePlayerProfileScreen} />
       <S name="LeagueFantasy" component={LeagueFantasyScreen} />
+      <S name="ScorerMatches" component={ScorerMatchesScreen} />
       <S name="ScorerDemo" component={ScorerDemoScreen} />
     </>
   );
@@ -151,6 +153,16 @@ const MeStackNavigator = () => (
   </MeStack.Navigator>
 );
 
+// Profile tab — roots on the player's career profile (falls back to the
+// logged-in user when opened with no params). Used as the second bottom tab in
+// the league-kiosk build (HOME · PROFILE).
+const ProfileStack = createNativeStackNavigator<MeStackParamList>();
+const ProfileStackNavigator = () => (
+  <ProfileStack.Navigator screenOptions={{ headerShown: false }} initialRouteName={'PlayerProfile' as any}>
+    {registerDetailAndManageScreens(ProfileStack)}
+  </ProfileStack.Navigator>
+);
+
 // ─── Bottom tabs ─────────────────────────────────────────────────
 const Tab = createBottomTabNavigator<YoidenTabParamList>();
 
@@ -163,6 +175,7 @@ export const YoidenTabNavigator: React.FC = () => (
     <Tab.Screen name="PlayTab" component={PlayStackNavigator} />
     <Tab.Screen name="BookTab" component={BookStackNavigator} />
     <Tab.Screen name="MeTab" component={MeStackNavigator} />
+    <Tab.Screen name="ProfileTab" component={ProfileStackNavigator} />
   </Tab.Navigator>
 );
 

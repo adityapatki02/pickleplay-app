@@ -152,6 +152,13 @@ export interface Tie {
   notes?: string;
   /** Court assignment for live-streaming overlay routing (1, 2, 3, ...) */
   courtNumber?: number | null;
+  /** Second court for a two-court (SBPL) tie played across two courts. */
+  courtNumber2?: number | null;
+  /** Assigned scorer (legacy single-scorer / SPPL lock). */
+  scorerId?: string | null;
+  /** Two authorized scorers for a two-court (SBPL) tie. */
+  scorer1Id?: string | null;
+  scorer2Id?: string | null;
   /** Points-to-win target (11/15/21) — drives match scoringMode */
   pointsToWin?: number;
   /** Games per match (best of 1/3/5) — Phase 2 */
@@ -169,6 +176,7 @@ export interface TieMatch {
   categorySlug: CategorySlug;
   pointValue: number;
   isRallyPointGame: boolean;
+  courtNumber?: number | null;
   homePlayer1Id?: string;
   homePlayer2Id?: string;
   awayPlayer1Id?: string;
