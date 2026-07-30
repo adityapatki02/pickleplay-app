@@ -74,6 +74,8 @@ export interface LeagueSeason {
   maxSubstitutionsPerTie: number;
   maxMatchesPerPlayerPerTie: number;
   tieSheetDeadlineMinutes: number;
+  /** Per-court live-stream links, keyed by court number. */
+  streamLinks?: Record<string, string> | null;
   createdAt: string;
   updatedAt: string;
 }

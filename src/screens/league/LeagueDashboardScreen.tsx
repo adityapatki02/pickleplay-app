@@ -54,6 +54,7 @@ import {
   removeLeagueAdmin,
   recalculateStandings,
   updateSeason,
+  setStreamLinks,
   backfillGender,
   resetLeagueTie,
   applyDefaultSchedule,
@@ -289,6 +290,11 @@ const LeagueDashboardScreen: React.FC = () => {
   const [showOverlaysModal, setShowOverlaysModal] = useState(false);
   const [showCourtsModal, setShowCourtsModal] = useState(false);
   const [savingCourts, setSavingCourts] = useState(false);
+
+  // Streaming links (per court) — organiser-editable, shown as Watch buttons.
+  const [showStreamModal, setShowStreamModal] = useState(false);
+  const [streamEdits, setStreamEdits] = useState<Record<string, string>>({});
+  const [savingStream, setSavingStream] = useState(false);
 
   // Backfill-gender modal (multi-line CSV input)
   const [showBackfillModal, setShowBackfillModal] = useState(false);
@@ -1063,6 +1069,17 @@ const LeagueDashboardScreen: React.FC = () => {
         bg: '#DCFCE7',
       },
       {
+        icon: '📡',
+        title: 'Streaming Links',
+        sub: 'Per-court live-stream URLs shown to viewers',
+        onPress: () => {
+          setStreamEdits({ ...(season?.streamLinks || {}) });
+          setShowStreamModal(true);
+        },
+        color: '#DC2626',
+        bg: '#FEE2E2',
+      },
+      {
         icon: '🔄',
         title: 'Recalculate Standings',
         sub: 'Re-aggregate rally points & match wins from all completed ties',
@@ -1594,6 +1611,50 @@ const LeagueDashboardScreen: React.FC = () => {
     );
   };
 
+  // Viewer-facing "Watch Live" — per-court stream links set by the organiser.
+  const renderWatchLive = () => {
+    const links = season?.streamLinks || {};
+    const courts = Object.keys(links)
+      .filter((c) => (links[c] || '').trim())
+      .sort((a, b) => Number(a) - Number(b));
+    if (courts.length === 0) return null;
+    return (
+      <View style={{ paddingHorizontal: 20, marginTop: 18 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' }} />
+          <YEyebrow size={10} color={YColors.ink3}>WATCH LIVE</YEyebrow>
+        </View>
+        <View style={{ gap: 10 }}>
+          {courts.map((c) => (
+            <TouchableOpacity
+              key={`stream-${c}`}
+              onPress={() => Linking.openURL(links[c])}
+              activeOpacity={0.85}
+              style={{
+                backgroundColor: '#0A0A0B',
+                borderRadius: YRadius.xl,
+                paddingVertical: 15,
+                paddingHorizontal: 16,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Text style={{ fontSize: 20 }}>▶️</Text>
+                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '900', letterSpacing: 0.3 }}>Watch Court {c}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' }} />
+                <Text style={{ color: '#EF4444', fontSize: 11, fontWeight: '900', letterSpacing: 0.5 }}>LIVE</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
   const renderOverview = () => (
     <ScrollView
       contentContainerStyle={styles.tabContent}
@@ -1671,6 +1732,7 @@ const LeagueDashboardScreen: React.FC = () => {
 
       {/* Quick stats — compact row */}
       {renderLiveMatches()}
+      {renderWatchLive()}
       {renderQuickStats()}
 
       {/* Hero: Standings snapshot */}
@@ -3918,6 +3980,59 @@ const LeagueDashboardScreen: React.FC = () => {
             </TouchableOpacity>
           </TouchableOpacity>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Streaming Links Modal — per-court live-stream URLs */}
+      <Modal visible={showStreamModal} transparent animationType="slide">
+        <TouchableOpacity
+          activeOpacity={1}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+          onPress={() => !savingStream && setShowStreamModal(false)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ backgroundColor: WHITE, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '80%' }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: NAVY, marginBottom: 4 }}>Streaming Links</Text>
+            <Text style={{ fontSize: 12, color: TEXT_SUB, marginBottom: 16 }}>Paste each court's live-stream URL (YouTube, etc.). Leave blank to hide a court. Viewers see "Watch Court N" on the dashboard.</Text>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {['1', '2', '3', '4'].map((c) => (
+                <View key={`str-${c}`} style={{ marginBottom: 12 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: NAVY, marginBottom: 4 }}>COURT {c}</Text>
+                  <TextInput
+                    style={{ backgroundColor: SURFACE, borderRadius: 8, borderWidth: 1, borderColor: BORDER, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: NAVY }}
+                    placeholder="https://…"
+                    placeholderTextColor={TEXT_MUTED}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="url"
+                    value={streamEdits[c] || ''}
+                    onChangeText={(t) => setStreamEdits((prev) => ({ ...prev, [c]: t }))}
+                  />
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={{ marginTop: 8, paddingVertical: 14, borderRadius: 10, backgroundColor: '#DC2626', alignItems: 'center', opacity: savingStream ? 0.6 : 1 }}
+              disabled={savingStream}
+              onPress={async () => {
+                setSavingStream(true);
+                try {
+                  await setStreamLinks(leagueId, resolvedSeasonId, streamEdits);
+                  await fetchAll();
+                  setShowStreamModal(false);
+                  xAlert('Saved', 'Streaming links updated.');
+                } catch (err: any) {
+                  xAlert('Error', err?.response?.data?.message || err?.message || 'Failed to save');
+                } finally {
+                  setSavingStream(false);
+                }
+              }}
+            >
+              {savingStream ? <ActivityIndicator color={WHITE} /> : <Text style={{ color: WHITE, fontSize: 14, fontWeight: '800' }}>SAVE LINKS</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={{ marginTop: 10, paddingVertical: 12, alignItems: 'center' }} onPress={() => !savingStream && setShowStreamModal(false)}>
+              <Text style={{ color: TEXT_SUB, fontSize: 14, fontWeight: '700' }}>CLOSE</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* Court Assignments Modal — quick per-tie court picker */}
