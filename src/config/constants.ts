@@ -18,8 +18,10 @@ export const DUPR_CLIENT_KEY = process.env.EXPO_PUBLIC_DUPR_CLIENT_KEY || 'test-
 
 // Support + legal. The privacy policy URL is REQUIRED by Apple/Google and must
 // resolve to a live page before store submission — host these before shipping.
-// TODO(dupr): confirm real support email + WhatsApp number before DUPR submission
-export const SUPPORT_EMAIL = process.env.EXPO_PUBLIC_SUPPORT_EMAIL || 'support@yoiden.com';
+// TODO(dupr): confirm the real support email + WhatsApp number before DUPR submission.
+// Interim default is the existing, working support address (do not regress to a
+// placeholder domain that could bounce); override at build time via EXPO_PUBLIC_*.
+export const SUPPORT_EMAIL = process.env.EXPO_PUBLIC_SUPPORT_EMAIL || 'aditya.patki@crescendotranscriptions.com';
 export const SUPPORT_WHATSAPP = process.env.EXPO_PUBLIC_SUPPORT_WHATSAPP || '+910000000000';
 export const PRIVACY_URL = 'https://yoiden.com/privacy';
 export const TERMS_URL = 'https://yoiden.com/terms';
