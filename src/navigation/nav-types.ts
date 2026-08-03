@@ -23,6 +23,7 @@ export type DetailAndManageRoutes = {
   PlayerProfile: { playerId: string; leagueId?: string; seasonId?: string };
   ScorerMatches: { leagueId: string; seasonId?: string };
   LeagueFantasy: { seasonId: string; leagueId?: string };
+  Support: undefined;
   ScorerDemo: {
     homeName?: string;
     awayName?: string;

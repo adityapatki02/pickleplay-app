@@ -31,7 +31,7 @@ import { tournamentsApi } from '../../api/tournaments.api';
 import { registrationsApi } from '../../api/registrations.api';
 import { linkDupr, getDuprMe, unlinkDupr, DuprMeResponse } from '../../api/dupr.api';
 import { presentDuprSso } from '../../utils/dupr-host-bridge';
-import { SUPPORT_EMAIL, PRIVACY_URL, TERMS_URL } from '../../config/constants';
+import { PRIVACY_URL, TERMS_URL } from '../../config/constants';
 import { xConfirm, xAlert } from '../../utils/alert';
 import { venuesApi } from '../../api/venues.api';
 import type { Tournament } from '../../types/tournament.types';
@@ -173,8 +173,7 @@ export default function MeScreen() {
     nav.navigate('MeTab', { screen: 'TournamentDetail', params: { tournamentId: id } });
   const openEditProfile = () => (nav as any).navigate('MeTab', { screen: 'EditProfile' });
   const openURL = (url: string) => Linking.openURL(url).catch(() => {});
-  const contactSupport = () =>
-    openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Yoiden support')}`);
+  const openSupport = () => (nav as any).navigate('MeTab', { screen: 'Support' });
 
   const doDelete = async () => {
     try {
@@ -349,6 +348,11 @@ export default function MeScreen() {
             </>
           )}
         </View>
+        <Pressable onPress={openSupport} hitSlop={8} style={{ alignSelf: 'center', marginTop: 10 }}>
+          <YUiText size={11} color={YColors.ink3} style={{ textAlign: 'center' }}>
+            Match dispute? <YUiText size={11} weight={800} color={YColors.accent}>Contact support</YUiText>
+          </YUiText>
+        </Pressable>
 
         {/* My Bookings card */}
         <YSectionHead eyebrow="COURT TIME" title="MY BOOKINGS" />
@@ -470,7 +474,7 @@ export default function MeScreen() {
           <Row label="EDIT PROFILE" onPress={openEditProfile} />
           <Row label="PRIVACY POLICY" onPress={() => openURL(PRIVACY_URL)} />
           <Row label="TERMS OF SERVICE" onPress={() => openURL(TERMS_URL)} />
-          <Row label="HELP & SUPPORT" onPress={contactSupport} />
+          <Row label="HELP & SUPPORT" onPress={openSupport} />
           <Row label="DELETE ACCOUNT" onPress={handleDeleteAccount} destructive />
         </View>
 

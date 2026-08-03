@@ -46,6 +46,9 @@ import MyBookingsScreen from '../screens/yoiden/MyBookingsScreen';
 import BookingSuccessScreen from '../screens/yoiden/BookingSuccessScreen';
 import BookingDetailScreen from '../screens/yoiden/BookingDetailScreen';
 
+// Support (DUPR go-live requirement — match disputes + general help)
+import SupportScreen from '../screens/yoiden/SupportScreen';
+
 // League (SPPL) screens — themed for demo
 import LeagueDashboardScreen from '../screens/league/LeagueDashboardScreen';
 import LiveLeaguesScreen from '../screens/league/LiveLeaguesScreen';
@@ -76,6 +79,7 @@ function registerDetailAndManageScreens<T extends DetailAndManageRoutes>(
       {/* Location — opens as a slide-up modal */}
       <S name="CityPicker" component={CityPickerScreen} options={{ presentation: 'modal' }} />
       <S name="EditProfile" component={EditProfileScreen} />
+      <S name="Support" component={SupportScreen} />
       {/* Tournament */}
       <S name="TournamentDetail" component={TournamentDetailScreen} />
       <S name="CreateTournament" component={CreateTournamentScreen} />
