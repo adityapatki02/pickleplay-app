@@ -6,6 +6,16 @@ export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://yoiden-a
  *  Use rzp_test_... for development, rzp_live_... for production. */
 export const RAZORPAY_KEY = 'rzp_live_T1smxtRwzaVgcA';
 
+/** DUPR SSO. Only the client KEY lives here — it is base64'd into the SSO
+ *  login URL and is safe to expose in the app bundle (same trust model as
+ *  the Razorpay key above). The client SECRET is backend-only (pickleplay-api
+ *  .env) and must never appear in this app. UAT values below (Client ID
+ *  8407268411); override with EXPO_PUBLIC_DUPR_* for local testing, and
+ *  swap to production values (SSO base https://dashboard.dupr.com + prod
+ *  client key) at go-live per Phase 8 of the DUPR integration plan. */
+export const DUPR_SSO_BASE_URL = process.env.EXPO_PUBLIC_DUPR_SSO_BASE_URL || 'https://uat.dupr.gg';
+export const DUPR_CLIENT_KEY = process.env.EXPO_PUBLIC_DUPR_CLIENT_KEY || 'test-ck-bd5d627e-0cbc-4948-f875-a14455953e9a';
+
 // Support + legal. The privacy policy URL is REQUIRED by Apple/Google and must
 // resolve to a live page before store submission — host these before shipping.
 export const SUPPORT_EMAIL = 'aditya.patki@crescendotranscriptions.com';
