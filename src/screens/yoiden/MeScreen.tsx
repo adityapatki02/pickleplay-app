@@ -29,6 +29,8 @@ import { useAuthStore } from '../../store/authStore';
 import { authApi } from '../../api/auth.api';
 import { tournamentsApi } from '../../api/tournaments.api';
 import { registrationsApi } from '../../api/registrations.api';
+import { linkDupr, getDuprMe, unlinkDupr, DuprMeResponse } from '../../api/dupr.api';
+import { presentDuprSso } from '../../utils/dupr-host-bridge';
 import { SUPPORT_EMAIL, PRIVACY_URL, TERMS_URL } from '../../config/constants';
 import { xConfirm, xAlert } from '../../utils/alert';
 import { venuesApi } from '../../api/venues.api';
@@ -53,6 +55,22 @@ const SKILL_LABEL: Record<string, string> = {
 
 type Registration = { id: string; tournamentId: string; tournament?: Tournament; status?: string };
 
+const formatDuprRating = (v: string | number | null | undefined): string => {
+  if (v === null || v === undefined || v === '') return 'NR';
+  const n = typeof v === 'number' ? v : parseFloat(v);
+  return Number.isFinite(n) ? n.toFixed(3).replace(/0+$/, '').replace(/\.$/, '') : String(v);
+};
+
+// DUPR's exact reliability shape (boolean flag vs. 0-1 confidence score) isn't
+// confirmed until a live UAT pull — handle both so this stays a display-only
+// concern, not a data-shape assumption baked into the request.
+const formatDuprReliability = (v: number | boolean | null | undefined): string | null => {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'boolean') return v ? 'Reliable' : 'Provisional';
+  if (typeof v === 'number') return v <= 1 ? `${Math.round(v * 100)}% reliable` : `${v} reliable`;
+  return null;
+};
+
 export default function MeScreen() {
   const nav = useNavigation<Nav>();
   const user = useAuthStore((s) => s.user);
@@ -67,12 +85,16 @@ export default function MeScreen() {
   const [myHosted, setMyHosted] = useState<Tournament[]>([]);
   const [myVenues, setMyVenues] = useState<Venue[]>([]);
 
+  const [duprMe, setDuprMe] = useState<DuprMeResponse | null>(null);
+  const [duprBusy, setDuprBusy] = useState(false);
+
   const fetchAll = useCallback(async () => {
     try {
-      const [regsRes, hostedRes, venueRes] = await Promise.allSettled([
+      const [regsRes, hostedRes, venueRes, duprRes] = await Promise.allSettled([
         registrationsApi.getMyRegistrations(),
         tournamentsApi.getMyTournaments(),
         venuesApi.getMyVenues(),
+        getDuprMe(),
       ]);
       if (regsRes.status === 'fulfilled') {
         const data = unwrap<Registration[]>(regsRes.value);
@@ -87,11 +109,56 @@ export default function MeScreen() {
         const data = res?.data?.data ?? res?.data ?? [];
         setMyVenues(Array.isArray(data) ? data : []);
       }
+      if (duprRes.status === 'fulfilled') {
+        setDuprMe(unwrap<DuprMeResponse>(duprRes.value));
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
+
+  const refreshDuprMe = useCallback(async () => {
+    try {
+      const res = await getDuprMe();
+      setDuprMe(unwrap<DuprMeResponse>(res));
+    } catch {
+      // leave the last-known state on screen; the pull-to-refresh will retry
+    }
+  }, []);
+
+  const handleConnectDupr = useCallback(async () => {
+    if (duprBusy) return;
+    setDuprBusy(true);
+    try {
+      const result = await presentDuprSso();
+      await linkDupr(result);
+      await refreshDuprMe();
+    } catch (e: any) {
+      const message = e?.response?.data?.message || e?.message || 'Could not connect DUPR. Please try again.';
+      // A plain cancel (Cancel bar / Android back) shouldn't surface an error alert.
+      if (message && !/cancel/i.test(message)) xAlert('DUPR', message);
+    } finally {
+      setDuprBusy(false);
+    }
+  }, [duprBusy, refreshDuprMe]);
+
+  const doDisconnectDupr = useCallback(async () => {
+    setDuprBusy(true);
+    try {
+      await unlinkDupr();
+      await refreshDuprMe();
+    } catch (e: any) {
+      xAlert('DUPR', e?.response?.data?.message ?? 'Could not disconnect DUPR. Please try again.');
+    } finally {
+      setDuprBusy(false);
+    }
+  }, [refreshDuprMe]);
+
+  const handleDisconnectDupr = useCallback(
+    () => xConfirm('Disconnect DUPR', 'Your DUPR rating will no longer sync to your Yoiden profile.', doDisconnectDupr),
+    [doDisconnectDupr],
+  );
 
   useEffect(() => {
     fetchAll();
@@ -215,6 +282,72 @@ export default function MeScreen() {
           <YUiText size={13} color={YColors.ink2} style={{ lineHeight: 19 }}>
             Your full pickleball career — matches, win rate, and per-format stats across every league and tournament you've played.
           </YUiText>
+        </View>
+
+        {/* DUPR card */}
+        <YSectionHead eyebrow="OFFICIAL RATING" title="DUPR" />
+        <View style={styles.duprCard}>
+          {duprMe?.linked ? (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch' }}>
+                <View style={styles.duprLogo}>
+                  <YUiText size={12} weight={900} color={YColors.accent} style={{ letterSpacing: 1 }}>
+                    DUPR
+                  </YUiText>
+                </View>
+                <View style={{ flex: 1 }} />
+                <YBadge color={YColors.accent}>ID {duprMe.duprId}</YBadge>
+              </View>
+
+              <View style={styles.duprRatingsRow}>
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                  <YDisplay size={26}>{formatDuprRating(duprMe.snapshot?.ratings?.doubles)}</YDisplay>
+                  <YEyebrow color={YColors.ink3} style={{ marginTop: 2 }}>DOUBLES</YEyebrow>
+                  {formatDuprReliability(duprMe.snapshot?.ratings?.doublesReliability) ? (
+                    <YUiText size={10} color={YColors.ink3} style={{ marginTop: 2 }}>
+                      {formatDuprReliability(duprMe.snapshot?.ratings?.doublesReliability)}
+                    </YUiText>
+                  ) : null}
+                </View>
+                <View style={styles.statDivider} />
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                  <YDisplay size={26}>{formatDuprRating(duprMe.snapshot?.ratings?.singles)}</YDisplay>
+                  <YEyebrow color={YColors.ink3} style={{ marginTop: 2 }}>SINGLES</YEyebrow>
+                  {formatDuprReliability(duprMe.snapshot?.ratings?.singlesReliability) ? (
+                    <YUiText size={10} color={YColors.ink3} style={{ marginTop: 2 }}>
+                      {formatDuprReliability(duprMe.snapshot?.ratings?.singlesReliability)}
+                    </YUiText>
+                  ) : null}
+                </View>
+              </View>
+
+              <Pressable onPress={duprBusy ? undefined : handleDisconnectDupr} style={{ marginTop: 16 }} hitSlop={8}>
+                <YUiText size={11} weight={800} color={YColors.live} style={{ letterSpacing: 0.8 }}>
+                  {duprBusy ? 'WORKING…' : 'DISCONNECT DUPR'}
+                </YUiText>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <View style={styles.duprLogo}>
+                <YUiText size={12} weight={900} color={YColors.accent} style={{ letterSpacing: 1 }}>
+                  DUPR
+                </YUiText>
+              </View>
+              <YUiText size={13} color={YColors.ink2} style={{ marginTop: 14, textAlign: 'center', lineHeight: 19 }}>
+                Connect your DUPR profile to show your official singles &amp; doubles rating and unlock DUPR-rated events.
+              </YUiText>
+              <YButton
+                variant="accent"
+                size="md"
+                style={{ marginTop: 16, alignSelf: 'center' }}
+                onPress={handleConnectDupr}
+                disabled={duprBusy}
+              >
+                {duprBusy ? 'CONNECTING…' : 'CONNECT DUPR'}
+              </YButton>
+            </>
+          )}
         </View>
 
         {/* My Bookings card */}
@@ -523,6 +656,15 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 6,
+  },
+  duprRatingsRow: {
+    marginTop: 20,
+    paddingTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    borderTopWidth: 1,
+    borderTopColor: YColors.line,
   },
 
   // ── Next match card ─────────────────────────────────────────────
