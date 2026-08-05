@@ -16,6 +16,11 @@ export const RAZORPAY_KEY = 'rzp_live_T1smxtRwzaVgcA';
 export const DUPR_SSO_BASE_URL = process.env.EXPO_PUBLIC_DUPR_SSO_BASE_URL || 'https://uat.dupr.gg';
 export const DUPR_CLIENT_KEY = process.env.EXPO_PUBLIC_DUPR_CLIENT_KEY || 'test-ck-bd5d627e-0cbc-4948-f875-a14455953e9a';
 
+/** Feature flag gating all DUPR UI (Me-screen card + Connect/Disconnect flow).
+ *  Defaults OFF so public builds don't surface DUPR until it's ready to launch;
+ *  set EXPO_PUBLIC_DUPR_ENABLED=true per-build to turn it on (e.g. internal/UAT builds). */
+export const DUPR_ENABLED = process.env.EXPO_PUBLIC_DUPR_ENABLED === 'true';
+
 // Support + legal. The privacy policy URL is REQUIRED by Apple/Google and must
 // resolve to a live page before store submission — host these before shipping.
 // Support contact for users / DUPR match disputes (confirmed 2026-08-03).

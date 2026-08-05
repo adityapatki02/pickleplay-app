@@ -31,7 +31,7 @@ import { tournamentsApi } from '../../api/tournaments.api';
 import { registrationsApi } from '../../api/registrations.api';
 import { linkDupr, getDuprMe, unlinkDupr, DuprMeResponse } from '../../api/dupr.api';
 import { presentDuprSso } from '../../utils/dupr-host-bridge';
-import { PRIVACY_URL, TERMS_URL } from '../../config/constants';
+import { PRIVACY_URL, TERMS_URL, DUPR_ENABLED } from '../../config/constants';
 import { xConfirm, xAlert } from '../../utils/alert';
 import { venuesApi } from '../../api/venues.api';
 import type { Tournament } from '../../types/tournament.types';
@@ -94,7 +94,7 @@ export default function MeScreen() {
         registrationsApi.getMyRegistrations(),
         tournamentsApi.getMyTournaments(),
         venuesApi.getMyVenues(),
-        getDuprMe(),
+        DUPR_ENABLED ? getDuprMe() : Promise.resolve(null),
       ]);
       if (regsRes.status === 'fulfilled') {
         const data = unwrap<Registration[]>(regsRes.value);
@@ -283,7 +283,9 @@ export default function MeScreen() {
           </YUiText>
         </View>
 
-        {/* DUPR card */}
+        {/* DUPR card — gated behind DUPR_ENABLED; when off, renders nothing */}
+        {DUPR_ENABLED ? (
+        <>
         <YSectionHead eyebrow="OFFICIAL RATING" title="DUPR" />
         <View style={styles.duprCard}>
           {duprMe?.linked ? (
@@ -353,6 +355,8 @@ export default function MeScreen() {
             Match dispute? <YUiText size={11} weight={800} color={YColors.accent}>Contact support</YUiText>
           </YUiText>
         </Pressable>
+        </>
+        ) : null}
 
         {/* My Bookings card */}
         <YSectionHead eyebrow="COURT TIME" title="MY BOOKINGS" />
