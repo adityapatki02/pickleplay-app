@@ -193,6 +193,11 @@ export default function RegisterScreen({ navigation, route }: Props) {
         serverMessage.toLowerCase().includes('deadline')
       ) {
         Alert.alert('Registration Closed', 'The registration deadline has passed for this tournament.');
+      } else if (serverMessage.toLowerCase().includes('dupr')) {
+        // DUPR gating (not linked / not eligible / premium / rating band). Make it explicit
+        // this is a DUPR-account requirement, not a generic failure, so the user knows why
+        // and what to do. Connect DUPR from the Me tab.
+        Alert.alert('DUPR account required', `${serverMessage}\n\nGo to the Me tab and tap "Connect DUPR", then try again.`);
       } else {
         Alert.alert('Registration Failed', serverMessage);
       }
@@ -770,6 +775,8 @@ const styles = StyleSheet.create({
   },
 
   bottomSpacer: {
-    height: spacing['2xl'],
+    // Clear the bottom tab bar so the last content (button + spots note) fully scrolls
+    // into view instead of being tucked under the nav.
+    height: 120,
   },
 });
