@@ -84,17 +84,44 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'TRENDS', label: 'Trends' },
 ];
 
-// Form-2 bucket metadata (human labels + how many picks + accent colour)
-const BUCKETS: { key: keyof FantasyForm2; label: string; picks: number; accent: string; hint: string }[] = [
-  { key: 'kids',      label: 'Kids — Pick 2',       picks: 2, accent: PURPLE, hint: 'Any 2 players from Kids roster' },
-  { key: 'teenBoys',  label: 'Teen Boys',           picks: 1, accent: '#F97316', hint: 'Any teen player' },
-  { key: 'teenGirls', label: 'Teen Girls',          picks: 1, accent: '#F97316', hint: 'Different from Teen Boys pick' },
-  { key: 'm1',        label: 'Men 1 — Pick 2',      picks: 2, accent: BLUE, hint: '' },
-  { key: 'w1',        label: 'Women 1 — Pick 2',    picks: 2, accent: '#EC4899', hint: '' },
-  { key: 'm2',        label: 'Men 2 — Pick 2',      picks: 2, accent: BLUE, hint: '' },
-  { key: 'w2',        label: 'Women 2 — Pick 3',    picks: 3, accent: '#EC4899', hint: '' },
-  { key: 'm3',        label: 'Men 3 — Pick 3',      picks: 3, accent: BLUE, hint: '' },
-];
+// Form-2 bucket metadata. The bucket SET is not fixed — it comes from the
+// season's `config.form2Shape` (SPPL = kids/teen/m1-3/w1-2; SBPL =
+// kids/women13/women45/menA-C). Labels/accents are looked up per key; the pick
+// count comes from the shape. `buildBuckets(shape)` turns the shape into the
+// ordered array the UI renders.
+const PINK = '#EC4899';
+export type BucketDef = { key: string; label: string; picks: number; accent: string; hint: string };
+const BUCKET_META: Record<string, { name: string; accent: string; hint: string }> = {
+  // SPPL
+  kids:      { name: 'Kids',      accent: PURPLE, hint: 'Any players from the Kids roster' },
+  teenBoys:  { name: 'Teen Boys', accent: ORANGE, hint: 'Any teen boy' },
+  teenGirls: { name: 'Teen Girls',accent: ORANGE, hint: 'Any teen girl' },
+  m1: { name: 'Men 1',   accent: BLUE, hint: '' },
+  w1: { name: 'Women 1', accent: PINK, hint: '' },
+  m2: { name: 'Men 2',   accent: BLUE, hint: '' },
+  w2: { name: 'Women 2', accent: PINK, hint: '' },
+  m3: { name: 'Men 3',   accent: BLUE, hint: '' },
+  // SBPL
+  women13: { name: 'Women 1-3', accent: PINK, hint: '' },
+  women45: { name: 'Women 4-5', accent: PINK, hint: '' },
+  menA:    { name: 'Men A',     accent: BLUE, hint: '' },
+  menB:    { name: 'Men B',     accent: BLUE, hint: '' },
+  menC:    { name: 'Men C',     accent: BLUE, hint: '' },
+};
+const BUCKET_ORDER = ['kids', 'teenBoys', 'teenGirls', 'm1', 'w1', 'm2', 'w2', 'm3', 'women13', 'women45', 'menA', 'menB', 'menC'];
+function buildBuckets(shape?: Record<string, number>): BucketDef[] {
+  if (!shape) return [];
+  return Object.keys(shape)
+    .sort((a, b) => {
+      const ia = BUCKET_ORDER.indexOf(a), ib = BUCKET_ORDER.indexOf(b);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    })
+    .map((key) => {
+      const meta = BUCKET_META[key] || { name: key, accent: BLUE, hint: '' };
+      const picks = shape[key];
+      return { key, picks, accent: meta.accent, hint: meta.hint, label: `${meta.name} — Pick ${picks}` };
+    });
+}
 
 // ═════════════════════════════════════════════════════════════════════
 // Chart primitives (kept as module-scope components to avoid re-creation
@@ -180,10 +207,13 @@ export default function FantasyScreen() {
   const [form1Draft, setForm1Draft] = useState<FantasyForm1>({});
   const [form2Draft, setForm2Draft] = useState<FantasyForm2>({});
 
+  // Dream Team buckets come from the season's shape (SPPL vs SBPL differ).
+  const buckets = useMemo(() => buildBuckets(config?.form2Shape), [config]);
+
   // Dream Team player-picker modal state
   const [pickerModal, setPickerModal] = useState<{
     visible: boolean;
-    bucket: keyof FantasyForm2 | null;
+    bucket: string | null;
   }>({ visible: false, bucket: null });
   const [pickerSearch, setPickerSearch] = useState('');
 
@@ -356,7 +386,7 @@ export default function FantasyScreen() {
 
     // Validate every bucket has its required number of picks
     const missing: string[] = [];
-    for (const b of BUCKETS) {
+    for (const b of buckets) {
       const raw = form2Draft[b.key] as any;
       const count = Array.isArray(raw) ? raw.length : raw ? 1 : 0;
       if (count < b.picks) {
@@ -758,14 +788,14 @@ export default function FantasyScreen() {
   const renderDreamTab = () => {
     // Compute all picked player IDs across all buckets (for duplicate detection)
     const allPicked = new Set<string>();
-    for (const b of BUCKETS) {
+    for (const b of buckets) {
       const raw = form2Draft[b.key] as any;
       if (!raw) continue;
       const ids = Array.isArray(raw) ? raw : [raw];
       ids.forEach((id: string) => allPicked.add(id));
     }
 
-    const renderBucket = (b: typeof BUCKETS[number]) => {
+    const renderBucket = (b: BucketDef) => {
       const bucketOptions = options[b.key] || [];
       const raw = form2Draft[b.key] as any;
       const picked: string[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
@@ -890,7 +920,7 @@ export default function FantasyScreen() {
           </Text>
         </View>
 
-        {BUCKETS.map(renderBucket)}
+        {buckets.map(renderBucket)}
 
         {config?.locked ? (
           <View style={[styles.saveBtn, { backgroundColor: TEXT_MUTED, opacity: 0.8 }]}>
@@ -1204,7 +1234,7 @@ export default function FantasyScreen() {
       for (const [bucket, picks] of Object.entries(trends.topPicks || {})) {
         for (const p of picks as any[]) {
           if (!best || p.count > best.count) {
-            const bucketLabel = BUCKETS.find((b) => b.key === bucket)?.label || bucket;
+            const bucketLabel = buckets.find((b) => b.key === bucket)?.label || bucket;
             best = { playerName: p.playerName, bucket: bucketLabel, count: p.count, pct: p.pct };
           }
         }
@@ -1393,7 +1423,7 @@ export default function FantasyScreen() {
               </View>
             </View>
 
-            {BUCKETS.map((b) => {
+            {buckets.map((b) => {
               const picks = (trends.topPicks && trends.topPicks[b.key]) || [];
               const topN = picks.slice(0, 5);
               return (
@@ -1571,7 +1601,7 @@ export default function FantasyScreen() {
       {(() => {
         const bucket = pickerModal.bucket;
         if (!bucket) return null;
-        const bucketDef = BUCKETS.find((b) => b.key === bucket);
+        const bucketDef = buckets.find((b) => b.key === bucket);
         if (!bucketDef) return null;
         const bucketOptions = options[bucket] || [];
         const raw = form2Draft[bucket] as any;
@@ -1580,7 +1610,7 @@ export default function FantasyScreen() {
 
         // Compute all-picked-across-team for greyed-out state
         const allPickedIds = new Set<string>();
-        for (const b of BUCKETS) {
+        for (const b of buckets) {
           const r = form2Draft[b.key] as any;
           if (!r) continue;
           (Array.isArray(r) ? r : [r]).forEach((id: string) => allPickedIds.add(id));

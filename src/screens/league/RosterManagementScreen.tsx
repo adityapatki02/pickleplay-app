@@ -15,7 +15,7 @@ import {
   Platform,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { getRoster, addRosterPlayer, getFranchise, removeRosterPlayer } from '../../api/leagues.api';
+import { getRoster, addRosterPlayer, getFranchise, removeRosterPlayer, updateRosterEntry } from '../../api/leagues.api';
 import { xAlert, xConfirm } from '../../utils/alert';
 import { useLeagueStore } from '../../store/leagueStore';
 import { colors, spacing, typography, borderRadius, shadows } from '../../config/theme';
@@ -26,6 +26,7 @@ import type {
   RosterStatus,
 } from '../../types/league.types';
 import { CATEGORY_LABELS } from '../../types/league.types';
+import { sbplGroupForCategory } from '../../utils/sbplCategory';
 import type { LeagueStackParamList } from '../../navigation/types';
 
 import { YColors, YTopBar } from '../../components/yoiden';
@@ -49,6 +50,19 @@ const CATEGORY_ORDER: CategorySlug[] = [
   'men1',
   'men2',
   'men3',
+];
+
+// SBPL rosters store auction-style sub-category slugs (k1/w1/w4/a1/b1/c1). The
+// grouping mapper (sbplGroupForCategory) keys off the FIRST LETTER, so a player
+// added into "Men A" must be stored as an 'a…' slug — not 'menA'. These are the
+// representative slugs the Add-Player picker writes for each SBPL group.
+const SBPL_ADD_CATEGORIES: { slug: string; label: string }[] = [
+  { slug: 'k1', label: 'Kids' },
+  { slug: 'w1', label: 'Women 1-3' },
+  { slug: 'w4', label: 'Women 4-5' },
+  { slug: 'a1', label: 'Men A' },
+  { slug: 'b1', label: 'Men B' },
+  { slug: 'c1', label: 'Men C' },
 ];
 
 const STATUS_COLORS: Record<RosterStatus, { bg: string; text: string }> = {
@@ -87,6 +101,53 @@ export default function RosterManagementScreen() {
   const [playerJersey, setPlayerJersey] = useState('');
   const [addError, setAddError] = useState('');
 
+  // Edit player form
+  const [editRosterId, setEditRosterId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editJersey, setEditJersey] = useState('');
+  const [editError, setEditError] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+
+  const openEditPlayer = (item: FranchiseRoster) => {
+    setEditRosterId(item.id);
+    setEditName(item.player?.fullName ?? (item.player as any)?.displayName ?? '');
+    setEditPhone(item.player?.phone ?? '');
+    setEditJersey(item.jerseyNumber != null ? String(item.jerseyNumber) : '');
+    setEditError('');
+  };
+
+  const handleUpdatePlayer = async () => {
+    if (!editRosterId) return;
+    if (!editName.trim()) { setEditError('Name is required'); return; }
+    setEditSaving(true);
+    try {
+      const data: any = {
+        playerName: editName.trim(),
+        playerPhone: editPhone.trim() || '',
+        jerseyNumber: editJersey.trim() ? parseInt(editJersey, 10) : null,
+      };
+      await updateRosterEntry(franchiseId, editRosterId, data);
+      // Reflect locally without a full refetch.
+      setRoster((prev) =>
+        prev.map((r) =>
+          r.id === editRosterId
+            ? {
+                ...r,
+                jerseyNumber: data.jerseyNumber,
+                player: { ...(r.player as any), fullName: data.playerName, phone: data.playerPhone || null },
+              }
+            : r,
+        ),
+      );
+      setEditRosterId(null);
+    } catch (err: any) {
+      setEditError(err?.response?.data?.message || err?.message || 'Failed to update player');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const fetchData = useCallback(async () => {
     try {
       const [rosterData, franchiseData] = await Promise.all([
@@ -119,21 +180,44 @@ export default function RosterManagementScreen() {
   // ── Build sections ──
 
   const safeRoster = Array.isArray(roster) ? roster : [];
-  const sections: RosterSection[] = CATEGORY_ORDER.map((slug) => ({
-    title: CATEGORY_LABELS[slug],
-    slug,
-    data: safeRoster.filter((r) => r.categorySlug === slug),
-  })).filter((s) => s.data.length > 0);
 
-  // If no players at all, show all categories empty for context
-  const displaySections =
-    sections.length > 0
-      ? sections
-      : CATEGORY_ORDER.map((slug) => ({
-          title: CATEGORY_LABELS[slug],
-          slug,
-          data: [] as FranchiseRoster[],
-        }));
+  // SBPL rosters use auction sub-categories (a1/w4/k1/…). Detect them and group
+  // by the SBPL category groups instead of the SPPL slug buckets.
+  const SPPL_SLUGS = ['kids', 'teen', 'women1', 'women2', 'men1', 'men2', 'men3'];
+  const isSbpl = safeRoster.some(
+    (r) => !SPPL_SLUGS.includes(r.categorySlug as string) && !!sbplGroupForCategory(r.categorySlug),
+  );
+  const SBPL_ORDER: { slug: string; title: string }[] = [
+    { slug: 'kids', title: 'Kids' },
+    { slug: 'women13', title: 'Women 1-3' },
+    { slug: 'women45', title: 'Women 4-5' },
+    { slug: 'menA', title: 'Men A' },
+    { slug: 'menB', title: 'Men B' },
+    { slug: 'menC', title: 'Men C' },
+  ];
+
+  let displaySections: RosterSection[];
+  if (isSbpl) {
+    displaySections = SBPL_ORDER.map((c) => ({
+      title: c.title,
+      slug: c.slug as any,
+      data: safeRoster.filter((r) => sbplGroupForCategory(r.categorySlug) === c.slug),
+    }));
+  } else {
+    const sections: RosterSection[] = CATEGORY_ORDER.map((slug) => ({
+      title: CATEGORY_LABELS[slug],
+      slug,
+      data: safeRoster.filter((r) => r.categorySlug === slug),
+    })).filter((s) => s.data.length > 0);
+    displaySections =
+      sections.length > 0
+        ? sections
+        : CATEGORY_ORDER.map((slug) => ({
+            title: CATEGORY_LABELS[slug],
+            slug,
+            data: [] as FranchiseRoster[],
+          }));
+  }
 
   // ── Add player ──
 
@@ -261,6 +345,15 @@ export default function RosterManagementScreen() {
                 {item.status.toUpperCase()}
               </Text>
             </View>
+            {/* Edit player name / phone / jersey */}
+            <TouchableOpacity
+              onPress={() => openEditPlayer(item)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.editBtn}
+              activeOpacity={0.6}
+            >
+              <Text style={styles.editBtnText}>✎</Text>
+            </TouchableOpacity>
             {/* Remove player — admin only; confirmation prevents accidental deletion */}
             <TouchableOpacity
               onPress={() => {
@@ -304,7 +397,10 @@ export default function RosterManagementScreen() {
       {/* FAB */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => setShowAddModal(true)}
+        onPress={() => {
+          setPlayerCategory((isSbpl ? 'a1' : 'men1') as any);
+          setShowAddModal(true);
+        }}
         activeOpacity={0.85}
       >
         <Text style={styles.fabText}>+</Text>
@@ -351,7 +447,13 @@ export default function RosterManagementScreen() {
             <View style={styles.modalField}>
               <Text style={styles.modalLabel}>CATEGORY</Text>
               <View style={styles.categoryPicker}>
-                {CATEGORY_ORDER.map((slug) => {
+                {(isSbpl
+                  ? SBPL_ADD_CATEGORIES
+                  : CATEGORY_ORDER.map((slug) => ({
+                      slug,
+                      label: CATEGORY_LABELS[slug],
+                    }))
+                ).map(({ slug, label }) => {
                   const active = playerCategory === slug;
                   return (
                     <TouchableOpacity
@@ -360,7 +462,7 @@ export default function RosterManagementScreen() {
                         styles.categoryChip,
                         active && styles.categoryChipActive,
                       ]}
-                      onPress={() => setPlayerCategory(slug)}
+                      onPress={() => setPlayerCategory(slug as any)}
                     >
                       <Text
                         style={[
@@ -368,7 +470,7 @@ export default function RosterManagementScreen() {
                           active && styles.categoryChipTextActive,
                         ]}
                       >
-                        {CATEGORY_LABELS[slug]}
+                        {label}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -413,6 +515,77 @@ export default function RosterManagementScreen() {
                   <ActivityIndicator color="#FFF" />
                 ) : (
                   <Text style={styles.modalSaveText}>ADD PLAYER</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Edit player — name / phone / jersey */}
+      <Modal visible={!!editRosterId} animationType="slide" transparent>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>EDIT PLAYER</Text>
+
+            <View style={styles.modalField}>
+              <Text style={styles.modalLabel}>PLAYER NAME</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Full name"
+                placeholderTextColor="#94A3B8"
+                value={editName}
+                onChangeText={setEditName}
+                maxLength={60}
+              />
+            </View>
+
+            <View style={styles.modalField}>
+              <Text style={styles.modalLabel}>PHONE NUMBER</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Phone (optional)"
+                placeholderTextColor="#94A3B8"
+                value={editPhone}
+                onChangeText={setEditPhone}
+                keyboardType="phone-pad"
+                maxLength={15}
+              />
+            </View>
+
+            <View style={styles.modalField}>
+              <Text style={styles.modalLabel}>JERSEY NUMBER</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. 7"
+                placeholderTextColor="#94A3B8"
+                value={editJersey}
+                onChangeText={setEditJersey}
+                keyboardType="numeric"
+                maxLength={3}
+              />
+            </View>
+
+            {editError ? <Text style={styles.modalError}>{editError}</Text> : null}
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setEditRosterId(null)}>
+                <Text style={styles.modalCancelText}>CANCEL</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={handleUpdatePlayer}
+                disabled={editSaving}
+                activeOpacity={0.85}
+              >
+                {editSaving ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.modalSaveText}>SAVE</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -551,6 +724,21 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  editBtn: {
+    marginLeft: spacing.sm,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editBtnText: {
+    fontSize: 14,
+    lineHeight: 16,
+    fontWeight: '700',
+    color: '#0369A1',
   },
   removeBtn: {
     marginLeft: spacing.sm,

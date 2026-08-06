@@ -5,7 +5,10 @@ import { ApiError } from '../types';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  // 40s so a slow request (e.g. a rare Cloud Run cold start, or a heavy query
+  // under load) doesn't abort with "timeout exceeded". The API is kept warm
+  // (min-instances=1) so cold starts should be rare regardless.
+  timeout: 40000,
   headers: {
     'Content-Type': 'application/json',
   },

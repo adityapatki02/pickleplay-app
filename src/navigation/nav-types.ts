@@ -21,7 +21,9 @@ export type DetailAndManageRoutes = {
   LeagueStats: { leagueId: string; seasonId: string };
   TieDetail: { tieId: string; leagueId?: string; seasonId?: string };
   PlayerProfile: { playerId: string; leagueId?: string; seasonId?: string };
+  ScorerMatches: { leagueId: string; seasonId?: string };
   LeagueFantasy: { seasonId: string; leagueId?: string };
+  Support: undefined;
   ScorerDemo: {
     homeName?: string;
     awayName?: string;
@@ -64,6 +66,7 @@ export type YoidenTabParamList = {
   PlayTab: NavigatorScreenParams<PlayStackParamList>;
   BookTab: NavigatorScreenParams<BookStackParamList>;
   MeTab: NavigatorScreenParams<MeStackParamList>;
+  ProfileTab: NavigatorScreenParams<MeStackParamList>;
 };
 
 // Demo constants — SPPL IDs to wire entry points

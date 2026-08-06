@@ -46,6 +46,9 @@ import MyBookingsScreen from '../screens/yoiden/MyBookingsScreen';
 import BookingSuccessScreen from '../screens/yoiden/BookingSuccessScreen';
 import BookingDetailScreen from '../screens/yoiden/BookingDetailScreen';
 
+// Support (DUPR go-live requirement — match disputes + general help)
+import SupportScreen from '../screens/yoiden/SupportScreen';
+
 // League (SPPL) screens — themed for demo
 import LeagueDashboardScreen from '../screens/league/LeagueDashboardScreen';
 import LiveLeaguesScreen from '../screens/league/LiveLeaguesScreen';
@@ -56,6 +59,10 @@ import LeagueTieDetailScreen from '../screens/league/TieDetailScreen';
 import LeaguePlayerProfileScreen from '../screens/league/PlayerProfileScreen';
 import LeagueFantasyScreen from '../screens/league/FantasyScreen';
 import ScorerDemoScreen from '../screens/league/ScorerDemoScreen';
+import ScorerMatchesScreen from '../screens/league/ScorerMatchesScreen';
+import FranchiseManagementScreen from '../screens/league/FranchiseManagementScreen';
+import RosterManagementScreen from '../screens/league/RosterManagementScreen';
+import GroupManagementScreen from '../screens/league/GroupManagementScreen';
 
 // Location picker — reused from onboarding, now opened as a modal from the Home header
 import { CityPickerScreen } from '../screens/auth/CityPickerScreen';
@@ -72,6 +79,7 @@ function registerDetailAndManageScreens<T extends DetailAndManageRoutes>(
       {/* Location — opens as a slide-up modal */}
       <S name="CityPicker" component={CityPickerScreen} options={{ presentation: 'modal' }} />
       <S name="EditProfile" component={EditProfileScreen} />
+      <S name="Support" component={SupportScreen} />
       {/* Tournament */}
       <S name="TournamentDetail" component={TournamentDetailScreen} />
       <S name="CreateTournament" component={CreateTournamentScreen} />
@@ -98,8 +106,12 @@ function registerDetailAndManageScreens<T extends DetailAndManageRoutes>(
       <S name="Standings" component={LeagueStandingsScreen} />
       <S name="LeagueStats" component={LeagueStatsScreen} />
       <S name="TieDetail" component={LeagueTieDetailScreen} />
+      <S name="FranchiseManagement" component={FranchiseManagementScreen} />
+      <S name="RosterManagement" component={RosterManagementScreen} />
+      <S name="GroupManagement" component={GroupManagementScreen} />
       <S name="PlayerProfile" component={LeaguePlayerProfileScreen} />
       <S name="LeagueFantasy" component={LeagueFantasyScreen} />
+      <S name="ScorerMatches" component={ScorerMatchesScreen} />
       <S name="ScorerDemo" component={ScorerDemoScreen} />
     </>
   );
@@ -145,6 +157,16 @@ const MeStackNavigator = () => (
   </MeStack.Navigator>
 );
 
+// Profile tab — roots on the player's career profile (falls back to the
+// logged-in user when opened with no params). Used as the second bottom tab in
+// the league-kiosk build (HOME · PROFILE).
+const ProfileStack = createNativeStackNavigator<MeStackParamList>();
+const ProfileStackNavigator = () => (
+  <ProfileStack.Navigator screenOptions={{ headerShown: false }} initialRouteName={'PlayerProfile' as any}>
+    {registerDetailAndManageScreens(ProfileStack)}
+  </ProfileStack.Navigator>
+);
+
 // ─── Bottom tabs ─────────────────────────────────────────────────
 const Tab = createBottomTabNavigator<YoidenTabParamList>();
 
@@ -157,6 +179,7 @@ export const YoidenTabNavigator: React.FC = () => (
     <Tab.Screen name="PlayTab" component={PlayStackNavigator} />
     <Tab.Screen name="BookTab" component={BookStackNavigator} />
     <Tab.Screen name="MeTab" component={MeStackNavigator} />
+    <Tab.Screen name="ProfileTab" component={ProfileStackNavigator} />
   </Tab.Navigator>
 );
 

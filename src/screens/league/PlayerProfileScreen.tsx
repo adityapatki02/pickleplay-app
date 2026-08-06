@@ -12,6 +12,7 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getPlayerCareer } from '../../api/leagues.api';
 import { xAlert } from '../../utils/alert';
+import { useAuthStore } from '../../store/authStore';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
 import { YColors, YTopBar } from '../../components/yoiden';
@@ -121,29 +122,43 @@ function buildTotal(formats: any[]) {
   };
 }
 
+// Fixed sport filter shown at the top of every profile — Pickleball first, then
+// Badminton. Each tab shows only that sport's leagues; a sport with no matches
+// yet shows an empty state.
+const SPORT_TABS: { key: string; label: string }[] = [
+  { key: 'pickleball', label: 'Pickleball' },
+  { key: 'badminton', label: 'Badminton' },
+];
+
 // ── Screen ──────────────────────────────────────────────────────────────────
 const PlayerProfileScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { playerId, seasonId } = route.params || {};
+  const authUser = useAuthStore((s) => s.user);
+  // When opened from the bottom Profile tab there are no params — fall back to
+  // the logged-in user so it shows "my profile".
+  const playerId = route.params?.playerId || authUser?.id;
+  const seasonId = route.params?.seasonId;
 
   const [loading, setLoading] = useState(true);
   const [career, setCareer] = useState<any>(null);
   const [selectedSport, setSelectedSport] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!playerId) return;
+    if (!playerId) { setLoading(false); return; }
     setLoading(true);
     getPlayerCareer(playerId, 'private')
       .then((c) => {
         setCareer(c);
-        setSelectedSport(c?.sports?.[0]?.sport ?? null);
+        // Pickleball first (per design); fall back to whatever sport has data.
+        const has = (sp: string) => c?.sports?.some((s: any) => s.sport === sp);
+        setSelectedSport(has('pickleball') ? 'pickleball' : (c?.sports?.[0]?.sport ?? 'pickleball'));
       })
       .catch((e: any) => xAlert('Error', e?.message || 'Failed to load profile'))
       .finally(() => setLoading(false));
   }, [playerId]);
 
-  const sport = career?.sports?.find((s: any) => s.sport === selectedSport) ?? career?.sports?.[0];
+  const sport = career?.sports?.find((s: any) => s.sport === selectedSport) ?? null;
 
   if (loading && !career) {
     return (
@@ -191,26 +206,26 @@ const PlayerProfileScreen: React.FC = () => {
           ) : null}
         </View>
 
-        {/* Sport filter chips */}
-        {career?.sports?.length > 1 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs} contentContainerStyle={{ paddingHorizontal: 14 }}>
-            {career.sports.map((s: any) => (
-              <TouchableOpacity
-                key={s.sport}
-                style={[styles.tab, s.sport === selectedSport && styles.tabActive]}
-                onPress={() => setSelectedSport(s.sport)}
-              >
-                <Text style={[styles.tabText, s.sport === selectedSport && styles.tabTextActive]}>
-                  {s.sport.charAt(0).toUpperCase() + s.sport.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        )}
+        {/* Sport filter — Pickleball / Badminton, each shows its own data */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs} contentContainerStyle={{ paddingHorizontal: 14 }}>
+          {SPORT_TABS.map((t) => (
+            <TouchableOpacity
+              key={t.key}
+              style={[styles.tab, t.key === selectedSport && styles.tabActive]}
+              onPress={() => setSelectedSport(t.key)}
+            >
+              <Text style={[styles.tabText, t.key === selectedSport && styles.tabTextActive]}>
+                {t.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
         {!sport ? (
           <View style={styles.card}>
-            <Text style={styles.emptyText}>No stats available yet.</Text>
+            <Text style={styles.emptyText}>
+              No {(SPORT_TABS.find((t) => t.key === selectedSport)?.label || 'sport').toLowerCase()} matches yet.
+            </Text>
           </View>
         ) : (
           <>

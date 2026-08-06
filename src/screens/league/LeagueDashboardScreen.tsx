@@ -3,6 +3,7 @@ import * as Clipboard from 'expo-clipboard';
 import {
   View,
   Text,
+  Image,
   ScrollView,
   FlatList,
   StyleSheet,
@@ -16,6 +17,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   BackHandler,
+  Linking,
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import {
@@ -34,6 +36,7 @@ import {
   resetKnockout,
   resetSeason,
   sendCaptainPortalLinks,
+  getMyCaptainTeams,
   sendDefaultLineupReminderToOne,
   sendDefaultLineupReminders,
   setCaptain,
@@ -41,6 +44,7 @@ import {
   importDefaultLineupsCSV,
   listScorers,
   addScorer,
+  lookupScorer,
   resetScorerPin,
   removeScorer,
   sendScorerInvite,
@@ -50,6 +54,7 @@ import {
   removeLeagueAdmin,
   recalculateStandings,
   updateSeason,
+  setStreamLinks,
   backfillGender,
   resetLeagueTie,
   applyDefaultSchedule,
@@ -90,12 +95,28 @@ const WHITE = '#FFFFFF';
 const WARN = '#FFB300';
 const RED = '#EF4444';
 const PURPLE = '#8B5CF6';
+
+// ── SBPL S2 branded header: league logo (centre) + 4 sponsors (2 either side).
+// Shown only for the SBPL league. Labels are editable placeholders derived from
+// the booklet asset names (title / co / t-shirt / trophy).
+const SBPL_LEAGUE_ID = '5fc20913-c637-4ebd-8a11-398c68173334';
+const SBPL_LOGO = require('../../../assets/sbpl/sbpl-s2-logo.png');
+const SBPL_SPONSORS_LEFT = [
+  { img: require('../../../assets/sbpl/rr-group.png'), label: 'TITLE SPONSOR' },
+  { img: require('../../../assets/sbpl/realestiq.png'), label: 'CO-SPONSOR' },
+];
+const SBPL_SPONSORS_RIGHT = [
+  { img: require('../../../assets/sbpl/globald2c.png'), label: 'T-SHIRT SPONSOR' },
+  // Kamakhya is a wide/landscape logo — `cover` would crop its sides, so it
+  // uses `contain` (full logo, blends on the dark card).
+  { img: require('../../../assets/sbpl/kamakhya.png'), label: 'TROPHY SPONSOR', fit: 'contain' as const },
+];
 const ORANGE = '#F97316';
 const PINK = '#EC4899';
 
 // ─── Tab definitions ────────────────────────────────────────────────────────
 // STATS removed — replaced by the curated Best Performers card on OVERVIEW.
-const TABS = ['OVERVIEW', 'FIXTURES', 'STANDINGS', 'KNOCKOUT'] as const;
+const TABS = ['OVERVIEW', 'FIXTURES', 'STANDINGS', 'STATS', 'KNOCKOUT'] as const;
 type Tab = (typeof TABS)[number];
 
 // ─── Phase colors ───────────────────────────────────────────────────────────
@@ -148,6 +169,9 @@ const LeagueDashboardScreen: React.FC = () => {
     return () => { cancelled = true; };
   }, [leagueId]);
   const [activeTab, setActiveTab] = useState<Tab>('OVERVIEW');
+  // Fixtures sub-tab: Upcoming (default) vs Completed. A tie moves to Completed
+  // once its status is 'completed'.
+  const [fixtureTab, setFixtureTab] = useState<'upcoming' | 'completed'>('upcoming');
   // GROUP is the most useful default — that's what stakeholders watch during
   // knockout qualification. Mirrors the standalone StandingsScreen default.
   // Standings sub-tab.  Once QFs are generated the dashboard auto-promotes
@@ -172,12 +196,88 @@ const LeagueDashboardScreen: React.FC = () => {
   const [newScorerName, setNewScorerName] = useState('');
   const [newScorerPhone, setNewScorerPhone] = useState('');
   const [newScorerPin, setNewScorerPin] = useState('');
+  // Recognises an existing account for the typed phone (name + whether they
+  // already have a portal PIN) so we don't ask for details we already have.
+  const [scorerLookup, setScorerLookup] = useState<
+    { exists: boolean; name: string | null; hasPin: boolean; alreadyScorer: boolean } | null
+  >(null);
+
+  // Debounced phone lookup while adding a scorer.
+  useEffect(() => {
+    const digits = newScorerPhone.replace(/\D/g, '');
+    if (digits.length < 10) { setScorerLookup(null); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const res = await lookupScorer(leagueId, newScorerPhone.trim());
+        if (!cancelled) setScorerLookup(res || null);
+      } catch { if (!cancelled) setScorerLookup(null); }
+    }, 400);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [newScorerPhone, leagueId]);
   const [showLinksModal, setShowLinksModal] = useState(false);
   const [captainLinks, setCaptainLinks] = useState<{ name: string; token: string; url: string; franchiseId?: string }[]>([]);
   const [captainEdits, setCaptainEdits] = useState<Record<string, { name: string; phone: string }>>({});
   const [captainEditMode, setCaptainEditMode] = useState<Record<string, boolean>>({});
   const [resolvedSeasonId, setResolvedSeasonId] = useState(routeSeasonId || '');
   const [showSetup, setShowSetup] = useState(false);
+  // SBPL sponsor slider — shows 2 logos at a time, auto-advances every 15s.
+  const [sponsorPage, setSponsorPage] = useState(0);
+  React.useEffect(() => {
+    if (store.currentLeague?.id !== SBPL_LEAGUE_ID) return;
+    const totalPages = Math.ceil((SBPL_SPONSORS_LEFT.length + SBPL_SPONSORS_RIGHT.length) / 2);
+    if (totalPages <= 1) return;
+    const t = setInterval(() => setSponsorPage((p) => (p + 1) % totalPages), 15000);
+    return () => clearInterval(t);
+  }, [store.currentLeague?.id]);
+
+  // SBPL live-match tiles — poll the master scoreboard feed and surface both
+  // courts of every live tie as stacked tiles on the dashboard. A tie runs on
+  // two courts in parallel, so we show the court being scored AND the one that's
+  // up next; each tile carries its own status (LIVE / UP NEXT / FINAL).
+  const [liveTiles, setLiveTiles] = useState<any[]>([]);
+  React.useEffect(() => {
+    if (!resolvedSeasonId || store.currentLeague?.id !== SBPL_LEAGUE_ID) return;
+    let alive = true;
+    const base = API_BASE_URL.replace(/\/$/, '');
+    const load = async () => {
+      try {
+        const res = await fetch(`${base}/scoreboard/master/${resolvedSeasonId}/data`, { cache: 'no-store' });
+        const j = await res.json();
+        const ties = j?.data?.ties || [];
+        const tiles: any[] = [];
+        for (const t of ties) {
+          for (const c of t.courts || []) {
+            if (c.match) {
+              tiles.push({ ...c.match, tieId: t.tieId, courtNumber: c.courtNumber, homeTeam: t.homeTeam, awayTeam: t.awayTeam });
+            }
+          }
+        }
+        if (alive) setLiveTiles(tiles);
+      } catch { /* keep last tiles on a transient error */ }
+    };
+    load();
+    const id = setInterval(load, 8000);
+    return () => { alive = false; clearInterval(id); };
+  }, [resolvedSeasonId, store.currentLeague?.id]);
+
+  // Captain's own portal link — a logged-in captain (matched by phone) gets a
+  // blue "Open Captain's Portal" tile that opens their tie-sheet portal.
+  const [captainTeams, setCaptainTeams] = useState<{ franchiseName: string; url: string }[]>([]);
+  React.useEffect(() => {
+    if (!authUser?.id) { setCaptainTeams([]); return; }
+    let alive = true;
+    getMyCaptainTeams()
+      .then((teams) => {
+        if (!alive) return;
+        // Scope to the league being viewed so e.g. a Mini Pickleball captaincy
+        // doesn't surface on the SBPL site.
+        const mine = (Array.isArray(teams) ? teams : []).filter((t) => t.leagueId === leagueId);
+        setCaptainTeams(mine);
+      })
+      .catch(() => { if (alive) setCaptainTeams([]); });
+    return () => { alive = false; };
+  }, [authUser?.id, leagueId]);
 
   // League admins
   const [showAdminsModal, setShowAdminsModal] = useState(false);
@@ -190,6 +290,11 @@ const LeagueDashboardScreen: React.FC = () => {
   const [showOverlaysModal, setShowOverlaysModal] = useState(false);
   const [showCourtsModal, setShowCourtsModal] = useState(false);
   const [savingCourts, setSavingCourts] = useState(false);
+
+  // Streaming links (per court) — organiser-editable, shown as Watch buttons.
+  const [showStreamModal, setShowStreamModal] = useState(false);
+  const [streamEdits, setStreamEdits] = useState<Record<string, string>>({});
+  const [savingStream, setSavingStream] = useState(false);
 
   // Backfill-gender modal (multi-line CSV input)
   const [showBackfillModal, setShowBackfillModal] = useState(false);
@@ -441,12 +546,33 @@ const LeagueDashboardScreen: React.FC = () => {
   // overview "Upcoming Ties" section shows the next-to-play tie at the top.
   // Ties without a scheduledStart fall to the end. Tie-breaks: matchDay,
   // courtNumber, then id (stable).
+  // Chronological key: prefer scheduledStart, fall back to matchDay (date-only),
+  // else push to the end. So a league tie that only has a matchDay still orders
+  // ahead of a later-dated knockout instead of sinking to Infinity.
+  const tieTimeKey = (t: any) => {
+    if (t.scheduledStart) {
+      const x = new Date(t.scheduledStart).getTime();
+      if (!Number.isNaN(x)) return x;
+    }
+    if (t.matchDay) {
+      const x = new Date(t.matchDay).getTime();
+      if (!Number.isNaN(x)) return x;
+    }
+    return Number.POSITIVE_INFINITY;
+  };
+  const isKnockoutTie = (t: any) => (t.round || '').startsWith('knockout_');
   const upcomingTies = ties
     .filter((t) => t.status !== 'completed' && t.status !== 'postponed')
     .slice()
     .sort((a, b) => {
-      const ta = (a as any).scheduledStart ? new Date((a as any).scheduledStart).getTime() : Number.POSITIVE_INFINITY;
-      const tb = (b as any).scheduledStart ? new Date((b as any).scheduledStart).getTime() : Number.POSITIVE_INFINITY;
+      // League (pool) ties are always played before knockouts, so surface the
+      // next-to-play league matches above the QFs/Final (which come later and
+      // often aren't even seeded yet).
+      const ka = isKnockoutTie(a) ? 1 : 0;
+      const kb = isKnockoutTie(b) ? 1 : 0;
+      if (ka !== kb) return ka - kb;
+      const ta = tieTimeKey(a);
+      const tb = tieTimeKey(b);
       if (ta !== tb) return ta - tb;
       const da = (a as any).matchDay || '';
       const db = (b as any).matchDay || '';
@@ -456,6 +582,25 @@ const LeagueDashboardScreen: React.FC = () => {
       if (ca !== cb) return ca - cb;
       return (a.id || '').localeCompare(b.id || '');
     });
+
+  // Ties assigned to the logged-in user as scorer. Drives the homepage
+  // "Scorer's Matches" shortcut so an assigned scorer jumps straight to the
+  // ties they need to score. Live first, then upcoming (soonest), completed last.
+  const myScorerTies = !authUser?.id
+    ? []
+    : ties
+        .filter((t) =>
+          [(t as any).scorerId, (t as any).scorer1Id, (t as any).scorer2Id].includes(authUser.id),
+        )
+        .slice()
+        .sort((a, b) => {
+          const rank = (t: any) => (t.status === 'in_progress' ? 0 : t.status === 'completed' ? 2 : 1);
+          const ra = rank(a);
+          const rb = rank(b);
+          if (ra !== rb) return ra - rb;
+          return tieTimeKey(a) - tieTimeKey(b);
+        });
+  const myScorerPending = myScorerTies.filter((t) => t.status !== 'completed').length;
 
   const ROUND_LABELS: Record<string, string> = {
     knockout_qf1: 'Quarterfinal 1',
@@ -583,7 +728,137 @@ const LeagueDashboardScreen: React.FC = () => {
     );
   };
 
+  // SBPL live match tiles — one per in-progress court game, shown on the
+  // Overview above the sponsors.
+  const renderLiveMatches = () => {
+    if (store.currentLeague?.id !== SBPL_LEAGUE_ID || liveTiles.length === 0) return null;
+    const pair = (a?: string, b?: string) => {
+      const x = (a || '').trim(), y = (b || '').trim();
+      return [x, y].filter(Boolean);
+    };
+    return (
+      <View style={{ paddingHorizontal: 20, marginTop: 18 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' }} />
+          <YEyebrow size={10} color={YColors.ink3}>LIVE NOW</YEyebrow>
+        </View>
+        <View style={{ gap: 12 }}>
+          {liveTiles.map((m, i) => {
+            const hc = m.homeTeam?.primaryColor || '#0A2A6B';
+            const ac = m.awayTeam?.primaryColor || '#0FB5A6';
+            const hp = pair(m.homePlayer1, m.homePlayer2);
+            const ap = pair(m.awayPlayer1, m.awayPlayer2);
+            const live = m.status === 'in_progress';
+            const done = m.status === 'completed';
+            const badge = live
+              ? { label: 'LIVE', color: '#EF4444', dot: true }
+              : done
+                ? { label: 'FINAL', color: '#06D6A0', dot: false }
+                : { label: 'UP NEXT', color: '#F97316', dot: false };
+            const showScore = live || done;
+            return (
+              <TouchableOpacity
+                key={i}
+                activeOpacity={m.tieId ? 0.7 : 1}
+                disabled={!m.tieId}
+                onPress={() => m.tieId && navigation.navigate('TieDetail', { tieId: m.tieId, leagueId, seasonId: resolvedSeasonId })}
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: YRadius.xl,
+                  borderWidth: 1,
+                  borderColor: YColors.line2,
+                  padding: 14,
+                  ...(Platform.OS === 'web'
+                    ? { boxShadow: '0 2px 10px rgba(10,10,11,0.05)' as any }
+                    : { shadowColor: '#0A0A0B', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }),
+                }}
+              >
+                {/* header */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '900', color: '#001E40', backgroundColor: '#C6FF00', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, letterSpacing: 0.5 }}>
+                    COURT {m.courtNumber}
+                  </Text>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: YColors.ink2, flex: 1 }} numberOfLines={1}>{m.category}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    {badge.dot && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: badge.color }} />}
+                    <Text style={{ fontSize: 11, fontWeight: '900', color: badge.color, letterSpacing: 0.5 }}>{badge.label}</Text>
+                  </View>
+                </View>
+                {/* players + score (or UP NEXT) */}
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ flex: 1, borderLeftWidth: 3, borderLeftColor: hc, paddingLeft: 8 }}>
+                    {hp.map((n, k) => (
+                      <Text key={k} style={{ fontSize: 13, fontWeight: '800', color: YColors.ink }} numberOfLines={1}>{n}</Text>
+                    ))}
+                  </View>
+                  {showScore ? (
+                    <Text style={{ fontSize: 26, fontWeight: '900', color: YColors.ink, marginHorizontal: 12, fontVariant: ['tabular-nums'] as any }}>
+                      {m.teamAScore}<Text style={{ color: YColors.ink3 }}> - </Text>{m.teamBScore}
+                    </Text>
+                  ) : (
+                    <Text style={{ fontSize: 13, fontWeight: '900', color: YColors.ink3, marginHorizontal: 12, letterSpacing: 0.5 }}>UP NEXT</Text>
+                  )}
+                  <View style={{ flex: 1, alignItems: 'flex-end', borderRightWidth: 3, borderRightColor: ac, paddingRight: 8 }}>
+                    {ap.map((n, k) => (
+                      <Text key={k} style={{ fontSize: 13, fontWeight: '800', color: YColors.ink, textAlign: 'right' }} numberOfLines={1}>{n}</Text>
+                    ))}
+                  </View>
+                </View>
+                {/* teams */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: YColors.ink2, flex: 1 }} numberOfLines={1}>{m.homeTeam?.name || ''}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: YColors.ink2, flex: 1, textAlign: 'right' }} numberOfLines={1}>{m.awayTeam?.name || ''}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
+
   const renderQuickStats = () => {
+    // SBPL: use this prime slot to showcase the four sponsors instead of counts.
+    if (store.currentLeague?.id === SBPL_LEAGUE_ID) {
+      const all = [...SBPL_SPONSORS_LEFT, ...SBPL_SPONSORS_RIGHT];
+      // Chunk into pages of 2. The 15s timer (effect above) advances sponsorPage.
+      const pages: typeof all[] = [];
+      for (let i = 0; i < all.length; i += 2) pages.push(all.slice(i, i + 2));
+      const page = pages[sponsorPage % pages.length] || [];
+      return (
+        <View style={{ paddingHorizontal: 20, marginTop: 18, marginBottom: 6 }}>
+          <YEyebrow size={10} color={YColors.ink3} style={{ marginBottom: 12 }}>OUR SPONSORS</YEyebrow>
+          <View style={{ flexDirection: 'row', gap: 16 }}>
+            {page.map((s) => (
+              <View key={s.label} style={{ flex: 1, minWidth: 0, alignItems: 'center' }}>
+                <View style={styles.sbplSponsorCard}>
+                  <Image source={s.img} style={styles.sbplSponsorCardImg} resizeMode={(s as any).fit || 'cover'} />
+                </View>
+                <Text style={styles.sbplShowcaseLbl} numberOfLines={2}>{s.label}</Text>
+              </View>
+            ))}
+            {/* keep layout balanced if a page has a single logo */}
+            {page.length === 1 && <View style={{ flex: 1 }} />}
+          </View>
+          {/* page dots */}
+          {pages.length > 1 && (
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 12 }}>
+              {pages.map((_, i) => (
+                <View
+                  key={i}
+                  style={{
+                    width: i === (sponsorPage % pages.length) ? 18 : 6,
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor: i === (sponsorPage % pages.length) ? YColors.accent : YColors.line2,
+                  }}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+      );
+    }
     const played = completedTies.length;
     const remaining = ties.length - played;
     const items = [
@@ -603,9 +878,11 @@ const LeagueDashboardScreen: React.FC = () => {
     );
   };
 
-  const renderTieCard = (tie: Tie, compact = false) => {
+  const renderTieCard = (tie: Tie, compact = false, onPressOverride?: () => void) => {
     const chipCfg = STATUS_CHIP[tie.status] || STATUS_CHIP.scheduled;
-    const isMyAssignedTie = !!authUser?.id && (tie as any).scorerId === authUser.id;
+    const isMyAssignedTie =
+      !!authUser?.id &&
+      [(tie as any).scorerId, (tie as any).scorer1Id, (tie as any).scorer2Id].includes(authUser.id);
 
     // Human-readable knockout stage label + placeholder names before teams are seeded
     const isCross = (season as any)?.format === 'cross_5game';
@@ -648,12 +925,13 @@ const LeagueDashboardScreen: React.FC = () => {
           marginBottom: 10,
         }}
         activeOpacity={0.85}
-        onPress={() => navigation.navigate('TieDetail', { tieId: tie.id, leagueId })}
+        onPress={onPressOverride || (() => navigation.navigate('TieDetail', { tieId: tie.id, leagueId }))}
       >
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1 }}>
             {timeLabel ? <YBadge color="#92400E" bg="#FEF3C7">{timeLabel}</YBadge> : null}
             {(tie as any).courtNumber ? <YBadge color="#0369A1" bg="#E0F2FE">{`COURT ${(tie as any).courtNumber}`}</YBadge> : null}
+            {(tie as any).courtNumber2 ? <YBadge color="#0369A1" bg="#E0F2FE">{`COURT ${(tie as any).courtNumber2}`}</YBadge> : null}
             {tie.notes ? <YBadge color="#7C3AED" bg="#EDE9FE">{tie.notes}</YBadge> : null}
             {isMyAssignedTie ? <YBadge color="#fff" bg="#06D6A0">MY TIE</YBadge> : null}
             {stageLabel ? <YBadge color="#1D4ED8" bg="#DBEAFE">{stageLabel}</YBadge> : null}
@@ -789,6 +1067,17 @@ const LeagueDashboardScreen: React.FC = () => {
         onPress: () => setShowCourtsModal(true),
         color: '#16A34A',
         bg: '#DCFCE7',
+      },
+      {
+        icon: '📡',
+        title: 'Streaming Links',
+        sub: 'Per-court live-stream URLs shown to viewers',
+        onPress: () => {
+          setStreamEdits({ ...(season?.streamLinks || {}) });
+          setShowStreamModal(true);
+        },
+        color: '#DC2626',
+        bg: '#FEE2E2',
       },
       {
         icon: '🔄',
@@ -1322,15 +1611,128 @@ const LeagueDashboardScreen: React.FC = () => {
     );
   };
 
+  // Viewer-facing "Watch Live" — per-court stream links set by the organiser.
+  const renderWatchLive = () => {
+    const links = season?.streamLinks || {};
+    const courts = Object.keys(links)
+      .filter((c) => (links[c] || '').trim())
+      .sort((a, b) => Number(a) - Number(b));
+    if (courts.length === 0) return null;
+    return (
+      <View style={{ paddingHorizontal: 20, marginTop: 18 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' }} />
+          <YEyebrow size={10} color={YColors.ink3}>WATCH LIVE</YEyebrow>
+        </View>
+        <View style={{ gap: 10 }}>
+          {courts.map((c) => (
+            <TouchableOpacity
+              key={`stream-${c}`}
+              onPress={() => Linking.openURL(links[c])}
+              activeOpacity={0.85}
+              style={{
+                backgroundColor: '#0A0A0B',
+                borderRadius: YRadius.xl,
+                paddingVertical: 15,
+                paddingHorizontal: 16,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Text style={{ fontSize: 20 }}>▶️</Text>
+                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '900', letterSpacing: 0.3 }}>Watch Court {c}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' }} />
+                <Text style={{ color: '#EF4444', fontSize: 11, fontWeight: '900', letterSpacing: 0.5 }}>LIVE</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
   const renderOverview = () => (
     <ScrollView
       contentContainerStyle={styles.tabContent}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
+      {/* Captain shortcut — a logged-in captain (matched by phone) gets a blue
+          tile that opens their tie-sheet portal in the browser. */}
+      {captainTeams.map((ct, i) => (
+        <TouchableOpacity
+          key={`cap-${i}`}
+          onPress={() => Linking.openURL(ct.url)}
+          activeOpacity={0.85}
+          style={{
+            marginHorizontal: 14,
+            marginTop: 6,
+            marginBottom: 12,
+            backgroundColor: '#2196F3',
+            borderRadius: YRadius.xl,
+            paddingVertical: 16,
+            paddingHorizontal: 16,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+            <Text style={{ fontSize: 22 }}>📋</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#fff', fontSize: 15, fontWeight: '900', letterSpacing: 0.3 }}>Open Captain's Portal</Text>
+              <Text style={{ color: '#E3F2FD', fontSize: 12, fontWeight: '600', marginTop: 1 }} numberOfLines={1}>
+                {ct.franchiseName} · submit & edit your lineup
+              </Text>
+            </View>
+          </View>
+          <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900' }}>›</Text>
+        </TouchableOpacity>
+      ))}
+
+      {/* Scorer shortcut — only shows for a user with ties assigned to them.
+          Jumps straight to their matches so they don't hunt through fixtures. */}
+      {myScorerTies.length > 0 && (
+        <TouchableOpacity
+          onPress={() => navigation.navigate('ScorerMatches', { leagueId, seasonId: resolvedSeasonId })}
+          activeOpacity={0.85}
+          style={{
+            marginHorizontal: 14,
+            marginTop: 6,
+            marginBottom: 12,
+            backgroundColor: '#06D6A0',
+            borderRadius: YRadius.xl,
+            paddingVertical: 16,
+            paddingHorizontal: 16,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+            <Text style={{ fontSize: 22 }}>🎯</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#fff', fontSize: 15, fontWeight: '900', letterSpacing: 0.3 }}>Scorer's Matches</Text>
+              <Text style={{ color: '#E6FFF7', fontSize: 12, fontWeight: '600', marginTop: 1 }}>
+                {myScorerPending > 0
+                  ? `${myScorerPending} match${myScorerPending === 1 ? '' : 'es'} to score · tap to open`
+                  : 'View your assigned matches'}
+              </Text>
+            </View>
+          </View>
+          <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900' }}>›</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Champion banner — only after final completes */}
       {renderChampionBanner()}
 
       {/* Quick stats — compact row */}
+      {renderLiveMatches()}
+      {renderWatchLive()}
       {renderQuickStats()}
 
       {/* Hero: Standings snapshot */}
@@ -1437,28 +1839,58 @@ const LeagueDashboardScreen: React.FC = () => {
             Start the league phase to generate fixtures for all groups.
           </Text>
         </View>
-      ) : (
-        [...ties]
-          .sort((a, b) => {
-            // Primary sort: scheduledStart (full date+time). Falls back to
-            // matchDay (date only) when scheduledStart isn't set on a tie.
-            const aTime = new Date(a.scheduledStart || a.matchDay || 0).getTime();
-            const bTime = new Date(b.scheduledStart || b.matchDay || 0).getTime();
-            if (aTime !== bTime) return aTime - bTime;
-            // Secondary: court number ascending (lower courts first when ties
-            // share a slot). Ties without a court go last.
-            const aCourt = (a as any).courtNumber ?? Number.MAX_SAFE_INTEGER;
-            const bCourt = (b as any).courtNumber ?? Number.MAX_SAFE_INTEGER;
-            if (aCourt !== bCourt) return aCourt - bCourt;
-            // Tertiary: id, just to keep order stable across renders.
-            return a.id.localeCompare(b.id);
-          })
-          .map((t) => (
-          <View key={t.id}>
-            {renderTieCard(t)}
-          </View>
-        ))
-      )}
+      ) : (() => {
+        const upcoming = ties.filter((t) => t.status !== 'completed');
+        const completed = ties.filter((t) => t.status === 'completed');
+        const shown = fixtureTab === 'completed' ? completed : upcoming;
+        const sorted = [...shown].sort((a, b) => {
+          // Completed: newest first. Upcoming: soonest first.
+          const aTime = new Date(a.scheduledStart || a.matchDay || 0).getTime();
+          const bTime = new Date(b.scheduledStart || b.matchDay || 0).getTime();
+          if (aTime !== bTime) return fixtureTab === 'completed' ? bTime - aTime : aTime - bTime;
+          const aCourt = (a as any).courtNumber ?? Number.MAX_SAFE_INTEGER;
+          const bCourt = (b as any).courtNumber ?? Number.MAX_SAFE_INTEGER;
+          if (aCourt !== bCourt) return aCourt - bCourt;
+          return a.id.localeCompare(b.id);
+        });
+        const SubTab = ({ id, label, count }: { id: 'upcoming' | 'completed'; label: string; count: number }) => {
+          const on = fixtureTab === id;
+          return (
+            <TouchableOpacity
+              onPress={() => setFixtureTab(id)}
+              activeOpacity={0.85}
+              style={{
+                flex: 1,
+                paddingVertical: 10,
+                borderRadius: 10,
+                alignItems: 'center',
+                backgroundColor: on ? YColors.accent : '#F1F5F9',
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: '800', letterSpacing: 0.3, color: on ? WHITE : YColors.ink2 }}>
+                {label} {count > 0 ? `(${count})` : ''}
+              </Text>
+            </TouchableOpacity>
+          );
+        };
+        return (
+          <>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+              <SubTab id="upcoming" label="UPCOMING" count={upcoming.length} />
+              <SubTab id="completed" label="COMPLETED" count={completed.length} />
+            </View>
+            {sorted.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>
+                  {fixtureTab === 'completed' ? 'No completed ties yet.' : 'No upcoming ties.'}
+                </Text>
+              </View>
+            ) : (
+              sorted.map((t) => <View key={t.id}>{renderTieCard(t)}</View>)
+            )}
+          </>
+        );
+      })()}
       <View style={{ height: 40 }} />
     </ScrollView>
   );
@@ -2059,6 +2491,10 @@ const LeagueDashboardScreen: React.FC = () => {
 
   const renderKnockoutTab = () => {
     if ((season as any)?.format === 'cross_5game') return renderCrossPoolKnockout();
+    // SBPL runs a straight QF → SF → Final bracket (no IPL-style Q1/Eliminator/
+    // Q2). Its SFs seed and its Final advances automatically on the backend, so
+    // the middle round is labelled "SF" and shows SF1/SF2 instead of playoffs.
+    const isSbpl = (season as any)?.format === 'sbpl_15game';
     const seasonStatus = season?.status;
     // "Has knockout ties" = knockouts have actually been GENERATED (teams
     // assigned), not just that empty shells exist. Shell ties are pre-created
@@ -2223,7 +2659,11 @@ const LeagueDashboardScreen: React.FC = () => {
                   </TouchableOpacity>
                 );
               };
-              const groupSuffix = isAdmin ? ' (TAP TO CHANGE)' : '';
+              // Only advertise "TAP TO CHANGE" when the rows are actually
+              // tappable (admin + league play finished). Before that the Top 4
+              // is a live projection from standings and can't be overridden, so
+              // the hint would be misleading.
+              const groupSuffix = isAdmin && allLeagueTiesCompleted ? ' (TAP TO CHANGE)' : '';
               return (
                 <>
                   <View style={koStyles.groupPairCard}>
@@ -2250,12 +2690,22 @@ const LeagueDashboardScreen: React.FC = () => {
                   <Text style={koStyles.bracketPreviewText}>QF2: {label(eff('ab2'))} vs {label(eff('cd3'))}</Text>
                   <Text style={koStyles.bracketPreviewText}>QF3: {label(eff('ab3'))} vs {label(eff('cd2'))}</Text>
                   <Text style={koStyles.bracketPreviewText}>QF4: {label(eff('ab4'))} vs {label(eff('cd1'))}</Text>
-                  <Text style={[koStyles.bracketPreviewTitle, { marginTop: 8 }]}>PLAYOFFS (IPL-STYLE)</Text>
-                  <Text style={koStyles.bracketPreviewText}>Q1: H1 vs H2 (winner → Final, loser → Q2)</Text>
-                  <Text style={koStyles.bracketPreviewText}>Eliminator: H3 vs H4 (winner → Q2)</Text>
-                  <Text style={koStyles.bracketPreviewText}>Q2: Loser(Q1) vs Winner(Elim)</Text>
+                  {isSbpl ? (
+                    <>
+                      <Text style={[koStyles.bracketPreviewTitle, { marginTop: 8 }]}>SEMIFINALS</Text>
+                      <Text style={koStyles.bracketPreviewText}>SF1: H1 vs H4 (winner → Final)</Text>
+                      <Text style={koStyles.bracketPreviewText}>SF2: H2 vs H3 (winner → Final)</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={[koStyles.bracketPreviewTitle, { marginTop: 8 }]}>PLAYOFFS (IPL-STYLE)</Text>
+                      <Text style={koStyles.bracketPreviewText}>Q1: H1 vs H2 (winner → Final, loser → Q2)</Text>
+                      <Text style={koStyles.bracketPreviewText}>Eliminator: H3 vs H4 (winner → Q2)</Text>
+                      <Text style={koStyles.bracketPreviewText}>Q2: Loser(Q1) vs Winner(Elim)</Text>
+                    </>
+                  )}
                   <Text style={[koStyles.bracketPreviewTitle, { marginTop: 8 }]}>FINAL</Text>
-                  <Text style={koStyles.bracketPreviewText}>Winner(Q1) vs Winner(Q2)</Text>
+                  <Text style={koStyles.bracketPreviewText}>{isSbpl ? 'SF1 winner vs SF2 winner' : 'Winner(Q1) vs Winner(Q2)'}</Text>
                 </View>
               );
             })()}
@@ -2299,7 +2749,7 @@ const LeagueDashboardScreen: React.FC = () => {
       // Simple sub-tab nav (only QF is active — Playoffs/Final greyed)
       const preSubTabs = [
         { key: 'qf' as const, label: 'QF', unlocked: true },
-        { key: 'playoffs' as const, label: 'Playoffs', unlocked: false },
+        { key: 'playoffs' as const, label: isSbpl ? 'SF' : 'Playoffs', unlocked: false },
         { key: 'final' as const, label: 'Final', unlocked: false },
       ];
       return (
@@ -2418,7 +2868,7 @@ const LeagueDashboardScreen: React.FC = () => {
     const renderSubTabNav = () => {
       const subTabs: { key: 'qf' | 'playoffs' | 'final'; label: string; unlocked: boolean; badge?: boolean }[] = [
         { key: 'qf', label: 'QF', unlocked: true, badge: !!needsPlayoffConfirm },
-        { key: 'playoffs', label: 'Playoffs', unlocked: playoffsUnlocked, badge: !!needsQ1Advance || !!needsElimAdvance },
+        { key: 'playoffs', label: isSbpl ? 'SF' : 'Playoffs', unlocked: playoffsUnlocked, badge: isSbpl ? false : (!!needsQ1Advance || !!needsElimAdvance) },
         { key: 'final', label: 'Final', unlocked: finalUnlocked, badge: !!needsQ2Advance },
       ];
       return (
@@ -2679,7 +3129,40 @@ const LeagueDashboardScreen: React.FC = () => {
           )}
         </View>
         <View style={{ marginHorizontal: 20 }}>
-          {renderKnockoutTieCard(finalTie || null, 'FINAL')}
+          {renderKnockoutTieCard(finalTie || null, 'FINAL', isSbpl ? 'SF1 winner vs SF2 winner' : undefined)}
+        </View>
+      </>
+    );
+
+    // ───────── Sub-tab: SF (SBPL only — QF winners auto-advance here) ─────────
+    const renderSFSubTab = () => (
+      <>
+        <View style={{ marginHorizontal: 14, marginTop: 4, marginBottom: 10, backgroundColor: '#EFF6FF', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#BFDBFE' }}>
+          <Text style={{ fontSize: 12, fontWeight: '800', color: '#1E40AF', marginBottom: 2 }}>SEMIFINALS</Text>
+          <Text style={{ fontSize: 11, color: '#1E3A5F' }}>
+            {allQFsDone
+              ? 'Teams below are seeded automatically from the QF ranking (top seed H1 vs H4, H2 vs H3). SF winners advance to the Final on their own.'
+              : 'Semifinal teams fill in automatically once all four Quarterfinals are complete.'}
+          </Text>
+        </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, marginBottom: 4 }}>
+          <Text style={koStyles.sectionTitle}>SF FIXTURES</Text>
+          {isAdmin && (sf1 || sf2) && (
+            <TouchableOpacity onPress={() => openRoundSetup('SF')} style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#2196F3' }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#1E40AF' }}>⚙ SETUP</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <View style={{ paddingHorizontal: 14 }}>
+          <View style={{ marginBottom: 8 }}>
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#2196F3', marginBottom: 4, letterSpacing: 0.5 }}>SEMIFINAL 1</Text>
+            {renderKnockoutTieCard(sf1 || null, 'SF1', 'H1 vs H4 — winner → Final')}
+          </View>
+          <View style={{ marginBottom: 4 }}>
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#2196F3', marginBottom: 4, letterSpacing: 0.5 }}>SEMIFINAL 2</Text>
+            {renderKnockoutTieCard(sf2 || null, 'SF2', 'H2 vs H3 — winner → Final')}
+          </View>
         </View>
       </>
     );
@@ -2709,7 +3192,7 @@ const LeagueDashboardScreen: React.FC = () => {
         {renderSubTabNav()}
 
         {activeSubTab === 'qf' && renderQFSubTab()}
-        {activeSubTab === 'playoffs' && renderPlayoffsSubTab()}
+        {activeSubTab === 'playoffs' && (isSbpl ? renderSFSubTab() : renderPlayoffsSubTab())}
         {activeSubTab === 'final' && renderFinalSubTab()}
 
         {/* Admin: reset knockout — wipes QF/Playoffs/Final so admin can re-pick 8 teams */}
@@ -2800,12 +3283,18 @@ const LeagueDashboardScreen: React.FC = () => {
         ) : (
           <View style={{ width: 40 }} />
         )}
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {store.currentLeague?.name || 'League'}
-          </Text>
-          <Text style={styles.headerSubtitle}>{season?.name || 'Season'}</Text>
-        </View>
+        {store.currentLeague?.id === SBPL_LEAGUE_ID ? (
+          <View style={styles.headerCenter}>
+            <Image source={SBPL_LOGO} style={styles.sbplHeaderLogo} resizeMode="contain" />
+          </View>
+        ) : (
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {store.currentLeague?.name || 'League'}
+            </Text>
+            <Text style={styles.headerSubtitle}>{season?.name || 'Season'}</Text>
+          </View>
+        )}
         {/* Header gear opens the admin-only Setup panel (CSV import, scorers,
             admins, captain links, reset, etc.). Hidden for non-admins so
             viewers don't see a dead-end icon that opens an empty panel. */}
@@ -2839,7 +3328,15 @@ const LeagueDashboardScreen: React.FC = () => {
             return (
               <TouchableOpacity
                 key={tab}
-                onPress={() => setActiveTab(tab)}
+                onPress={() => {
+                  // STATS opens the full league-performance screen (leaderboards
+                  // + category/stage filters). Other tabs render inline below.
+                  if (tab === 'STATS') {
+                    navigation.navigate('LeagueStats', { leagueId, seasonId: resolvedSeasonId });
+                  } else {
+                    setActiveTab(tab);
+                  }
+                }}
                 activeOpacity={0.8}
                 style={{
                   flexGrow: 1, flexBasis: '31%', alignItems: 'center',
@@ -3485,6 +3982,59 @@ const LeagueDashboardScreen: React.FC = () => {
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* Streaming Links Modal — per-court live-stream URLs */}
+      <Modal visible={showStreamModal} transparent animationType="slide">
+        <TouchableOpacity
+          activeOpacity={1}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+          onPress={() => !savingStream && setShowStreamModal(false)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={() => {}} style={{ backgroundColor: WHITE, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '80%' }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: NAVY, marginBottom: 4 }}>Streaming Links</Text>
+            <Text style={{ fontSize: 12, color: TEXT_SUB, marginBottom: 16 }}>Paste each court's live-stream URL (YouTube, etc.). Leave blank to hide a court. Viewers see "Watch Court N" on the dashboard.</Text>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {['1', '2', '3', '4'].map((c) => (
+                <View key={`str-${c}`} style={{ marginBottom: 12 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: NAVY, marginBottom: 4 }}>COURT {c}</Text>
+                  <TextInput
+                    style={{ backgroundColor: SURFACE, borderRadius: 8, borderWidth: 1, borderColor: BORDER, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: NAVY }}
+                    placeholder="https://…"
+                    placeholderTextColor={TEXT_MUTED}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="url"
+                    value={streamEdits[c] || ''}
+                    onChangeText={(t) => setStreamEdits((prev) => ({ ...prev, [c]: t }))}
+                  />
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              style={{ marginTop: 8, paddingVertical: 14, borderRadius: 10, backgroundColor: '#DC2626', alignItems: 'center', opacity: savingStream ? 0.6 : 1 }}
+              disabled={savingStream}
+              onPress={async () => {
+                setSavingStream(true);
+                try {
+                  await setStreamLinks(leagueId, resolvedSeasonId, streamEdits);
+                  await fetchAll();
+                  setShowStreamModal(false);
+                  xAlert('Saved', 'Streaming links updated.');
+                } catch (err: any) {
+                  xAlert('Error', err?.response?.data?.message || err?.message || 'Failed to save');
+                } finally {
+                  setSavingStream(false);
+                }
+              }}
+            >
+              {savingStream ? <ActivityIndicator color={WHITE} /> : <Text style={{ color: WHITE, fontSize: 14, fontWeight: '800' }}>SAVE LINKS</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={{ marginTop: 10, paddingVertical: 12, alignItems: 'center' }} onPress={() => !savingStream && setShowStreamModal(false)}>
+              <Text style={{ color: TEXT_SUB, fontSize: 14, fontWeight: '700' }}>CLOSE</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Court Assignments Modal — quick per-tie court picker */}
       <Modal visible={showCourtsModal} transparent animationType="slide">
         <TouchableOpacity
@@ -4077,47 +4627,75 @@ const LeagueDashboardScreen: React.FC = () => {
                   // API_BASE_URL ends with /api/v1 → drop that and rebuild the overlay base.
                   const apiBase = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
                   const courts = [1, 2, 3];
-                  return courts.map((n) => {
-                    const bottomUrl = `${apiBase}/api/v1/scoreboard/court/${seasonId}/${n}`;
-                    const cornerUrl = `${bottomUrl}/corner`;
-                    return (
-                      <View key={n} style={{ backgroundColor: SURFACE, borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: BORDER }}>
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: NAVY, marginBottom: 10 }}>Court {n}</Text>
 
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: TEXT_SUB, marginBottom: 4 }}>BOTTOM TICKER</Text>
-                        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
-                          <View style={{ flex: 1, backgroundColor: WHITE, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: BORDER }}>
-                            <Text style={{ fontSize: 11, color: TEXT_COLOR }} numberOfLines={2} selectable>{bottomUrl}</Text>
-                          </View>
-                          <TouchableOpacity
-                            onPress={async () => {
-                              await Clipboard.setStringAsync(bottomUrl);
-                              xAlert('Copied', `Court ${n} bottom-ticker URL copied`);
-                            }}
-                            style={{ paddingHorizontal: 14, justifyContent: 'center', backgroundColor: NAVY, borderRadius: 8 }}
-                          >
-                            <Text style={{ color: WHITE, fontSize: 12, fontWeight: '700' }}>COPY</Text>
-                          </TouchableOpacity>
+                  // A single copy-row: label, hint, URL box + COPY button.
+                  const UrlRow = ({ label, hint, url, copyMsg }: { label: string; hint: string; url: string; copyMsg: string }) => (
+                    <View style={{ marginBottom: 10 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: TEXT_SUB, marginBottom: 1 }}>{label}</Text>
+                      <Text style={{ fontSize: 10, color: TEXT_MUTED, marginBottom: 4 }}>{hint}</Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <View style={{ flex: 1, backgroundColor: WHITE, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: BORDER }}>
+                          <Text style={{ fontSize: 11, color: TEXT_COLOR }} numberOfLines={2} selectable>{url}</Text>
                         </View>
-
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: TEXT_SUB, marginBottom: 4 }}>CORNER BOX</Text>
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                          <View style={{ flex: 1, backgroundColor: WHITE, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: BORDER }}>
-                            <Text style={{ fontSize: 11, color: TEXT_COLOR }} numberOfLines={2} selectable>{cornerUrl}</Text>
-                          </View>
-                          <TouchableOpacity
-                            onPress={async () => {
-                              await Clipboard.setStringAsync(cornerUrl);
-                              xAlert('Copied', `Court ${n} corner-box URL copied`);
-                            }}
-                            style={{ paddingHorizontal: 14, justifyContent: 'center', backgroundColor: NAVY, borderRadius: 8 }}
-                          >
-                            <Text style={{ color: WHITE, fontSize: 12, fontWeight: '700' }}>COPY</Text>
-                          </TouchableOpacity>
-                        </View>
+                        <TouchableOpacity
+                          onPress={async () => {
+                            await Clipboard.setStringAsync(url);
+                            xAlert('Copied', copyMsg);
+                          }}
+                          style={{ paddingHorizontal: 14, justifyContent: 'center', backgroundColor: NAVY, borderRadius: 8 }}
+                        >
+                          <Text style={{ color: WHITE, fontSize: 12, fontWeight: '700' }}>COPY</Text>
+                        </TouchableOpacity>
                       </View>
-                    );
-                  });
+                    </View>
+                  );
+
+                  return (
+                    <>
+                      {courts.map((n) => {
+                        const base = `${apiBase}/api/v1/scoreboard/court/${seasonId}/${n}`;
+                        // All five court-camera overlay variants (auto-switch to the live tie on that court).
+                        const variants = [
+                          { key: 'display', label: 'COURT-SIDE DISPLAY (full screen)', hint: 'Full-screen TV / monitor beside the court — big scoreboard.', url: `${base}/display`, tag: 'court-side display' },
+                          { key: 'ticker', label: 'BOTTOM TICKER', hint: 'Broadcast lower-third bar across the bottom of the stream.', url: base, tag: 'bottom-ticker' },
+                          { key: 'rich-a', label: 'RICH OVERLAY A (team-colour)', hint: 'IPL-style bottom bar — team-colour sweeps, hex shields.', url: `${base}/rich-a`, tag: 'rich overlay A' },
+                          { key: 'rich-b', label: 'RICH OVERLAY B (premium)', hint: 'Premium broadcast bottom bar — glass plate, bevels.', url: `${base}/rich-b`, tag: 'rich overlay B' },
+                          { key: 'corner', label: 'CORNER BOX', hint: 'Compact score box for a top/bottom corner of the stream.', url: `${base}/corner`, tag: 'corner-box' },
+                        ];
+                        return (
+                          <View key={n} style={{ backgroundColor: SURFACE, borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: BORDER }}>
+                            <Text style={{ fontSize: 14, fontWeight: '800', color: NAVY, marginBottom: 10 }}>Court {n}</Text>
+                            {variants.map((v) => (
+                              <UrlRow key={v.key} label={v.label} hint={v.hint} url={v.url} copyMsg={`Court ${n} ${v.tag} URL copied`} />
+                            ))}
+                          </View>
+                        );
+                      })}
+
+                      {/* Standalone overlays — not court-specific. Add as their own OBS browser sources. */}
+                      <View style={{ backgroundColor: SURFACE, borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: BORDER }}>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: NAVY, marginBottom: 10 }}>Other overlays (whole stream)</Text>
+                        <UrlRow
+                          label="MASTER DISPLAY (all courts + standings)"
+                          hint="Big-screen view: every live court game grouped by tie, plus both group standings."
+                          url={`${apiBase}/api/v1/scoreboard/master/${seasonId}`}
+                          copyMsg="Master-display URL copied"
+                        />
+                        <UrlRow
+                          label="LEAGUE LOGO (top-left)"
+                          hint="Transparent league logo — position top-left of the stream."
+                          url={`${apiBase}/api/v1/scoreboard/sppl-logo-overlay`}
+                          copyMsg="League-logo overlay URL copied"
+                        />
+                        <UrlRow
+                          label="SPONSOR LOGO (top-right)"
+                          hint="Transparent sponsor logo — position top-right of the stream."
+                          url={`${apiBase}/api/v1/scoreboard/sponsor-logo-overlay`}
+                          copyMsg="Sponsor-logo overlay URL copied"
+                        />
+                      </View>
+                    </>
+                  );
                 })()}
 
                 <View style={{ backgroundColor: '#FEF3C7', borderRadius: 10, padding: 12, marginTop: 4 }}>
@@ -4295,11 +4873,13 @@ const LeagueDashboardScreen: React.FC = () => {
                   </TouchableOpacity>
                 </View>
                 <Text style={{ fontSize: 12, color: TEXT_SUB, marginBottom: 16 }}>
-                  People who can enter scores at the courts via the scorer portal
+                  People who can score this league's matches. They log into the app with their own phone number — their assigned matches show up on their home screen.
                 </Text>
 
                 <ScrollView style={{ maxHeight: 480 }} keyboardShouldPersistTaps="handled">
-                  {/* Add scorer form */}
+                  {/* Add scorer form — mirrors the admin flow: just name + phone.
+                      The scorer is granted access the moment they sign into the
+                      app with that number; no PIN or separate portal. */}
                   <View style={{ backgroundColor: SURFACE, borderRadius: 12, padding: 14, marginBottom: 16 }}>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: NAVY, marginBottom: 8 }}>+ Add a scorer</Text>
                     <TextInput
@@ -4317,40 +4897,19 @@ const LeagueDashboardScreen: React.FC = () => {
                       keyboardType="phone-pad"
                       style={{ borderWidth: 1, borderColor: BORDER, borderRadius: 8, padding: 10, fontSize: 14, marginBottom: 8, backgroundColor: WHITE }}
                     />
-                    <TextInput
-                      placeholder="6-digit PIN (e.g. 482917)"
-                      placeholderTextColor={TEXT_MUTED}
-                      value={newScorerPin}
-                      onChangeText={(v) => setNewScorerPin(v.replace(/\D/g, '').slice(0, 6))}
-                      keyboardType="number-pad"
-                      maxLength={6}
-                      secureTextEntry={false}
-                      style={{ borderWidth: 1, borderColor: BORDER, borderRadius: 8, padding: 10, fontSize: 14, marginBottom: 4, backgroundColor: WHITE, letterSpacing: 2 }}
-                    />
                     <Text style={{ fontSize: 10, color: TEXT_MUTED, marginBottom: 10, fontStyle: 'italic' }}>
-                      Required. Pick something the scorer will remember — you'll share it with them manually via WhatsApp.
+                      They'll see their assigned matches in their Yoiden app once they sign in with this phone number.
                     </Text>
                     <TouchableOpacity
-                      style={{ backgroundColor: NAVY, paddingVertical: 12, borderRadius: 8, alignItems: 'center', opacity: (actionLoading || !newScorerName.trim() || !newScorerPhone.trim() || newScorerPin.length !== 6) ? 0.5 : 1 }}
-                      disabled={actionLoading || !newScorerName.trim() || !newScorerPhone.trim() || newScorerPin.length !== 6}
+                      style={{ backgroundColor: NAVY, paddingVertical: 12, borderRadius: 8, alignItems: 'center', opacity: (actionLoading || !newScorerName.trim() || !newScorerPhone.trim()) ? 0.5 : 1 }}
+                      disabled={actionLoading || !newScorerName.trim() || !newScorerPhone.trim()}
                       onPress={async () => {
                         if (!newScorerName.trim() || !newScorerPhone.trim()) return;
-                        const pinTrimmed = newScorerPin.trim();
-                        if (!/^\d{6}$/.test(pinTrimmed)) {
-                          xAlert('Invalid PIN', 'PIN is required and must be exactly 6 digits.');
-                          return;
-                        }
                         setActionLoading(true);
                         try {
-                          const result = await addScorer(leagueId, newScorerName.trim(), newScorerPhone.trim(), pinTrimmed);
-                          const userId = result?.user?.id;
-                          const pin = result?.generatedPin;
-                          if (userId && pin) {
-                            setScorerPinMap((prev) => ({ ...prev, [userId]: pin }));
-                          }
+                          await addScorer(leagueId, newScorerName.trim(), newScorerPhone.trim());
                           setNewScorerName('');
                           setNewScorerPhone('');
-                          setNewScorerPin('');
                           const list = await listScorers(leagueId);
                           setScorers(Array.isArray(list) ? list : []);
                         } catch (err: any) {
@@ -4391,55 +4950,13 @@ const LeagueDashboardScreen: React.FC = () => {
                               onPress={async () => {
                                 try {
                                   await sendScorerInvite(leagueId, s.userId);
-                                  xAlert('Sent', `WhatsApp invite sent to ${s.name}. Now share their PIN manually (use COPY PIN if this is a new/reset PIN).`);
+                                  xAlert('Sent', `WhatsApp invite sent to ${s.name}. They just sign into the Yoiden app with this number to see their matches.`);
                                 } catch (err: any) {
                                   xAlert('Send Failed', err?.response?.data?.message || err?.message || 'Could not send WhatsApp');
                                 }
                               }}
                             >
                               <Text style={{ fontSize: 11, fontWeight: '700', color: WHITE }}>📱 SEND WA</Text>
-                            </TouchableOpacity>
-                            {pin ? (
-                              <TouchableOpacity
-                                style={{ flex: 1, backgroundColor: '#2196F3', paddingVertical: 10, borderRadius: 6, alignItems: 'center', minWidth: 95 }}
-                                onPress={async () => {
-                                  try {
-                                    await Clipboard.setStringAsync(pin);
-                                    xAlert('Copied', `PIN ${pin} copied. Paste into your own WhatsApp chat with ${s.name}.`);
-                                  } catch {
-                                    xAlert('Copy Failed', 'Could not copy PIN');
-                                  }
-                                }}
-                              >
-                                <Text style={{ fontSize: 11, fontWeight: '700', color: WHITE }}>📋 COPY PIN</Text>
-                              </TouchableOpacity>
-                            ) : null}
-                            <TouchableOpacity
-                              style={{ flex: 1, backgroundColor: '#F59E0B', paddingVertical: 10, borderRadius: 6, alignItems: 'center', minWidth: 95 }}
-                              onPress={() => {
-                                xPrompt(
-                                  `Reset PIN for ${s.name}`,
-                                  'Enter new 6-digit PIN. The old PIN will stop working immediately.',
-                                  async (input) => {
-                                    const pinTrimmed = (input || '').trim();
-                                    if (!/^\d{6}$/.test(pinTrimmed)) {
-                                      xAlert('Invalid PIN', 'PIN is required and must be exactly 6 digits.');
-                                      return;
-                                    }
-                                    try {
-                                      const r = await resetScorerPin(leagueId, s.userId, pinTrimmed);
-                                      if (r?.newPin) {
-                                        setScorerPinMap((prev) => ({ ...prev, [s.userId]: r.newPin }));
-                                      }
-                                    } catch (err: any) {
-                                      xAlert('Reset Failed', err?.response?.data?.message || err?.message || 'Could not reset PIN');
-                                    }
-                                  },
-                                  { keyboardType: 'number-pad' },
-                                );
-                              }}
-                            >
-                              <Text style={{ fontSize: 11, fontWeight: '700', color: WHITE }}>🔄 RESET</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={{ flex: 1, backgroundColor: '#EF4444', paddingVertical: 10, borderRadius: 6, alignItems: 'center', minWidth: 95 }}
@@ -4474,7 +4991,7 @@ const LeagueDashboardScreen: React.FC = () => {
                   {/* Helper note */}
                   <View style={{ backgroundColor: '#EFF6FF', borderRadius: 8, padding: 10, marginTop: 8, borderLeftWidth: 3, borderLeftColor: '#2196F3' }}>
                     <Text style={{ fontSize: 11, color: '#1E40AF', lineHeight: 16 }}>
-                      💡 <Text style={{ fontWeight: '700' }}>Two-step invite:</Text> (1) Tap SEND WA — sends a generic "you're a scorer" message with the portal link. (2) Tap COPY PIN, then paste it into your own WhatsApp chat with them. PINs are only shown when first generated or reset.
+                      💡 Scorers just sign into the Yoiden app with this phone number — their assigned matches appear on their home screen under <Text style={{ fontWeight: '700' }}>Scorer's Matches</Text>. Tap SEND WA to send them a heads-up. Assign matches to a scorer from each tie's detail screen.
                     </Text>
                   </View>
                 </ScrollView>
@@ -4520,6 +5037,33 @@ const styles = StyleSheet.create({
   backBtn: { width: 36, height: 36, borderRadius: 999, borderWidth: 1, borderColor: YColors.line2, justifyContent: 'center', alignItems: 'center' },
   backBtnText: { color: YColors.ink, fontSize: 18, fontWeight: '700' },
   headerCenter: { flex: 1, alignItems: 'center' },
+  // Fully responsive: 4 sponsors + logo each take a flex share so they always
+  // fit (no clipping) on any width; images/labels scale down within their share.
+  sbplBar: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 4 },
+  sbplSponsor: { flex: 1, minWidth: 0, alignItems: 'center', maxWidth: 120 },
+  // Dark tile — the original sponsor logos are on dark backgrounds, so a uniform
+  // near-black tile makes the strip look consistent on the light header.
+  sbplTile: { width: '100%', maxWidth: 108, height: 48, backgroundColor: '#0A0A12', borderRadius: 8, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', paddingHorizontal: 6, paddingVertical: 4 },
+  sbplSponsorImg: { width: '100%', height: '100%' },
+  sbplSponsorLbl: { fontSize: 8, fontWeight: '800', color: YColors.ink2, letterSpacing: 0.3, marginTop: 3, textAlign: 'center' },
+  sbplLogoWrap: { flex: 1.15, minWidth: 0, maxWidth: 130, alignItems: 'center', justifyContent: 'center', marginHorizontal: 2 },
+  sbplLogoImg: { width: '100%', height: 66 },
+  // Top bar: league logo only (slightly larger).
+  sbplHeaderLogo: { width: 168, height: 70 },
+  // Overview sponsor showcase — logos shown directly (no tile background).
+  sbplShowcaseImg: { width: '100%', maxWidth: 200, height: 96 },
+  // 2-up sponsor slider — every logo sits in an identical fixed card so all
+  // sponsors read at the same width/height regardless of source aspect ratio.
+  sbplSponsorCard: {
+    width: '100%',
+    height: 150,
+    borderRadius: 12,
+    backgroundColor: '#0B0E16',
+    overflow: 'hidden',
+  },
+  // cover → every logo fills the identical card edge-to-edge (same H & W).
+  sbplSponsorCardImg: { width: '100%', height: '100%' },
+  sbplShowcaseLbl: { fontSize: 11, fontWeight: '800', color: YColors.ink2, letterSpacing: 0.4, marginTop: 6, textAlign: 'center' },
   headerTitle: { color: YColors.ink, fontSize: 18, fontWeight: '900', letterSpacing: 0.3 },
   headerSubtitle: { color: YColors.ink2, fontSize: 11, marginTop: 2, letterSpacing: 1.2, textTransform: 'uppercase', fontWeight: '700' },
 

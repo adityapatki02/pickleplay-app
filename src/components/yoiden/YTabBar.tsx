@@ -4,10 +4,25 @@ import Svg, { Path, Circle } from 'react-native-svg';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YColors } from '../../config/yoiden';
-import { IS_LEAGUE_KIOSK } from '../../config/appMode';
+import { IS_LEAGUE_KIOSK, LEAGUE_KIOSK_ID } from '../../config/appMode';
 import { YMono } from './YText';
 
-type TabId = 'home' | 'play' | 'book' | 'me';
+type TabId = 'home' | 'play' | 'book' | 'me' | 'profile';
+
+// Center Fantasy action (league-kiosk only). Pinned to the SBPL S2 season — the
+// kiosk is a single-season build, so the season id is stable for its lifetime.
+const FANTASY_ORANGE = '#F97316';
+const KIOSK_FANTASY_SEASON_ID = '90bc945f-3907-4c72-85b8-8b2eb3f38dc5';
+
+// Filled star for the raised Fantasy button.
+const FantasyStar: React.FC<{ size?: number }> = ({ size = 20 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24">
+    <Path
+      d="M12 2.6l2.9 5.88 6.49.94-4.7 4.58 1.11 6.46L12 17.9l-5.8 3.05 1.1-6.46-4.69-4.58 6.49-.94L12 2.6z"
+      fill="#FFFFFF"
+    />
+  </Svg>
+);
 
 const TabIcon: React.FC<{ id: TabId; color: string; active: boolean; size?: number }> = ({
   id,
@@ -72,13 +87,19 @@ const ALL_TABS: { id: TabId; label: string }[] = [
   { id: 'book', label: 'BOOK' },
   { id: 'me',   label: 'ME' },
 ];
-const TAB_META = IS_LEAGUE_KIOSK ? ALL_TABS.filter((t) => t.id === 'home') : ALL_TABS;
+// League kiosk shows HOME · PROFILE (profile = the viewer's cross-league career).
+const KIOSK_TABS: { id: TabId; label: string }[] = [
+  { id: 'home', label: 'HOME' },
+  { id: 'profile', label: 'PROFILE' },
+];
+const TAB_META = IS_LEAGUE_KIOSK ? KIOSK_TABS : ALL_TABS;
 
 const routeToTab = (route: string): TabId => {
   const lower = route.toLowerCase();
   if (lower.includes('home'))    return 'home';
   if (lower.includes('play'))    return 'play';
   if (lower.includes('book'))    return 'book';
+  if (lower.includes('profile')) return 'profile';
   return 'me';
 };
 
@@ -86,10 +107,14 @@ const routeToTab = (route: string): TabId => {
 // stack back to this screen (so HOME from a pushed detail like the league page
 // returns to the Home screen instead of doing nothing).
 const TAB_ROOT: Record<TabId, string> = {
-  home:    'Home',
+  // In the league-kiosk build the Home stack's root IS the league dashboard
+  // (see HomeStackNavigator.initialRouteName), so HOME must return there —
+  // not the full-app Home screen, which would break out of the kiosk.
+  home:    IS_LEAGUE_KIOSK ? 'LeagueDashboard' : 'Home',
   play:    'Play',
   book:    'Book',
   me:      'Me',
+  profile: 'PlayerProfile',
 };
 
 export const YTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
@@ -110,54 +135,74 @@ export const YTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
 
   // Single-tournament kiosk shows one tab, so the bar is slimmed down.
   const compact = IS_LEAGUE_KIOSK;
+
+  // Center Fantasy button (kiosk only) → the league Fantasy screen in the Home stack.
+  const onFantasy = () => {
+    const go = navigation.navigate as (name: string, params?: object) => void;
+    go('HomeTab', {
+      screen: 'LeagueFantasy',
+      params: { seasonId: KIOSK_FANTASY_SEASON_ID, leagueId: LEAGUE_KIOSK_ID },
+    });
+  };
+
+  const renderTab = (t: { id: TabId; label: string }) => {
+    const isActive = t.id === active;
+    return (
+      <Pressable key={t.id} onPress={() => onTabPress(t.id)} style={styles.tab} hitSlop={4}>
+        {/* Top accent bar in accent color when active */}
+        <View
+          style={[
+            styles.indicator,
+            { backgroundColor: isActive ? YColors.accent : 'transparent' },
+          ]}
+        />
+        <View style={[styles.tabInner, compact && { paddingTop: 1 }]}>
+          <View
+            style={[
+              styles.iconWrap,
+              compact && { width: 34, height: 22 },
+              isActive && { backgroundColor: 'rgba(24,88,214,0.10)' },
+            ]}
+          >
+            <TabIcon
+              id={t.id}
+              color={isActive ? YColors.accent : YColors.ink2}
+              active={isActive}
+              size={compact ? 18 : 28}
+            />
+          </View>
+          <YMono
+            size={compact ? 8 : 9}
+            bold={isActive}
+            color={isActive ? YColors.accent : YColors.ink2}
+            style={{ letterSpacing: 1.2, marginTop: 1 }}
+          >
+            {t.label}
+          </YMono>
+        </View>
+      </Pressable>
+    );
+  };
+
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, compact ? 4 : 12) }]}>
       <View style={[styles.row, compact && { height: 46 }]}>
-        {TAB_META.map((t) => {
-          const isActive = t.id === active;
-          return (
-            <Pressable
-              key={t.id}
-              onPress={() => onTabPress(t.id)}
-              style={styles.tab}
-              hitSlop={4}
-            >
-              {/* Top accent bar in accent color when active */}
-              <View
-                style={[
-                  styles.indicator,
-                  { backgroundColor: isActive ? YColors.accent : 'transparent' },
-                ]}
-              />
-              <View style={[styles.tabInner, compact && { paddingTop: 1 }]}>
-                <View
-                  style={[
-                    styles.iconWrap,
-                    compact && { width: 34, height: 22 },
-                    isActive && {
-                      backgroundColor: 'rgba(24,88,214,0.10)',
-                    },
-                  ]}
-                >
-                  <TabIcon
-                    id={t.id}
-                    color={isActive ? YColors.accent : YColors.ink2}
-                    active={isActive}
-                    size={compact ? 18 : 28}
-                  />
-                </View>
-                <YMono
-                  size={compact ? 8 : 9}
-                  bold={isActive}
-                  color={isActive ? YColors.accent : YColors.ink2}
-                  style={{ letterSpacing: 1.2, marginTop: compact ? 1 : 1 }}
-                >
-                  {t.label}
-                </YMono>
+        {compact && TAB_META.length === 2 ? (
+          <>
+            {renderTab(TAB_META[0])}
+            <Pressable onPress={onFantasy} style={styles.fabWrap} hitSlop={6}>
+              <View style={styles.fab}>
+                <FantasyStar size={20} />
               </View>
+              <YMono size={8} bold color={FANTASY_ORANGE} style={{ letterSpacing: 1.1, marginTop: 2 }}>
+                FANTASY
+              </YMono>
             </Pressable>
-          );
-        })}
+            {renderTab(TAB_META[1])}
+          </>
+        ) : (
+          TAB_META.map(renderTab)
+        )}
       </View>
     </View>
   );
@@ -208,5 +253,31 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  fabWrap: {
+    width: 80,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  fab: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: FANTASY_ORANGE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -16,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    ...Platform.select({
+      web: { boxShadow: '0 4px 12px rgba(249,115,22,0.45)' } as object,
+      default: {
+        shadowColor: FANTASY_ORANGE,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.45,
+        shadowRadius: 8,
+        elevation: 6,
+      },
+    }),
   },
 });

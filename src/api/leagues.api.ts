@@ -57,6 +57,10 @@ export const getSeason = (leagueId: string, seasonId: string) =>
 export const updateSeason = (leagueId: string, seasonId: string, data: Partial<CreateSeasonInput>) =>
   apiClient.patch<LeagueSeason>(`/leagues/${leagueId}/seasons/${seasonId}`, data).then((r) => (r.data as any)?.data ?? r.data);
 
+/** Set per-court live-stream links, e.g. { "1": "https://…", "2": "…" }. Organiser only. */
+export const setStreamLinks = (leagueId: string, seasonId: string, links: Record<string, string>) =>
+  apiClient.patch<LeagueSeason>(`/leagues/${leagueId}/seasons/${seasonId}/stream-links`, { links }).then((r) => (r.data as any)?.data ?? r.data);
+
 // ═══════════════════════════════════════════════════════════════════════
 // Franchises
 // ═══════════════════════════════════════════════════════════════════════
@@ -191,6 +195,34 @@ export const approveTieSheet = (tieId: string, sheetId: string) =>
 
 export const lockLineups = (tieId: string) =>
   apiClient.post(`/ties/${tieId}/lock-lineups`).then((r) => (r.data as any)?.data ?? r.data);
+
+/** Admin: (re-)open the captain portal for this tie for `minutes` from now. */
+export const openCaptainPortal = (tieId: string, minutes: number) =>
+  apiClient
+    .post(`/ties/${tieId}/open-captain-portal`, { minutes })
+    .then((r) => (r.data as any)?.data ?? r.data);
+
+/** SBPL: set the Kids submission deadline — absolute `deadline` (ISO) or open
+ *  for `minutes` from now. Omit both to clear it. */
+export const setKidsDeadline = (
+  tieId: string,
+  opts: { minutes?: number; deadline?: string | null },
+) =>
+  apiClient
+    .post(`/ties/${tieId}/kids-deadline`, opts)
+    .then((r) => (r.data as any)?.data ?? r.data);
+
+/** SBPL: lock ONE category's games (e.g. 'kids') ahead of the rest of the tie. */
+export const lockCategory = (tieId: string, category: string) =>
+  apiClient
+    .post(`/ties/${tieId}/lock-category`, { category })
+    .then((r) => (r.data as any)?.data ?? r.data);
+
+/** SBPL: reverse a category lock (only if none of its games have started). */
+export const unlockCategory = (tieId: string, category: string) =>
+  apiClient
+    .post(`/ties/${tieId}/unlock-category`, { category })
+    .then((r) => (r.data as any)?.data ?? r.data);
 
 // ═══════════════════════════════════════════════════════════════════════
 // Standings (Phase 2)
@@ -351,8 +383,14 @@ export const backfillGender = (leagueId: string, seasonId: string, teenCsvData?:
 export const listScorers = (leagueId: string) =>
   apiClient.get(`/leagues/${leagueId}/scorers`).then((r) => (r.data as any)?.data ?? r.data);
 
-export const addScorer = (leagueId: string, name: string, phone: string, pin: string) =>
+export const addScorer = (leagueId: string, name: string, phone: string, pin = '') =>
   apiClient.post(`/leagues/${leagueId}/scorers`, { name, phone, pin }).then((r) => (r.data as any)?.data ?? r.data);
+
+/** Recognise a phone before adding: { exists, name, hasPin, alreadyScorer }. */
+export const lookupScorer = (leagueId: string, phone: string) =>
+  apiClient
+    .get(`/leagues/${leagueId}/scorers/lookup`, { params: { phone } })
+    .then((r) => (r.data as any)?.data ?? r.data);
 
 export const resetScorerPin = (leagueId: string, scorerUserId: string, pin: string) =>
   apiClient.post(`/leagues/${leagueId}/scorers/${scorerUserId}/reset-pin`, { pin }).then((r) => (r.data as any)?.data ?? r.data);
@@ -398,6 +436,11 @@ export type TieConfigUpdate = {
   gamesPerMatch?: number; // 1, 3, 5
   /** Court number (1, 2, 3...) — drives persistent overlay URLs for streaming. null clears. */
   courtNumber?: number | null;
+  /** Second court for two-court (SBPL) ties. null clears. */
+  courtNumber2?: number | null;
+  /** Two authorized scorers for two-court (SBPL) ties. null to unassign. */
+  scorer1Id?: string | null;
+  scorer2Id?: string | null;
   /** Manually set home/away team on a tie (used for knockout stage confirmations). null to clear. */
   homeTeamId?: string | null;
   awayTeamId?: string | null;
@@ -433,6 +476,18 @@ export const adminFinalizeMatch = (
     .post(`/ties/${tieId}/matches/${matchId}/finalize`, { teamAScore, teamBScore, winnerId })
     .then((r) => (r.data as any)?.data ?? r.data);
 
+/** Persist the current serve state (config + events) so OBS overlays show server/receiver. Pass config=null to clear. */
+export const adminSyncServe = (tieId: string, matchId: string, config: any | null, events: any[]) =>
+  apiClient
+    .post(`/ties/${tieId}/matches/${matchId}/serve-sync`, { config, events })
+    .then((r) => (r.data as any)?.data ?? r.data);
+
+/** Override (or clear) a single game's court. Pass null to revert to the rulebook default. */
+export const adminSetMatchCourt = (tieId: string, matchId: string, courtNumber: number | null) =>
+  apiClient
+    .post(`/ties/${tieId}/matches/${matchId}/set-court`, { courtNumber })
+    .then((r) => (r.data as any)?.data ?? r.data);
+
 /** Emergency: declare winner at any score (forfeit/injury/decision). */
 export const adminDeclareWinner = (
   tieId: string,
@@ -451,6 +506,10 @@ export const adminDeclareWinner = (
 
 export const sendCaptainPortalLinks = (leagueId: string) =>
   apiClient.post(`/leagues/${leagueId}/notify/captain-links`).then((r) => (r.data as any)?.data ?? r.data);
+
+/** The logged-in user's captain team(s), matched by phone. Powers the home "Open Captain's Portal" tile. */
+export const getMyCaptainTeams = (): Promise<{ leagueId: string; leagueName: string; franchiseId: string; franchiseName: string; url: string }[]> =>
+  apiClient.get('/captain-portal/my-teams').then((r) => (r.data as any)?.teams ?? (r.data as any)?.data?.teams ?? []);
 
 export const setCaptain = (franchiseId: string, captainName: string, captainPhone: string) =>
   apiClient.post(`/franchises/${franchiseId}/set-captain`, { captainName, captainPhone }).then((r) => (r.data as any)?.data ?? r.data);

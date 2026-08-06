@@ -20,6 +20,9 @@ import {
   getTie,
   getTieSheets,
   lockLineups,
+  lockCategory,
+  unlockCategory,
+  setKidsDeadline,
   startTie,
   completeTie,
   submitTieSheet,
@@ -28,13 +31,27 @@ import {
   adminLiveScore,
   adminFinalizeMatch,
   adminDeclareWinner,
+  adminSetMatchCourt,
+  adminSyncServe,
   getLeague,
+  getSeasons,
   listScorers,
   resetLeagueTie,
   substitutePlayer,
   adminSwapSlotPlayer,
+  openCaptainPortal,
 } from '../../api/leagues.api';
 import { matchesApi } from '../../api/matches.api';
+import { computeMatchBonus, bonusToSides, SeasonBonusRules } from '../../utils/bonus';
+import {
+  foldServe,
+  ServeConfig,
+  ServeEvent,
+  Positions,
+  Side,
+} from '../../utils/serveState';
+import { sbplGroupForCategory, courtForSlot } from '../../utils/sbplCategory';
+import { ShuttleIcon, TargetIcon } from '../../components/ServeIcons';
 import { useLeagueStore } from '../../store/leagueStore';
 import { useAuthStore } from '../../store/authStore';
 import { IS_LEAGUE_KIOSK } from '../../config/appMode';
@@ -71,7 +88,8 @@ const ORANGE = '#F97316';
 const PINK = '#EC4899';
 
 // ─── Category colors ────────────────────────────────────────────────────────
-const CATEGORY_COLORS: Record<CategorySlug, { color: string; bg: string; label: string }> = {
+const CATEGORY_COLORS: Record<string, { color: string; bg: string; label: string }> = {
+  // SPPL
   kids: { color: PURPLE, bg: '#EDE9FE', label: 'Kids' },
   teen: { color: ORANGE, bg: '#FFF7ED', label: 'Teen' },
   women1: { color: PINK, bg: '#FCE7F3', label: 'Women 1' },
@@ -79,6 +97,12 @@ const CATEGORY_COLORS: Record<CategorySlug, { color: string; bg: string; label: 
   men1: { color: BLUE, bg: '#DBEAFE', label: 'Men 1' },
   men2: { color: BLUE, bg: '#DBEAFE', label: 'Men 2' },
   men3: { color: BLUE, bg: '#DBEAFE', label: 'Men 3' },
+  // SBPL (rulebook §2)
+  women13: { color: PINK, bg: '#FCE7F3', label: 'Women 1-3' },
+  women45: { color: PINK, bg: '#FCE7F3', label: 'Women 4-5' },
+  menA: { color: BLUE, bg: '#DBEAFE', label: 'Men A' },
+  menB: { color: BLUE, bg: '#DBEAFE', label: 'Men B' },
+  menC: { color: BLUE, bg: '#DBEAFE', label: 'Men C' },
 };
 
 // ─── Status chip colors ─────────────────────────────────────────────────────
@@ -111,6 +135,11 @@ const TieDetailScreen: React.FC = () => {
   const store = useLeagueStore();
   const authUser = useAuthStore((s) => s.user);
   const [league, setLeague] = useState(store.currentLeague);
+  // Season bonus bands for the live overlay (SBPL narrows the close-loss band).
+  // Null → the util uses SPPL defaults, so other leagues are unaffected.
+  const [bonusRules, setBonusRules] = useState<SeasonBonusRules | null>(null);
+  // Season format — drives the two-court UI (sbpl_15game ties play on 2 courts).
+  const [seasonFormat, setSeasonFormat] = useState<string | null>(null);
   const isOwner = !!authUser?.id && league?.organizerId === authUser.id;
   // Owner OR co-admin (league_admins) — resolved via the shared hook so
   // backend-granted admins get score/management access, not just the organizer.
@@ -118,10 +147,40 @@ const TieDetailScreen: React.FC = () => {
   const [isScorer, setIsScorer] = useState(false);
   const [scorersList, setScorersList] = useState<Array<{ id: string; userId: string; name: string; phone: string }>>([]);
   const [tie, setTie] = useState<Tie | null>(null);
-  // Scorers can only score the ties they're assigned to (tie.scorerId === user.id).
-  // Admin/organizer can always score.
-  const isAssignedScorer = !!authUser?.id && isScorer && !!tie?.scorerId && tie.scorerId === authUser.id;
+  // Scorers can only score the ties they're assigned to. SPPL uses a single
+  // scorerId; SBPL two-court ties assign via scorer1Id / scorer2Id (either may
+  // score any game) — so match against all three. Admin/organizer can always score.
+  const isAssignedScorer =
+    !!authUser?.id &&
+    isScorer &&
+    [tie?.scorerId, (tie as any)?.scorer1Id, (tie as any)?.scorer2Id].includes(authUser.id);
   const canScore = isAdmin || isAssignedScorer;
+
+  // Court-lock for two-court ties: a scorer assigned to Court 1 (scorer1Id →
+  // courtNumber) may only score that court's games; likewise Court 2. If the
+  // same person holds both slots, or it's a single-scorer tie, no lock applies.
+  const myScorerCourts = React.useMemo(() => {
+    const t = tie as any;
+    const s = new Set<number>();
+    if (!authUser?.id || !t) return s;
+    if (t.scorer1Id === authUser.id && t.courtNumber != null) s.add(t.courtNumber);
+    if (t.scorer2Id === authUser.id && t.courtNumber2 != null) s.add(t.courtNumber2);
+    return s;
+  }, [authUser?.id, tie]);
+
+  // May the logged-in user score THIS game? Admin: always. Assigned scorer:
+  // only games on their court (the Rally Point Game and court-less games are
+  // unrestricted). Single-scorer ties (no court lock) are unaffected.
+  const canScoreMatch = (tm: TieMatch): boolean => {
+    if (isAdmin) return true;
+    if (!isAssignedScorer) return false;
+    if (myScorerCourts.size === 0) return true;
+    const isRally = (tm as any).isRallyPointGame === true || tm.slotNumber === 0;
+    if (isRally) return true;
+    const c = tm.courtNumber ?? courtForSlot(tie as any, tm.slotNumber);
+    if (c == null) return true;
+    return myScorerCourts.has(c);
+  };
 
   // Lineup is "revealed" once admin locks both teams' picks. Until then,
   // anyone who isn't the admin (scorers, captains-of-other-teams browsing
@@ -152,6 +211,13 @@ const TieDetailScreen: React.FC = () => {
   const [scoreSubmitting, setScoreSubmitting] = useState(false);
   const [kbHeight, setKbHeight] = useState(0);
 
+  // Per-game court override modal
+  const [courtModal, setCourtModal] = useState<{ visible: boolean; tieMatch: TieMatch | null }>({
+    visible: false,
+    tieMatch: null,
+  });
+  const [courtSaving, setCourtSaving] = useState(false);
+
   useEffect(() => {
     const showSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (e) => setKbHeight(e.endCoordinates.height));
     const hideSub = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKbHeight(0));
@@ -160,6 +226,21 @@ const TieDetailScreen: React.FC = () => {
 
   // Player name map (playerId → name)
   const [playerMap, setPlayerMap] = useState<Record<string, string>>({});
+  // One lineup position → display name. A real player shows their name (with
+  // " (sub)" if they were substituted in); an empty placeholder shows the word
+  // "Substitute" so a not-yet-filled slot reads clearly instead of blank/TBD.
+  const posName = (pid?: string | null, isSub?: any): string =>
+    pid ? `${playerMap[pid] || 'Player'}${isSub ? ' (sub)' : ''}` : 'Substitute';
+  const pairName = (p1?: string | null, p1s?: any, p2?: string | null, p2s?: any): string =>
+    `${posName(p1, p1s)} & ${posName(p2, p2s)}`;
+  // JSX variant that highlights "Substitute" / "(sub)" in orange.
+  const SUB_ORANGE = { color: '#EA580C', fontWeight: '800' as const };
+  const posNameJSX = (pid?: string | null, isSub?: any) =>
+    pid
+      ? (<>{playerMap[pid] || 'Player'}{isSub ? <Text style={SUB_ORANGE}> (sub)</Text> : null}</>)
+      : (<Text style={SUB_ORANGE}>Substitute</Text>);
+  const pairNameJSX = (p1?: string | null, p1s?: any, p2?: string | null, p2s?: any) =>
+    (<>{posNameJSX(p1, p1s)} & {posNameJSX(p2, p2s)}</>);
   const [showLineups, setShowLineups] = useState(false);
 
   // Full rosters per team for the substitute modal — { home: [...], away: [...] }
@@ -178,6 +259,9 @@ const TieDetailScreen: React.FC = () => {
     oldPlayerId: string | null;
     newPlayerId: string | null;
   }>({ visible: false, team: 'home', oldPlayerId: null, newPlayerId: null });
+  // Within the substitute modal: which empty slot is being filled. When set,
+  // the modal shows the full-team picker (any category) instead of the grid.
+  const [fillTarget, setFillTarget] = useState<{ slotNumber: number; position: 'player1' | 'player2'; label: string } | null>(null);
   const [substituteSubmitting, setSubstituteSubmitting] = useState(false);
 
   // Admin slot-swap modal — pencil icon next to a player in the lineup
@@ -218,9 +302,40 @@ const TieDetailScreen: React.FC = () => {
     courtNumber: null,
   });
 
+  // Open-captain-portal modal (admin re-opens the portal for N minutes)
+  const [openPortalModal, setOpenPortalModal] = useState(false);
+  const [openPortalMins, setOpenPortalMins] = useState('');
+  const [openPortalBusy, setOpenPortalBusy] = useState(false);
+  // Kids submission modal (set an absolute deadline, or open for N minutes)
+  const [kidsModal, setKidsModal] = useState(false);
+  const [kidsMins, setKidsMins] = useState('');
+  const [kidsWhen, setKidsWhen] = useState(''); // absolute datetime text, e.g. 2026-07-31 18:00
+  const [kidsBusy, setKidsBusy] = useState(false);
+
   // Score modal +/- counters (replace old text inputs)
   const [scoreVals, setScoreVals] = useState<{ a: number; b: number }>({ a: 0, b: 0 });
+  // Serve tracking (SBPL): config (first server/positions) + the rally-winner
+  // sequence fed from the +/- taps. Whose-serve is derived by folding these.
+  const [serveConfig, setServeConfig] = useState<ServeConfig | null>(null);
+  const [serveEvents, setServeEvents] = useState<ServeEvent[]>([]);
+  const [serveSetupServer, setServeSetupServer] = useState<string | null>(null);
+  // Total points already on the board when serve was declared. Serve is set up
+  // AT the current score (often mid-match), so sync is measured by points since
+  // setup — not against the absolute score (which would strand it "out of sync").
+  const [serveBaseTotal, setServeBaseTotal] = useState(0);
   const [livePushStatus, setLivePushStatus] = useState<'idle' | 'syncing' | 'live' | 'error'>('idle');
+
+  // Persist serve state to the backend so the OBS overlays show server/receiver.
+  // The app owns the serve state; push the full snapshot (config + events) on
+  // change, debounced. Only while a serve is actively declared (config set).
+  useEffect(() => {
+    const tm = scoreModal.tieMatch;
+    if (!tm || seasonFormat !== 'sbpl_15game' || !serveConfig) return;
+    const t = setTimeout(() => {
+      adminSyncServe(tieId, tm.matchId, serveConfig, serveEvents).catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [serveConfig, serveEvents, scoreModal.tieMatch, seasonFormat, tieId]);
   const [winnerPickerVisible, setWinnerPickerVisible] = useState(false);
   // When true, the winner-confirm panel flips its presumed winner to the
   // OTHER team. Lets the scorer correct a mistaken score side without
@@ -251,6 +366,18 @@ const TieDetailScreen: React.FC = () => {
             setLeague(leagueData as any);
             store.setCurrentLeague(leagueData as any);
           }
+        } catch {}
+      }
+
+      // Resolve this season's bonus bands for the live overlay (SBPL differs
+      // from SPPL). Best-effort — on failure the util falls back to SPPL.
+      if (effectiveLeagueId && tieData?.seasonId) {
+        try {
+          const seasons = await getSeasons(effectiveLeagueId).catch(() => []);
+          const arr = Array.isArray(seasons) ? seasons : [];
+          const season = arr.find((s: any) => s.id === tieData.seasonId);
+          setBonusRules(((season as any)?.bonusRules ?? null) as SeasonBonusRules | null);
+          setSeasonFormat(((season as any)?.format ?? null) as string | null);
         } catch {}
       }
 
@@ -326,6 +453,101 @@ const TieDetailScreen: React.FC = () => {
     });
   };
 
+  // SBPL kids-first: lock only the kids games ahead of the rest of the tie.
+  const kidsLocked = Array.isArray((tie as any)?.lockedCategories)
+    && (tie as any).lockedCategories.includes('kids');
+  const handleLockKids = () => {
+    xConfirm(
+      'Lock Kids Games',
+      'Lock only the Kids pairs and reveal them? The rest of the tie stays open for teams to submit later.',
+      async () => {
+        setActionLoading(true);
+        try {
+          await lockCategory(tieId, 'kids');
+          xAlert('Kids Locked', 'Kids pairs are locked and revealed. Scorers can now play them.');
+          await fetchData();
+        } catch (err: any) {
+          xAlert('Error', err?.response?.data?.message || err?.message || 'Failed to lock kids games');
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    );
+  };
+  const handleUnlockKids = () => {
+    xConfirm(
+      'Unlock Kids Games',
+      'Unlock the Kids pairs? Only allowed if no kids game has started yet.',
+      async () => {
+        setActionLoading(true);
+        try {
+          await unlockCategory(tieId, 'kids');
+          xAlert('Kids Unlocked', 'Kids pairs are open for editing again.');
+          await fetchData();
+        } catch (err: any) {
+          xAlert('Error', err?.response?.data?.message || err?.message || 'Failed to unlock kids games');
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    );
+  };
+
+  // Set the Kids submission window — either a fixed date/time (e.g. 6pm 31 Jul)
+  // or "open for N minutes from now". Past it, kids auto-fill from defaults.
+  const handleSetKidsDeadline = async (opts: { minutes?: number; deadline?: string }) => {
+    setKidsBusy(true);
+    try {
+      const data = await setKidsDeadline(tieId, opts);
+      setKidsModal(false);
+      setKidsMins('');
+      setKidsWhen('');
+      await fetchData();
+      const dl = data?.kidsDeadline ? new Date(data.kidsDeadline) : null;
+      xAlert(
+        'Kids Submission Open',
+        dl ? `Captains can submit Kids pairs until ${dl.toLocaleString('en-IN')}.` : 'Kids deadline cleared.',
+      );
+    } catch (err: any) {
+      xAlert('Error', err?.response?.data?.message || err?.message || 'Failed to set kids deadline');
+    } finally {
+      setKidsBusy(false);
+    }
+  };
+  const submitKidsWhen = () => {
+    // Accept "YYYY-MM-DD HH:mm" (local) → ISO.
+    const raw = kidsWhen.trim();
+    const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/);
+    if (!m) {
+      xAlert('Invalid', 'Enter date & time as YYYY-MM-DD HH:MM (e.g. 2026-07-31 18:00).');
+      return;
+    }
+    const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]));
+    handleSetKidsDeadline({ deadline: dt.toISOString() });
+  };
+
+  const handleOpenCaptainPortal = async (minutes: number) => {
+    if (!Number.isFinite(minutes) || minutes < 1) {
+      xAlert('Invalid', 'Enter a number of minutes (1 or more).');
+      return;
+    }
+    setOpenPortalBusy(true);
+    try {
+      await openCaptainPortal(tieId, Math.round(minutes));
+      setOpenPortalModal(false);
+      setOpenPortalMins('');
+      await fetchData();
+      xAlert(
+        'Portal Opened',
+        `Captains can now submit or edit their lineup for the next ${Math.round(minutes)} minutes.`,
+      );
+    } catch (err: any) {
+      xAlert('Error', err?.response?.data?.message || err?.message || 'Failed to open captain portal');
+    } finally {
+      setOpenPortalBusy(false);
+    }
+  };
+
   const handleStartTie = async () => {
     // OBS overlay isn't used for this league, so skip the court-confirmation
     // step and start the tie directly.
@@ -396,7 +618,39 @@ const TieDetailScreen: React.FC = () => {
     setScoreVals({ a, b });
     setLivePushStatus('idle');
     setWinnerPickerVisible(false);
+    setServeConfig(null);
+    setServeEvents([]);
+    setServeSetupServer(null);
+    setServeBaseTotal(0);
     setScoreModal({ visible: true, tieMatch: tm });
+  };
+
+  // ── Per-game court override ──
+  // Each game defaults to its rulebook court (slots 1–7 → court 1, 8–15 →
+  // court 2); admin can move an individual game to another court here.
+  const handleSetMatchCourt = async (courtNumber: number | null) => {
+    const tm = courtModal.tieMatch;
+    if (!tm) return;
+    setCourtSaving(true);
+    try {
+      await adminSetMatchCourt(tieId, tm.matchId, courtNumber);
+      // Reflect locally so the badge updates without a full refetch.
+      setTie((prev) =>
+        prev
+          ? {
+              ...prev,
+              tieMatches: (prev.tieMatches || []).map((x) =>
+                x.matchId === tm.matchId ? { ...x, courtNumber } : x,
+              ),
+            }
+          : prev,
+      );
+      setCourtModal({ visible: false, tieMatch: null });
+    } catch (e: any) {
+      xAlert('Could not change court', e?.response?.data?.message || e?.message || 'Please try again.');
+    } finally {
+      setCourtSaving(false);
+    }
   };
 
   /** Target points (14 / 15 / 21) derived from the match's scoringMode. */
@@ -430,13 +684,152 @@ const TieDetailScreen: React.FC = () => {
     const tm = scoreModal.tieMatch;
     if (!tm) return;
     const cap = getTargetPoints(tm);
-    setScoreVals((prev) => {
-      const next = { ...prev };
-      if (side === 'a') next.a = Math.max(0, Math.min(cap, next.a + delta));
-      else next.b = Math.max(0, Math.min(cap, next.b + delta));
-      schedulePush(tm, next.a, next.b);
-      return next;
-    });
+    const before = side === 'a' ? scoreVals.a : scoreVals.b;
+    const after = Math.max(0, Math.min(cap, before + delta));
+    if (after === before) return; // no change at floor/cap
+    const next = side === 'a' ? { ...scoreVals, a: after } : { ...scoreVals, b: after };
+    setScoreVals(next);
+    schedulePush(tm, next.a, next.b);
+    // Feed the serve reducer: +1 = a rally win for that side; -1 = undo the
+    // last rally if it was that side's (out-of-order edits leave the log,
+    // which the "out of sync" guard surfaces in the panel).
+    const winner: Side = side === 'a' ? 'home' : 'away';
+    if (delta > 0) {
+      setServeEvents((ev) => ev.concat({ type: 'rally', winner }));
+    } else {
+      setServeEvents((ev) => {
+        const last = ev[ev.length - 1];
+        return last && last.type === 'rally' && last.winner === winner ? ev.slice(0, -1) : ev;
+      });
+    }
+  };
+
+  // Build a ServeConfig from the chosen first server + receiver. The server's
+  // partner takes the Left court; the receiver + partner mirror on the other side.
+  const buildServeConfig = (tm: TieMatch, serverId: string, receiverId: string): ServeConfig => {
+    const home = [(tm as any).homePlayer1Id, (tm as any).homePlayer2Id] as string[];
+    const away = [(tm as any).awayPlayer1Id, (tm as any).awayPlayer2Id] as string[];
+    const serverSide: Side = home.includes(serverId) ? 'home' : 'away';
+    const serverPair = serverSide === 'home' ? home : away;
+    const recvPair = serverSide === 'home' ? away : home;
+    const serverPartner = serverPair.find((id) => id !== serverId) || serverId;
+    const recvPartner = recvPair.find((id) => id !== receiverId) || receiverId;
+    const serving = { R: serverId, L: serverPartner };
+    const receiving = { R: receiverId, L: recvPartner };
+    const positions: Positions =
+      serverSide === 'home' ? { home: serving, away: receiving } : { home: receiving, away: serving };
+    return { firstServingSide: serverSide, positions };
+  };
+
+  // Serve indicator inside the score modal (SBPL games only). Setup (first
+  // server + receiver) → then whose-serve derived from the +/- rally taps.
+  const renderServePanel = (tm: TieMatch) => {
+    if (seasonFormat !== 'sbpl_15game') return null;
+    const h1 = (tm as any).homePlayer1Id, h2 = (tm as any).homePlayer2Id;
+    const a1 = (tm as any).awayPlayer1Id, a2 = (tm as any).awayPlayer2Id;
+    const ids = [h1, h2, a1, a2];
+    const nameOf = (id?: string | null) => (id ? playerMap[id] || 'Player' : '—');
+    const box = { marginTop: 10, padding: 10, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' };
+    const chip = (id: string) => (
+      <TouchableOpacity
+        key={id}
+        onPress={() =>
+          serveSetupServer
+            ? (setServeConfig(buildServeConfig(tm, serveSetupServer, id)),
+              setServeEvents([]),
+              // Serve declared at the current score → track points from here.
+              setServeBaseTotal(scoreVals.a + scoreVals.b))
+            : setServeSetupServer(id)
+        }
+        style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#EEF2FF', borderWidth: 1, borderColor: '#C7D2FE', margin: 3 }}
+      >
+        <Text style={{ fontSize: 12, fontWeight: '800', color: NAVY }}>{nameOf(id)}</Text>
+      </TouchableOpacity>
+    );
+
+    if (ids.some((x) => !x)) {
+      return (
+        <View style={box}>
+          <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>Submit lineups to track serve.</Text>
+        </View>
+      );
+    }
+    if (serveConfig) {
+      const st = foldServe(serveConfig, serveEvents);
+      // In sync when the rallies logged since setup match the points scored since
+      // setup. Serve is declared at serveBaseTotal, not necessarily 0-0.
+      const inSync = serveEvents.length === scoreVals.a + scoreVals.b - serveBaseTotal;
+      // Fixed 4-name display; only the 🏸 (server) and 🎯 (receiver) icons move.
+      const playerLine = (id?: string | null) => {
+        const isServer = inSync && st.serverId === id;
+        const isReceiver = inSync && st.receiverId === id;
+        return (
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 3 }}>
+            <View style={{ width: 22, alignItems: 'center' }}>
+              {isServer ? <ShuttleIcon size={16} color="#0369A1" /> : isReceiver ? <TargetIcon size={16} color="#B45309" /> : null}
+            </View>
+            <Text
+              numberOfLines={1}
+              style={{
+                flex: 1, fontSize: 13,
+                fontWeight: isServer ? '900' : isReceiver ? '800' : '600',
+                color: isServer ? '#0369A1' : isReceiver ? '#B45309' : NAVY,
+              }}
+            >
+              {nameOf(id)}
+            </Text>
+          </View>
+        );
+      };
+      return (
+        <View style={box}>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: BLUE, letterSpacing: 1, marginBottom: 2 }} numberOfLines={1}>
+                {homeName.toUpperCase()}
+              </Text>
+              {playerLine(h1)}
+              {playerLine(h2)}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: RED, letterSpacing: 1, marginBottom: 2 }} numberOfLines={1}>
+                {awayName.toUpperCase()}
+              </Text>
+              {playerLine(a1)}
+              {playerLine(a2)}
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
+            <ShuttleIcon size={12} color="#64748B" />
+            <Text style={{ fontSize: 10, color: '#64748B' }}> Server   </Text>
+            <TargetIcon size={12} color="#64748B" />
+            <Text style={{ fontSize: 10, color: '#64748B' }}> Receiver</Text>
+            {!inSync && (
+              <Text style={{ fontSize: 10, color: ORANGE, fontWeight: '700', marginLeft: 8 }}>· out of sync</Text>
+            )}
+            <View style={{ flex: 1 }} />
+            <TouchableOpacity onPress={() => {
+              setServeConfig(null); setServeSetupServer(null);
+              // Clear serve on the backend too so OBS stops showing server/receiver.
+              adminSyncServe(tieId, tm.matchId, null, []).catch(() => {});
+            }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: BLUE }}>Reset</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+    // Setup
+    const serverSide = !serveSetupServer ? null : [h1, h2].includes(serveSetupServer) ? 'home' : 'away';
+    const setupIds = !serveSetupServer ? ids : serverSide === 'home' ? [a1, a2] : [h1, h2];
+    return (
+      <View style={box}>
+        <Text style={{ fontSize: 11, fontWeight: '800', color: NAVY, marginBottom: 6 }}>
+          {serveSetupServer ? `Server: ${nameOf(serveSetupServer)} — WHO RECEIVES?` : 'WHO SERVES FIRST?'}
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{setupIds.map((id) => chip(id))}</View>
+      </View>
+    );
   };
 
   /** SAVE SCORE → validate target → open winner picker. */
@@ -593,16 +986,35 @@ const TieDetailScreen: React.FC = () => {
     const slotNumbers = hasRallyGame
       ? [0, ...tieSlots.map((s) => s.slotNumber)]
       : tieSlots.map((s) => s.slotNumber);
+    // Per-game label source depends on the league. SPPL prints its compact
+    // rulebook codes ("K & K"); SBPL (and any category-based format) labels
+    // each game by its own category ("Kids", "Women 1-3", "Men A"). Detect
+    // SBPL by the presence of a badminton-only category slug — the "kids"
+    // slug overlaps with SPPL and slot numbers alone can't tell them apart.
+    const SPPL_SLUGS = ['kids', 'teen', 'women1', 'women2', 'men1', 'men2', 'men3'];
+    const catBySlot = new Map(tieSlots.map((s) => [s.slotNumber, s.categorySlug as string]));
+    const isSbpl = tieSlots.some((s) => {
+      const slug = s.categorySlug as string;
+      return slug && slug !== 'open' && !SPPL_SLUGS.includes(slug);
+    });
+    const labelFor = (slotNum: number) => {
+      if (slotNum === 0) return 'Rally Pt';
+      const slug = catBySlot.get(slotNum);
+      if (isSbpl) return (slug && CATEGORY_COLORS[slug]?.label) || `Game ${slotNum}`;
+      return SPPL_TIE_SHEET_LABELS[slotNum] || `Game ${slotNum}`;
+    };
+    const nameSub = (pid: string | undefined | null, isSub: any) =>
+      pid ? `${nameOf(pid)}${isSub ? ' (sub)' : ''}` : 'Substitute';
     const slots = slotNumbers.map((slotNum) => {
-      const homeSlot = homeSheet?.lineupData?.find((s: any) => s.slotNumber === slotNum);
-      const awaySlot = awaySheet?.lineupData?.find((s: any) => s.slotNumber === slotNum);
+      const homeSlot: any = homeSheet?.lineupData?.find((s: any) => s.slotNumber === slotNum);
+      const awaySlot: any = awaySheet?.lineupData?.find((s: any) => s.slotNumber === slotNum);
       return {
         slotNumber: slotNum,
-        gameLabel: SPPL_TIE_SHEET_LABELS[slotNum] || (slotNum === 0 ? 'Rally' : `Game ${slotNum}`),
-        team1Player1: nameOf(homeSlot?.player1Id),
-        team1Player2: nameOf(homeSlot?.player2Id),
-        team2Player1: nameOf(awaySlot?.player1Id),
-        team2Player2: nameOf(awaySlot?.player2Id),
+        gameLabel: labelFor(slotNum),
+        team1Player1: nameSub(homeSlot?.player1Id, homeSlot?.player1IsSub),
+        team1Player2: nameSub(homeSlot?.player2Id, homeSlot?.player2IsSub),
+        team2Player1: nameSub(awaySlot?.player1Id, awaySlot?.player1IsSub),
+        team2Player2: nameSub(awaySlot?.player2Id, awaySlot?.player2IsSub),
       };
     });
     const ist = (d: Date) => d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
@@ -622,6 +1034,7 @@ const TieDetailScreen: React.FC = () => {
     // the sheet, so a coarse label is enough here.
     const stage = (tie.round || '').startsWith('league_week_') ? 'LEAGUE' : 'KNOCKOUT';
     downloadTieSheet({
+      leagueName: league?.name,
       matchNo: stage,
       date: dateStr,
       time: timeStr,
@@ -643,14 +1056,26 @@ const TieDetailScreen: React.FC = () => {
       .filter((tm) => !tm.isRallyPointGame && tm.slotNumber > 0)
       .slice()
       .sort((a, b) => a.slotNumber - b.slotNumber);
+    const SPPL_SLUGS = ['kids', 'teen', 'women1', 'women2', 'men1', 'men2', 'men3'];
     return tms.map((tm) => {
+      const slug = tm.categorySlug as string;
+      const isOpen = !slug || slug === 'open';
       const sppl = SPPL_MATCH_SLOTS.find((s) => s.slotNumber === tm.slotNumber);
-      const generic = tm.categorySlug === ('open' as any) || !sppl;
+      // SPPL keeps its slot-number-based label + eligibility (unchanged).
+      // SBPL (and any format with real category slugs) labels from the game's
+      // own category via CATEGORY_COLORS; eligibility stays open for now
+      // (group → auction sub-category mapping is a follow-up).
+      const useSppl = !isOpen && !!sppl && SPPL_SLUGS.includes(slug);
+      const label = isOpen
+        ? `Game ${tm.slotNumber}`
+        : useSppl
+          ? sppl!.label
+          : CATEGORY_COLORS[slug]?.label || `Game ${tm.slotNumber}`;
       return {
         slotNumber: tm.slotNumber,
         categorySlug: tm.categorySlug,
-        allowedCategories: generic ? [] : sppl!.allowedCategories,
-        label: generic ? `Game ${tm.slotNumber}` : sppl!.label,
+        allowedCategories: useSppl ? sppl!.allowedCategories : [],
+        label,
         pointValue: tm.pointValue,
       };
     });
@@ -681,27 +1106,14 @@ const TieDetailScreen: React.FC = () => {
       // Rally Point Game: no bonus per SPPL rulebook § 15
       if ((tm as any).isRallyPointGame) continue;
 
-      // Bonus rules branch on scoringMode.
-      // rally_21 (knockout): loser≤7 / 14-19+win=21 / 20+win=21
-      // rally_15 (default):  loser≤4 / 11-13+win=15 / 14
-      const mode = (m as any).scoringMode;
-      if (mode === 'rally_21') {
-        if (loserScore <= 7) {
-          if (homeWon) homeBonus += 2; else awayBonus += 2;
-        } else if (loserScore >= 14 && loserScore <= 19 && winnerScore === 21) {
-          if (homeWon) awayBonus += 1; else homeBonus += 1;
-        } else if (loserScore === 20 && winnerScore === 21) {
-          if (homeWon) awayBonus += 2; else homeBonus += 2;
-        }
-      } else {
-        if (loserScore <= 4) {
-          if (homeWon) homeBonus += 2; else awayBonus += 2;
-        } else if (loserScore >= 11 && loserScore <= 13 && winnerScore === 15) {
-          if (homeWon) awayBonus += 1; else homeBonus += 1;
-        } else if (loserScore === 14) {
-          if (homeWon) awayBonus += 2; else homeBonus += 2;
-        }
-      }
+      // Bonus via the shared util (honors season.bonusRules — SBPL narrows the
+      // close-loss band; defaults to SPPL when bonusRules is absent).
+      const sides = bonusToSides(
+        computeMatchBonus(winnerScore, loserScore, (m as any).scoringMode, bonusRules),
+        homeWon,
+      );
+      homeBonus += sides.home;
+      awayBonus += sides.away;
     }
     return {
       homeMP, awayMP, homeBonus, awayBonus,
@@ -710,7 +1122,7 @@ const TieDetailScreen: React.FC = () => {
       completed: tieMatches.filter((tm: any) => tm.match?.status === 'completed').length,
       total: tieMatches.length,
     };
-  }, [tie]);
+  }, [tie, bonusRules]);
 
   // ─── RENDERS ──────────────────────────────────────────────────────────────
 
@@ -807,9 +1219,18 @@ const TieDetailScreen: React.FC = () => {
   const renderTieControls = () => {
     if (!tie) return null;
     const currentCourt = (tie as any).courtNumber ?? null;
+    const currentCourt2 = (tie as any).courtNumber2 ?? null;
     const currentScorerId = (tie as any).scorerId ?? null;
+    const currentScorer1Id = (tie as any).scorer1Id ?? null;
+    const currentScorer2Id = (tie as any).scorer2Id ?? null;
+    // SBPL ties play across two courts with two scorers; other formats use one.
+    const twoCourt = seasonFormat === 'sbpl_15game';
 
-    const updateTie = async (patch: { courtNumber?: number | null; scorerId?: string | null }) => {
+    const updateTie = async (patch: {
+      courtNumber?: number | null;
+      courtNumber2?: number | null;
+      scorerId?: string | null;
+    }) => {
       try {
         setActionLoading(true);
         await bulkUpdateTies('', [{ tieId, ...patch }]);
@@ -822,19 +1243,21 @@ const TieDetailScreen: React.FC = () => {
     };
 
     const COURTS = [1, 2, 3, 4];
-    return (
-      <View style={styles.tieSheetBar}>
-        <Text style={styles.tieSheetTitle}>Tie Controls</Text>
-
-        {/* Court picker */}
-        <Text style={{ fontSize: 11, fontWeight: '800', color: NAVY, letterSpacing: 1, marginTop: 8, marginBottom: 6 }}>COURT</Text>
+    // One selectable court row bound to a field (courtNumber or courtNumber2).
+    const courtRow = (
+      label: string,
+      current: number | null,
+      field: 'courtNumber' | 'courtNumber2',
+    ) => (
+      <>
+        <Text style={{ fontSize: 11, fontWeight: '800', color: NAVY, letterSpacing: 1, marginTop: 8, marginBottom: 6 }}>{label}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
           {COURTS.map((c) => {
-            const selected = currentCourt === c;
+            const selected = current === c;
             return (
               <TouchableOpacity
                 key={c}
-                onPress={() => updateTie({ courtNumber: selected ? null : c })}
+                onPress={() => updateTie({ [field]: selected ? null : c } as any)}
                 disabled={actionLoading}
                 style={{
                   paddingHorizontal: 14, paddingVertical: 8,
@@ -850,9 +1273,9 @@ const TieDetailScreen: React.FC = () => {
               </TouchableOpacity>
             );
           })}
-          {currentCourt !== null && (
+          {current !== null && (
             <TouchableOpacity
-              onPress={() => updateTie({ courtNumber: null })}
+              onPress={() => updateTie({ [field]: null } as any)}
               disabled={actionLoading}
               style={{
                 paddingHorizontal: 12, paddingVertical: 8,
@@ -864,9 +1287,17 @@ const TieDetailScreen: React.FC = () => {
             </TouchableOpacity>
           )}
         </View>
+      </>
+    );
 
-        {/* Scorer picker */}
-        <Text style={{ fontSize: 11, fontWeight: '800', color: NAVY, letterSpacing: 1, marginTop: 14, marginBottom: 6 }}>SCORER</Text>
+    // One selectable scorer row bound to a field (scorerId / scorer1Id / scorer2Id).
+    const scorerRow = (
+      label: string,
+      current: string | null,
+      field: 'scorerId' | 'scorer1Id' | 'scorer2Id',
+    ) => (
+      <>
+        <Text style={{ fontSize: 11, fontWeight: '800', color: NAVY, letterSpacing: 1, marginTop: 14, marginBottom: 6 }}>{label}</Text>
         {scorersList.length === 0 ? (
           <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>
             No scorers added yet. Add from League Dashboard → Scorers.
@@ -874,18 +1305,16 @@ const TieDetailScreen: React.FC = () => {
         ) : (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             {scorersList.map((s) => {
-              const selected = currentScorerId === s.userId;
+              const selected = current === s.userId;
               return (
                 <TouchableOpacity
                   key={s.userId}
-                  onPress={() => updateTie({ scorerId: selected ? null : s.userId })}
+                  onPress={() => updateTie({ [field]: selected ? null : s.userId } as any)}
                   disabled={actionLoading}
                   style={{
-                    paddingHorizontal: 12, paddingVertical: 8,
-                    borderRadius: 8,
+                    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
                     backgroundColor: selected ? '#06D6A0' : '#F1F5F9',
-                    borderWidth: 1,
-                    borderColor: selected ? '#06D6A0' : '#E2E8F0',
+                    borderWidth: 1, borderColor: selected ? '#06D6A0' : '#E2E8F0',
                   }}
                 >
                   <Text style={{ fontSize: 12, fontWeight: '800', color: selected ? WHITE : NAVY }}>
@@ -894,20 +1323,93 @@ const TieDetailScreen: React.FC = () => {
                 </TouchableOpacity>
               );
             })}
-            {currentScorerId && (
+            {current && (
               <TouchableOpacity
-                onPress={() => updateTie({ scorerId: null })}
+                onPress={() => updateTie({ [field]: null } as any)}
                 disabled={actionLoading}
-                style={{
-                  paddingHorizontal: 12, paddingVertical: 8,
-                  borderRadius: 8, backgroundColor: '#FEF2F2',
-                  borderWidth: 1, borderColor: '#FCA5A5',
-                }}
+                style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FCA5A5' }}
               >
                 <Text style={{ fontSize: 12, fontWeight: '800', color: RED }}>Unassign</Text>
               </TouchableOpacity>
             )}
           </View>
+        )}
+      </>
+    );
+
+    return (
+      <View style={styles.tieSheetBar}>
+        <Text style={styles.tieSheetTitle}>Tie Controls</Text>
+
+        {/* Court-wise controls — SBPL ties run on two courts in parallel. Each
+            court is grouped with its own scorer, and the scorer label follows
+            the physical court number the admin picks (Court 1/2/3/4). Either
+            scorer may still score any game; this just assigns who's on which court. */}
+        {twoCourt ? (
+          <>
+            {courtRow('COURT 1', currentCourt, 'courtNumber')}
+            {scorerRow(`SCORER · COURT ${currentCourt ?? 1}`, currentScorer1Id, 'scorer1Id')}
+            <View style={{ height: 1, backgroundColor: '#E2E8F0', marginTop: 16 }} />
+            {courtRow('COURT 2', currentCourt2, 'courtNumber2')}
+            {scorerRow(`SCORER · COURT ${currentCourt2 ?? 2}`, currentScorer2Id, 'scorer2Id')}
+          </>
+        ) : (
+          <>
+            {courtRow('COURT', currentCourt, 'courtNumber')}
+            {scorerRow('SCORER', currentScorerId, 'scorerId')}
+          </>
+        )}
+
+        {/* Open the captain portal on demand — available on EVERY tie. Opening it
+            can never change an already-played game (that's frozen per-game). */}
+        {true && (
+          <TouchableOpacity
+            onPress={() => { setOpenPortalMins(''); setOpenPortalModal(true); }}
+            activeOpacity={0.85}
+            style={{
+              marginTop: 12,
+              backgroundColor: '#EFF6FF',
+              borderWidth: 1,
+              borderColor: '#2196F3',
+              borderRadius: 10,
+              paddingVertical: 12,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '800', color: '#1E40AF', letterSpacing: 0.3 }}>
+              🔓  OPEN CAPTAIN'S PORTAL
+            </Text>
+            <Text style={{ fontSize: 11, color: '#3B82F6', marginTop: 2 }}>
+              Give captains a fresh window to submit lineups
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* SBPL: open the Kids submission window (own deadline; past it kids
+            auto-fill from defaults). */}
+        {seasonFormat === 'sbpl_15game' && (
+          <TouchableOpacity
+            onPress={() => { setKidsMins(''); setKidsWhen(''); setKidsModal(true); }}
+            activeOpacity={0.85}
+            style={{
+              marginTop: 10,
+              backgroundColor: '#F5F3FF',
+              borderWidth: 1,
+              borderColor: '#7C3AED',
+              borderRadius: 10,
+              paddingVertical: 12,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '800', color: '#6D28D9', letterSpacing: 0.3 }}>
+              🧒  OPEN KIDS SUBMISSION
+            </Text>
+            <Text style={{ fontSize: 11, color: '#7C3AED', marginTop: 2 }}>
+              {(tie as any)?.kidsDeadline
+                ? `Kids deadline: ${new Date((tie as any).kidsDeadline).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                : 'Set the Kids submission deadline'}
+            </Text>
+          </TouchableOpacity>
         )}
       </View>
     );
@@ -960,41 +1462,38 @@ const TieDetailScreen: React.FC = () => {
     playerId: string;
     name: string;
     categories: string[];
+    // Set for empty (substitute) slots so the modal can fill THIS specific
+    // game/position instead of the old merged "one placeholder" behaviour.
+    sub?: { slotNumber: number; position: 'player1' | 'player2'; categorySlug: string };
   }> => {
     if (!tie) return [];
     const map = new Map<string, Set<string>>();
-    // Collect categories where this team has at least one NULL player slot
-    // so we can surface a synthetic SUBSTITUTE entry the admin can replace.
-    const subCats = new Set<string>();
+    // Each empty slot+position becomes its own entry, labelled by game, so a
+    // captain who left multiple substitutes gets a clear, per-game fill list.
+    const subs: Array<{ playerId: string; name: string; categories: string[]; sub: { slotNumber: number; position: 'player1' | 'player2'; categorySlug: string } }> = [];
+    const catLabelOf = (slug: string) => CATEGORY_COLORS[slug]?.label || slug;
     for (const tm of tie.tieMatches || []) {
-      const ids = team === 'home'
-        ? [tm.homePlayer1Id, tm.homePlayer2Id]
-        : [tm.awayPlayer1Id, tm.awayPlayer2Id];
-      for (const id of ids) {
-        if (!id) {
-          // NULL = substitute placeholder waiting to be filled.
-          subCats.add(tm.categorySlug);
-          continue;
-        }
+      if ((tm as any).isRallyPointGame || tm.slotNumber === 0) continue; // skip RPG
+      const p1 = team === 'home' ? tm.homePlayer1Id : tm.awayPlayer1Id;
+      const p2 = team === 'home' ? tm.homePlayer2Id : tm.awayPlayer2Id;
+      const addNamed = (id: string | null | undefined) => {
+        if (!id) return;
         if (!map.has(id)) map.set(id, new Set());
         map.get(id)!.add(tm.categorySlug);
-      }
+      };
+      addNamed(p1);
+      addNamed(p2);
+      const lbl = catLabelOf(tm.categorySlug);
+      if (!p1) subs.push({ playerId: `__SUB__:${tm.slotNumber}:player1`, name: `Substitute — #${tm.slotNumber} ${lbl} · Player 1`, categories: [tm.categorySlug], sub: { slotNumber: tm.slotNumber, position: 'player1', categorySlug: tm.categorySlug } });
+      if (!p2) subs.push({ playerId: `__SUB__:${tm.slotNumber}:player2`, name: `Substitute — #${tm.slotNumber} ${lbl} · Player 2`, categories: [tm.categorySlug], sub: { slotNumber: tm.slotNumber, position: 'player2', categorySlug: tm.categorySlug } });
     }
     const named = Array.from(map.entries()).map(([pid, cats]) => ({
       playerId: pid,
       name: playerMap[pid] || 'Player',
       categories: Array.from(cats),
     }));
-    // Append the substitute placeholder entry (if any). The pseudo-id
-    // 'SUBSTITUTE' is recognised server-side and matched against null slots.
-    if (subCats.size > 0) {
-      named.push({
-        playerId: 'SUBSTITUTE',
-        name: 'Substitute placeholder',
-        categories: Array.from(subCats),
-      });
-    }
-    return named;
+    // Named players first (for injury swaps), then each empty slot to fill.
+    return [...named, ...subs];
   };
 
   // Open the admin slot-swap modal for a specific (team, slot, position).
@@ -1059,6 +1558,20 @@ const TieDetailScreen: React.FC = () => {
     }
     try {
       setSubstituteSubmitting(true);
+      // Empty-slot fill: `__SUB__:<slot>:<position>` → fill THAT specific game.
+      if (oldPlayerId.startsWith('__SUB__:')) {
+        const [, slotStr, position] = oldPlayerId.split(':');
+        await adminSwapSlotPlayer(tieId, {
+          team,
+          slotNumber: parseInt(slotStr, 10),
+          position: position as 'player1' | 'player2',
+          newPlayerId,
+        });
+        setSubstituteModal({ visible: false, team: 'home', oldPlayerId: null, newPlayerId: null });
+        xAlert('Substitute filled', `${playerMap[newPlayerId] || 'Player'} added to game #${slotStr}.`);
+        await fetchData();
+        return;
+      }
       const result = await substitutePlayer(tieId, { team, oldPlayerId, newPlayerId });
       setSubstituteModal({ visible: false, team: 'home', oldPlayerId: null, newPlayerId: null });
       xAlert(
@@ -1071,6 +1584,33 @@ const TieDetailScreen: React.FC = () => {
       await fetchData();
     } catch (err: any) {
       xAlert('Could not substitute', err?.response?.data?.message || err?.message || 'Failed');
+    } finally {
+      setSubstituteSubmitting(false);
+    }
+  };
+
+  // Fill the currently-targeted empty slot with any team player (any category).
+  // The player is tagged as a substitute on the backend so their stats for
+  // this game don't count toward their totals.
+  const applyFill = async (newPlayerId: string) => {
+    if (!fillTarget) return;
+    const target = fillTarget;
+    setSubstituteSubmitting(true);
+    try {
+      await adminSwapSlotPlayer(tieId, {
+        team: substituteModal.team,
+        slotNumber: target.slotNumber,
+        position: target.position,
+        newPlayerId,
+      });
+      setFillTarget(null);
+      await fetchData();
+      xAlert(
+        'Substitute filled',
+        `${playerMap[newPlayerId] || 'Player'} added to ${target.label} · ${target.position === 'player1' ? 'Player 1' : 'Player 2'} — tagged (sub); their stats for this game won't count.`,
+      );
+    } catch (err: any) {
+      xAlert('Could not fill', err?.response?.data?.message || err?.message || 'Failed');
     } finally {
       setSubstituteSubmitting(false);
     }
@@ -1097,6 +1637,11 @@ const TieDetailScreen: React.FC = () => {
           ) : (
             <Text style={[styles.sheetBadge, { color: TEXT_MUTED }]}>Not Submitted</Text>
           )}
+          {!!(homeSheet as any)?.lineupData?.some?.((l: any) => l.fromDefault) && (
+            <Text style={{ fontSize: 10, fontWeight: '900', color: '#C2410C', backgroundColor: '#FFEDD5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, marginTop: 3, letterSpacing: 0.4 }}>
+              DEFAULT USED
+            </Text>
+          )}
         </View>
         {/* Away */}
         <View style={styles.sheetStatus}>
@@ -1115,12 +1660,33 @@ const TieDetailScreen: React.FC = () => {
           ) : (
             <Text style={[styles.sheetBadge, { color: TEXT_MUTED }]}>Not Submitted</Text>
           )}
+          {!!(awaySheet as any)?.lineupData?.some?.((l: any) => l.fromDefault) && (
+            <Text style={{ fontSize: 10, fontWeight: '900', color: '#C2410C', backgroundColor: '#FFEDD5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, marginTop: 3, letterSpacing: 0.4 }}>
+              DEFAULT USED
+            </Text>
+          )}
         </View>
       </View>
 
       {/* Lock / Re-lock button — admin only. Scorers see the locked status
           via the panel above but don't get the re-lock action since lineups
           are an organizer decision, not a scorer one. */}
+      {/* SBPL kids-first: lock only the Kids games ahead of the rest of the tie. */}
+      {isAdmin && seasonFormat === 'sbpl_15game' && homeSheet && awaySheet
+        && tie.status !== 'in_progress' && tie.status !== 'completed' && (
+        <TouchableOpacity
+          style={[styles.lockBtn, { backgroundColor: kidsLocked ? '#64748B' : '#7C3AED', marginBottom: 10 }]}
+          onPress={kidsLocked ? handleUnlockKids : handleLockKids}
+          disabled={actionLoading}
+        >
+          {actionLoading ? (
+            <ActivityIndicator color={WHITE} size="small" />
+          ) : (
+            <Text style={styles.lockBtnText}>{kidsLocked ? 'UNLOCK KIDS GAMES' : 'LOCK KIDS GAMES'}</Text>
+          )}
+        </TouchableOpacity>
+      )}
+
       {isAdmin && (tie.status === 'lineup_submitted' || tie.status === 'lineup_locked') && homeSheet && awaySheet && (
         <TouchableOpacity
           style={[styles.lockBtn, tie.status === 'lineup_locked' && { backgroundColor: '#F97316' }]}
@@ -1237,6 +1803,7 @@ const TieDetailScreen: React.FC = () => {
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                           <Text style={{ fontSize: 12, color: NAVY, fontWeight: '600', flex: 1 }} numberOfLines={1}>
                             {playerMap[homeSlot.player1Id] || '—'}
+                            {(homeSlot as any).player1IsSub ? <Text style={{ color: '#EA580C', fontWeight: '800' }}> (sub)</Text> : null}
                           </Text>
                           {isAdmin && (
                             <TouchableOpacity
@@ -1251,6 +1818,7 @@ const TieDetailScreen: React.FC = () => {
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                           <Text style={{ fontSize: 12, color: TEXT_SUB, flex: 1 }} numberOfLines={1}>
                             {playerMap[homeSlot.player2Id] || '—'}
+                            {(homeSlot as any).player2IsSub ? <Text style={{ color: '#EA580C', fontWeight: '800' }}> (sub)</Text> : null}
                           </Text>
                           {isAdmin && (
                             <TouchableOpacity
@@ -1285,6 +1853,7 @@ const TieDetailScreen: React.FC = () => {
                           )}
                           <Text style={{ fontSize: 12, color: NAVY, fontWeight: '600', textAlign: 'right' }} numberOfLines={1}>
                             {playerMap[awaySlot.player1Id] || '—'}
+                            {(awaySlot as any).player1IsSub ? <Text style={{ color: '#EA580C', fontWeight: '800' }}> (sub)</Text> : null}
                           </Text>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}>
@@ -1299,6 +1868,7 @@ const TieDetailScreen: React.FC = () => {
                           )}
                           <Text style={{ fontSize: 12, color: TEXT_SUB, textAlign: 'right' }} numberOfLines={1}>
                             {playerMap[awaySlot.player2Id] || '—'}
+                            {(awaySlot as any).player2IsSub ? <Text style={{ color: '#EA580C', fontWeight: '800' }}> (sub)</Text> : null}
                           </Text>
                         </View>
                       </>
@@ -1321,8 +1891,16 @@ const TieDetailScreen: React.FC = () => {
     const scores = tm.match?.scores?.[0];
     const isCompleted = matchStatus === 'completed';
     const isRally = (tm as any).isRallyPointGame === true || tm.slotNumber === 0;
+    // Two-court tie: each game shows its court (rulebook default, or override) and
+    // an admin/scorer can move it. Effective court = explicit override else default.
+    const isTwoCourt = (tie as any).courtNumber2 != null;
+    const effectiveCourt = tm.courtNumber ?? courtForSlot(tie, tm.slotNumber);
+    const showCourt = isTwoCourt && !isRally;
+    // Court-lock: a scorer assigned to the other court can't score this game.
+    const courtEligible = canScoreMatch(tm);
+    const lockedForScorer = isAssignedScorer && !isAdmin && !courtEligible;
     // Rally Point Game can be scored any time after tie starts (no lineup gate)
-    const canEnterScore = canScore && (
+    const canEnterScore = courtEligible && (
       isRally
         ? (tie.status === 'in_progress' || tie.status === 'lineup_locked' || tie.status === 'scheduled' || tie.status === 'lineup_submitted')
         : (tie.status === 'in_progress' || tie.status === 'lineup_locked')
@@ -1331,9 +1909,14 @@ const TieDetailScreen: React.FC = () => {
     return (
       <TouchableOpacity
         key={tm.id}
-        style={[styles.matchCard, isRally && { backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#93C5FD' }]}
+        style={[styles.matchCard, isRally && { backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#93C5FD' }, lockedForScorer && { opacity: 0.45 }]}
         activeOpacity={canEnterScore ? 0.7 : 1}
-        onPress={() => canEnterScore && openScoreEntry(tm)}
+        onPress={() => {
+          if (canEnterScore) return openScoreEntry(tm);
+          if (lockedForScorer) {
+            xAlert('Other court', `This game is on Court ${effectiveCourt ?? '—'}. You're assigned to a different court, so you can't score it.`);
+          }
+        }}
       >
         {/* Top row: slot, category, points */}
         <View style={styles.matchCardTop}>
@@ -1348,6 +1931,22 @@ const TieDetailScreen: React.FC = () => {
           <View style={styles.pointBadge}>
             <Text style={styles.pointBadgeText}>{tm.pointValue}pts</Text>
           </View>
+          {showCourt && (
+            <TouchableOpacity
+              style={styles.courtBadge}
+              activeOpacity={canScore ? 0.6 : 1}
+              onPress={(e) => {
+                (e as any).stopPropagation?.();
+                if (canScore) setCourtModal({ visible: true, tieMatch: tm });
+              }}
+            >
+              <Text style={styles.courtBadgeText}>
+                {effectiveCourt ? `COURT ${effectiveCourt}` : 'NO COURT'}
+                {tm.courtNumber != null ? ' •' : ''}
+              </Text>
+              {canScore && <Text style={styles.courtBadgePencil}> ✎</Text>}
+            </TouchableOpacity>
+          )}
           {isCompleted && (
             <View style={[styles.matchStatusDot, { backgroundColor: GREEN }]} />
           )}
@@ -1368,8 +1967,8 @@ const TieDetailScreen: React.FC = () => {
                 ? homeName
                 : !canSeeLineups
                   ? homeName
-                  : tm.homePlayer1Id
-                    ? `${playerMap[tm.homePlayer1Id] || 'Player'} & ${playerMap[tm.homePlayer2Id || ''] || 'Player'}`
+                  : (tm.homePlayer1Id || tm.homePlayer2Id)
+                    ? pairNameJSX(tm.homePlayer1Id, (tm as any).homePlayer1IsSub, tm.homePlayer2Id, (tm as any).homePlayer2IsSub)
                     : 'TBD'}
             </Text>
           </View>
@@ -1386,8 +1985,8 @@ const TieDetailScreen: React.FC = () => {
                 ? awayName
                 : !canSeeLineups
                   ? awayName
-                  : tm.awayPlayer1Id
-                    ? `${playerMap[tm.awayPlayer1Id] || 'Player'} & ${playerMap[tm.awayPlayer2Id || ''] || 'Player'}`
+                  : (tm.awayPlayer1Id || tm.awayPlayer2Id)
+                    ? pairNameJSX(tm.awayPlayer1Id, (tm as any).awayPlayer1IsSub, tm.awayPlayer2Id, (tm as any).awayPlayer2IsSub)
                     : 'TBD'}
             </Text>
           </View>
@@ -1404,26 +2003,14 @@ const TieDetailScreen: React.FC = () => {
           // Winner gets match points
           const homeMatchPts = homeWon ? tm.pointValue : 0;
           const awayMatchPts = homeWon ? 0 : tm.pointValue;
-          // Bonus — branch on scoringMode (rally_21 knockouts vs rally_15 league)
-          let homeBonusPts = 0, awayBonusPts = 0;
-          const matchMode = (tm.match as any)?.scoringMode;
-          if (matchMode === 'rally_21') {
-            if (loserScore <= 7) {
-              if (homeWon) homeBonusPts = 2; else awayBonusPts = 2;
-            } else if (loserScore >= 14 && loserScore <= 19 && winnerScore === 21) {
-              if (homeWon) awayBonusPts = 1; else homeBonusPts = 1;
-            } else if (loserScore === 20 && winnerScore === 21) {
-              if (homeWon) awayBonusPts = 2; else homeBonusPts = 2;
-            }
-          } else {
-            if (loserScore <= 4) {
-              if (homeWon) homeBonusPts = 2; else awayBonusPts = 2;
-            } else if (loserScore >= 11 && loserScore <= 13 && winnerScore === 15) {
-              if (homeWon) awayBonusPts = 1; else homeBonusPts = 1;
-            } else if (loserScore === 14) {
-              if (homeWon) awayBonusPts = 2; else homeBonusPts = 2;
-            }
-          }
+          // Bonus via the shared util (honors season.bonusRules — SBPL narrows
+          // the close-loss band; defaults to SPPL when bonusRules is absent).
+          const _sides = bonusToSides(
+            computeMatchBonus(winnerScore, loserScore, (tm.match as any)?.scoringMode, bonusRules),
+            homeWon,
+          );
+          const homeBonusPts = _sides.home;
+          const awayBonusPts = _sides.away;
           return (
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
               {/* Home points */}
@@ -1499,21 +2086,34 @@ const TieDetailScreen: React.FC = () => {
                 // and [1] is for Player 2 (matches the slot label order, e.g.,
                 // "Women1 & Men1" → P1=women1, P2=men1). Same-category slots
                 // share one pool across both players.
-                const p1Cats =
-                  slot.allowedCategories.length === 2
-                    ? [slot.allowedCategories[0]]
-                    : slot.allowedCategories;
-                const p2Cats =
-                  slot.allowedCategories.length === 2
-                    ? [slot.allowedCategories[1]]
-                    : slot.allowedCategories;
-                const p1CatPlayers = p1Cats.flatMap((cat) => playersByCategory[cat] || []);
-                const p2CatPlayers = p2Cats.flatMap((cat) => playersByCategory[cat] || []);
                 const picks = lineupSlots[slot.slotNumber] || { player1Id: '', player2Id: '' };
-                // Fallback to full roster only if no eligible players configured at all
-                const allPlayers = rosterPlayers;
-                const p1Players = p1CatPlayers.length > 0 ? p1CatPlayers : allPlayers;
-                const p2Players = p2CatPlayers.length > 0 ? p2CatPlayers : allPlayers;
+                let p1Players: FranchiseRoster[];
+                let p2Players: FranchiseRoster[];
+                if (seasonFormat === 'sbpl_15game') {
+                  // SBPL: both players must belong to the slot's category group
+                  // (map each roster player's sub-category to its group).
+                  const eligible = rosterPlayers.filter(
+                    (r) => sbplGroupForCategory(r.categorySlug) === slot.categorySlug,
+                  );
+                  p1Players = eligible;
+                  p2Players = eligible;
+                } else {
+                  // Mixed-gender SPPL slots have TWO categories in
+                  // allowedCategories — [0] for Player 1, [1] for Player 2.
+                  const p1Cats =
+                    slot.allowedCategories.length === 2
+                      ? [slot.allowedCategories[0]]
+                      : slot.allowedCategories;
+                  const p2Cats =
+                    slot.allowedCategories.length === 2
+                      ? [slot.allowedCategories[1]]
+                      : slot.allowedCategories;
+                  const p1CatPlayers = p1Cats.flatMap((cat) => playersByCategory[cat] || []);
+                  const p2CatPlayers = p2Cats.flatMap((cat) => playersByCategory[cat] || []);
+                  // Fallback to full roster only if no eligible players configured at all
+                  p1Players = p1CatPlayers.length > 0 ? p1CatPlayers : rosterPlayers;
+                  p2Players = p2CatPlayers.length > 0 ? p2CatPlayers : rosterPlayers;
+                }
 
                 // SPPL Season 1 rule: each player plays at most 1 match per
                 // tie. Build a set of every playerId already picked in any
@@ -1759,6 +2359,8 @@ const TieDetailScreen: React.FC = () => {
               </View>
             </View>
 
+            {scoreModal.tieMatch ? renderServePanel(scoreModal.tieMatch) : null}
+
             {/* Winner picker (shown after SAVE validates target).
                 Redesigned to show ONLY the winning team prominently, with
                 a small "switch" link for correcting mistakes — keeps the
@@ -1984,7 +2586,8 @@ const TieDetailScreen: React.FC = () => {
       {/* Bottom action buttons (admin or scorer) */}
       {canScore && (
         <View style={styles.bottomActions}>
-          {tie.status === 'lineup_locked' && (
+          {(tie.status === 'lineup_locked'
+            || (kidsLocked && tie.status !== 'in_progress' && tie.status !== 'completed')) && (
             <TouchableOpacity
               style={[styles.actionBtn, { backgroundColor: BLUE }]}
               onPress={handleStartTie}
@@ -1993,7 +2596,7 @@ const TieDetailScreen: React.FC = () => {
               {actionLoading ? (
                 <ActivityIndicator color={WHITE} />
               ) : (
-                <Text style={styles.actionBtnText}>START TIE</Text>
+                <Text style={styles.actionBtnText}>{tie.status === 'lineup_locked' ? 'START TIE' : 'START TIE (KIDS)'}</Text>
               )}
             </TouchableOpacity>
           )}
@@ -2017,6 +2620,165 @@ const TieDetailScreen: React.FC = () => {
       {renderLineupModal()}
 
       {/* Start-Tie Court Confirmation Modal */}
+      {/* Open Captain's Portal — pick a duration */}
+      <Modal
+        visible={openPortalModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !openPortalBusy && setOpenPortalModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: 'auto' }]}>
+            <Text style={styles.modalTitle}>Open Captain's Portal</Text>
+            <Text style={styles.modalSubtitle}>
+              How long should captains be able to submit or edit their lineup for this tie?
+            </Text>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+              {[15, 30, 40, 60].map((m) => (
+                <TouchableOpacity
+                  key={m}
+                  disabled={openPortalBusy}
+                  onPress={() => handleOpenCaptainPortal(m)}
+                  activeOpacity={0.85}
+                  style={{
+                    flexGrow: 1, minWidth: 64, paddingVertical: 14, borderRadius: 10,
+                    backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#2196F3',
+                    alignItems: 'center', opacity: openPortalBusy ? 0.5 : 1,
+                  }}
+                >
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#1E40AF' }}>{m}</Text>
+                  <Text style={{ fontSize: 10, color: '#3B82F6' }}>min</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={{ fontSize: 11, color: '#64748B', marginTop: 16, marginBottom: 6, fontWeight: '700' }}>
+              Or enter manually
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+              <TextInput
+                placeholder="e.g. 45"
+                placeholderTextColor="#94A3B8"
+                keyboardType="number-pad"
+                value={openPortalMins}
+                onChangeText={(v) => setOpenPortalMins(v.replace(/\D/g, '').slice(0, 3))}
+                editable={!openPortalBusy}
+                style={{
+                  flex: 1, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 10,
+                  paddingVertical: 12, paddingHorizontal: 14, fontSize: 15, color: '#0F172A',
+                }}
+              />
+              <TouchableOpacity
+                disabled={openPortalBusy || !openPortalMins}
+                onPress={() => handleOpenCaptainPortal(parseInt(openPortalMins, 10))}
+                activeOpacity={0.85}
+                style={{
+                  paddingVertical: 12, paddingHorizontal: 20, borderRadius: 10,
+                  backgroundColor: '#2196F3', opacity: (openPortalBusy || !openPortalMins) ? 0.5 : 1,
+                }}
+              >
+                {openPortalBusy
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={{ fontSize: 14, fontWeight: '800', color: '#fff' }}>Open</Text>}
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              disabled={openPortalBusy}
+              onPress={() => setOpenPortalModal(false)}
+              style={{ paddingVertical: 14, alignItems: 'center', marginTop: 10 }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#64748B' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Open Kids Submission — absolute deadline or open-for-N-minutes */}
+      <Modal
+        visible={kidsModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !kidsBusy && setKidsModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: 'auto' }]}>
+            <Text style={styles.modalTitle}>Open Kids Submission</Text>
+            <Text style={styles.modalSubtitle}>
+              Set a deadline for captains to submit their Kids pairs. Past it, missing kids
+              lineups auto-fill from each team's default.
+            </Text>
+
+            <Text style={{ fontSize: 11, color: '#64748B', marginTop: 14, marginBottom: 6, fontWeight: '700' }}>
+              Set a date & time
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+              <TextInput
+                placeholder="2026-07-31 18:00"
+                placeholderTextColor="#94A3B8"
+                value={kidsWhen}
+                onChangeText={setKidsWhen}
+                editable={!kidsBusy}
+                autoCapitalize="none"
+                style={{
+                  flex: 1, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 10,
+                  paddingVertical: 12, paddingHorizontal: 14, fontSize: 15, color: '#0F172A',
+                }}
+              />
+              <TouchableOpacity
+                disabled={kidsBusy || !kidsWhen.trim()}
+                onPress={submitKidsWhen}
+                activeOpacity={0.85}
+                style={{
+                  paddingVertical: 12, paddingHorizontal: 18, borderRadius: 10,
+                  backgroundColor: '#7C3AED', opacity: (kidsBusy || !kidsWhen.trim()) ? 0.5 : 1,
+                }}
+              >
+                {kidsBusy ? <ActivityIndicator color="#fff" /> : <Text style={{ fontSize: 14, fontWeight: '800', color: '#fff' }}>Set</Text>}
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ fontSize: 11, color: '#64748B', marginTop: 16, marginBottom: 6, fontWeight: '700' }}>
+              Or open now for
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {[30, 60, 120].map((m) => (
+                <TouchableOpacity
+                  key={m}
+                  disabled={kidsBusy}
+                  onPress={() => handleSetKidsDeadline({ minutes: m })}
+                  activeOpacity={0.85}
+                  style={{
+                    flexGrow: 1, minWidth: 64, paddingVertical: 14, borderRadius: 10,
+                    backgroundColor: '#F5F3FF', borderWidth: 1, borderColor: '#7C3AED',
+                    alignItems: 'center', opacity: kidsBusy ? 0.5 : 1,
+                  }}
+                >
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#6D28D9' }}>{m}</Text>
+                  <Text style={{ fontSize: 10, color: '#7C3AED' }}>min</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              disabled={kidsBusy}
+              onPress={() => handleSetKidsDeadline({ deadline: null } as any)}
+              style={{ paddingVertical: 12, alignItems: 'center', marginTop: 12 }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#DC2626' }}>Clear kids deadline</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              disabled={kidsBusy}
+              onPress={() => setKidsModal(false)}
+              style={{ paddingVertical: 10, alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#64748B' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <Modal
         visible={startCourtModal.visible}
         transparent
@@ -2102,6 +2864,89 @@ const TieDetailScreen: React.FC = () => {
         </View>
       </Modal>
 
+      {/* Per-game court override — admin/scorer picks which court a game is on.
+          Defaults to the rulebook court; "Default" clears the override. */}
+      <Modal
+        visible={courtModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !courtSaving && setCourtModal({ visible: false, tieMatch: null })}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: 'auto' }]}>
+            <Text style={styles.modalTitle}>Move game to court</Text>
+            <Text style={styles.modalSubtitle}>
+              {courtModal.tieMatch ? `Game #${courtModal.tieMatch.slotNumber}` : ''} — pick the court this game
+              is being played on. It updates that court's OBS overlay.
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+              {(() => {
+                const opts = Array.from(
+                  new Set(
+                    [(tie as any).courtNumber, (tie as any).courtNumber2].filter(
+                      (n) => n != null,
+                    ) as number[],
+                  ),
+                );
+                const list = opts.length ? opts : [1, 2, 3, 4];
+                const cur =
+                  courtModal.tieMatch?.courtNumber ??
+                  (courtModal.tieMatch ? courtForSlot(tie, courtModal.tieMatch.slotNumber) : null);
+                return list.map((n) => {
+                  const selected = cur === n;
+                  return (
+                    <TouchableOpacity
+                      key={n}
+                      disabled={courtSaving}
+                      onPress={() => handleSetMatchCourt(n)}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 16,
+                        borderRadius: 10,
+                        backgroundColor: selected ? NAVY : WHITE,
+                        borderWidth: 2,
+                        borderColor: selected ? NAVY : BORDER,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, color: selected ? 'rgba(255,255,255,0.7)' : TEXT_MUTED, fontWeight: '600' }}>COURT</Text>
+                      <Text style={{ fontSize: 24, fontWeight: '900', color: selected ? WHITE : NAVY, marginTop: 2 }}>{n}</Text>
+                    </TouchableOpacity>
+                  );
+                });
+              })()}
+            </View>
+
+            <TouchableOpacity
+              onPress={() => handleSetMatchCourt(null)}
+              disabled={courtSaving}
+              style={{ marginTop: 12, alignSelf: 'center' }}
+            >
+              <Text style={{ fontSize: 12, color: TEXT_SUB, textDecorationLine: 'underline' }}>
+                Reset to rulebook default
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                marginTop: 18,
+                backgroundColor: SURFACE,
+                borderWidth: 1,
+                borderColor: BORDER,
+                borderRadius: 10,
+                paddingVertical: 14,
+                alignItems: 'center',
+              }}
+              onPress={() => !courtSaving && setCourtModal({ visible: false, tieMatch: null })}
+              disabled={courtSaving}
+            >
+              <Text style={{ color: TEXT_COLOR, fontWeight: '700', fontSize: 14 }}>{courtSaving ? 'SAVING…' : 'Cancel'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Substitute Player Modal — admin/scorer-only. Pick a team, pick the
           rostered player to remove, pick the replacement (any category in
           the team's full roster), confirm. */}
@@ -2109,13 +2954,13 @@ const TieDetailScreen: React.FC = () => {
         visible={substituteModal.visible}
         transparent
         animationType="slide"
-        onRequestClose={() => !substituteSubmitting && setSubstituteModal({ visible: false, team: 'home', oldPlayerId: null, newPlayerId: null })}
+        onRequestClose={() => { if (!substituteSubmitting) { setFillTarget(null); setSubstituteModal({ visible: false, team: 'home', oldPlayerId: null, newPlayerId: null }); } }}
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { maxHeight: '90%' }]}>
             <Text style={styles.modalTitle}>Substitute Player</Text>
             <Text style={styles.modalSubtitle}>
-              Replace one rostered player with another. Only matches that haven't started yet are affected.
+              Your captain's lineup is shown below. Tap any orange "Fill substitute" slot, then pick a player. Only matches that haven't started yet are affected.
             </Text>
 
             {/* Team picker */}
@@ -2129,13 +2974,13 @@ const TieDetailScreen: React.FC = () => {
                 return (
                   <TouchableOpacity
                     key={side}
-                    onPress={() => setSubstituteModal((p) => ({
+                    onPress={() => { setFillTarget(null); setSubstituteModal((p) => ({
                       ...p,
                       team: side,
                       // Reset selections when switching teams since the rosters differ.
                       oldPlayerId: null,
                       newPlayerId: null,
-                    }))}
+                    })); }}
                     disabled={substituteSubmitting}
                     style={{
                       flex: 1,
@@ -2157,133 +3002,134 @@ const TieDetailScreen: React.FC = () => {
             </View>
 
             <ScrollView style={{ marginTop: 14 }} contentContainerStyle={{ paddingBottom: 8 }}>
-              {/* Player to replace — picks from current lineup only (deduped across matches) */}
-              <Text style={{ fontSize: 11, fontWeight: '800', color: TEXT_SUB, letterSpacing: 1, marginBottom: 8 }}>
-                REPLACE
-              </Text>
-              {(() => {
-                const lineup = lineupPlayersForTeam(substituteModal.team);
-                if (lineup.length === 0) {
-                  return (
-                    <Text style={{ fontSize: 12, color: TEXT_SUB, fontStyle: 'italic', marginBottom: 8 }}>
-                      No players are currently in this team's lineup. The captain may need to submit the tie sheet first.
-                    </Text>
-                  );
-                }
-                return lineup.map((p) => {
-                  const selected = substituteModal.oldPlayerId === p.playerId;
-                  return (
-                    <TouchableOpacity
-                      key={p.playerId}
-                      onPress={() => setSubstituteModal((prev) => ({ ...prev, oldPlayerId: p.playerId }))}
-                      disabled={substituteSubmitting}
-                      style={{
-                        paddingVertical: 10,
-                        paddingHorizontal: 12,
-                        borderRadius: 10,
-                        backgroundColor: selected ? '#FEE2E2' : '#F8FAFC',
-                        borderWidth: 1,
-                        borderColor: selected ? '#FCA5A5' : '#E2E8F0',
-                        marginBottom: 6,
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: NAVY }}>{p.name}</Text>
-                      <Text style={{ fontSize: 11, color: TEXT_SUB, marginTop: 2 }}>
-                        Playing in: {p.categories.join(', ')}
-                      </Text>
+              {/* Full lineup from the captain's tie sheet. Every game shows both
+                  players; only the empty (substitute) slots are tappable to fill.
+                  Tapping one switches this modal to the full-team picker below. */}
+              {!fillTarget && (
+                <>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: TEXT_SUB, letterSpacing: 1, marginBottom: 8 }}>
+                    LINEUP — tap a substitute slot to fill it
+                  </Text>
+                  {(() => {
+                    const sheet = substituteModal.team === 'home' ? homeSheet : awaySheet;
+                    if (!sheet?.lineupData || sheet.lineupData.length === 0) {
+                      return (
+                        <Text style={{ fontSize: 12, color: TEXT_SUB, fontStyle: 'italic', marginBottom: 8 }}>
+                          This team hasn't submitted a lineup yet.
+                        </Text>
+                      );
+                    }
+                    const isEmptyId = (pid: any) => !pid || pid === 'SUBSTITUTE' || !playerMap[pid];
+                    const anyEmpty = tieSlots.some((slot) => {
+                      const row = sheet.lineupData.find((x: any) => x.slotNumber === slot.slotNumber);
+                      return isEmptyId(row?.player1Id) || isEmptyId(row?.player2Id);
+                    });
+                    const renderPos = (row: any, position: 'player1' | 'player2', gameLabel: string) => {
+                      const pid = row?.[`${position}Id`];
+                      if (!isEmptyId(pid)) {
+                        const isSub = !!row?.[`${position}IsSub`];
+                        return (
+                          <View style={{ flex: 1, paddingVertical: 7, paddingHorizontal: 8 }}>
+                            <Text style={{ fontSize: 13, color: NAVY, fontWeight: '600' }} numberOfLines={1}>
+                              {playerMap[pid]}
+                              {isSub ? <Text style={{ color: '#EA580C', fontWeight: '800' }}>  (sub)</Text> : null}
+                            </Text>
+                          </View>
+                        );
+                      }
+                      return (
+                        <TouchableOpacity
+                          onPress={() => setFillTarget({ slotNumber: row?.slotNumber, position, label: gameLabel })}
+                          disabled={substituteSubmitting}
+                          style={{ flex: 1, paddingVertical: 7, paddingHorizontal: 8, borderRadius: 8, backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#FED7AA' }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: '800', color: '#9A3412' }}>🔁 Fill substitute</Text>
+                        </TouchableOpacity>
+                      );
+                    };
+                    return (
+                      <>
+                        {!anyEmpty && (
+                          <Text style={{ fontSize: 12, color: '#065F46', fontStyle: 'italic', marginBottom: 8 }}>
+                            ✓ No substitutes to fill — every slot has a player.
+                          </Text>
+                        )}
+                        {tieSlots.map((slot) => {
+                          const row = sheet.lineupData.find((x: any) => x.slotNumber === slot.slotNumber) || { slotNumber: slot.slotNumber };
+                          const gameLabel = `#${slot.slotNumber} ${slot.label}`;
+                          return (
+                            <View key={slot.slotNumber} style={{ backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, marginBottom: 6, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                              <Text style={{ fontSize: 10, fontWeight: '800', color: TEXT_MUTED, letterSpacing: 0.5, marginBottom: 6 }}>
+                                {gameLabel}
+                              </Text>
+                              <View style={{ gap: 6 }}>
+                                {renderPos(row, 'player1', gameLabel)}
+                                {renderPos(row, 'player2', gameLabel)}
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </>
+                    );
+                  })()}
+                </>
+              )}
+
+              {/* Full-team picker — any player, any category. Shown after tapping
+                  a "Fill substitute" slot. Selecting fills that slot and flags
+                  the player as a substitute (stats for this game excluded). */}
+              {fillTarget && (() => {
+                const roster = substituteModal.team === 'home' ? teamRosters.home : teamRosters.away;
+                return (
+                  <>
+                    <TouchableOpacity onPress={() => setFillTarget(null)} disabled={substituteSubmitting} style={{ marginBottom: 10 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: BLUE }}>‹ Back to lineup</Text>
                     </TouchableOpacity>
-                  );
-                });
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>
+                      Fill {fillTarget.label} · {fillTarget.position === 'player1' ? 'Player 1' : 'Player 2'}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: TEXT_SUB, marginTop: 2, marginBottom: 10 }}>
+                      Pick any player from the squad — they'll be tagged as a substitute for this game.
+                    </Text>
+                    {(!roster || roster.length === 0) ? (
+                      <Text style={{ fontSize: 12, color: TEXT_SUB, fontStyle: 'italic' }}>Roster not loaded.</Text>
+                    ) : (
+                      roster.map((r: any) => (
+                        <TouchableOpacity
+                          key={r.id || r.playerId}
+                          disabled={substituteSubmitting}
+                          onPress={() => applyFill(r.playerId)}
+                          activeOpacity={0.7}
+                          style={{ paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 6 }}
+                        >
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: NAVY }}>
+                            {r.player?.fullName || r.player?.displayName || playerMap[r.playerId] || 'Player'}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: TEXT_SUB, marginTop: 2 }}>Category: {r.categorySlug || '—'}</Text>
+                        </TouchableOpacity>
+                      ))
+                    )}
+                  </>
+                );
               })()}
 
-              {/* Replacement — picks from full team roster (all categories) */}
-              <Text style={{ fontSize: 11, fontWeight: '800', color: TEXT_SUB, letterSpacing: 1, marginTop: 14, marginBottom: 8 }}>
-                WITH
-              </Text>
-              {(() => {
-                const roster = substituteModal.team === 'home' ? teamRosters.home : teamRosters.away;
-                if (!roster || roster.length === 0) {
-                  return (
-                    <Text style={{ fontSize: 12, color: TEXT_SUB, fontStyle: 'italic' }}>
-                      Roster not loaded.
-                    </Text>
-                  );
-                }
-                // Hide the player being replaced from the replacement list (clearer UX).
-                const candidates = roster.filter((r: any) => r.playerId !== substituteModal.oldPlayerId);
-                if (candidates.length === 0) {
-                  return (
-                    <Text style={{ fontSize: 12, color: TEXT_SUB, fontStyle: 'italic' }}>
-                      No other roster players available.
-                    </Text>
-                  );
-                }
-                return candidates.map((r: any) => {
-                  const selected = substituteModal.newPlayerId === r.playerId;
-                  const name = r.player?.fullName || r.player?.displayName || playerMap[r.playerId] || 'Player';
-                  return (
-                    <TouchableOpacity
-                      key={r.id || r.playerId}
-                      onPress={() => setSubstituteModal((prev) => ({ ...prev, newPlayerId: r.playerId }))}
-                      disabled={substituteSubmitting}
-                      style={{
-                        paddingVertical: 10,
-                        paddingHorizontal: 12,
-                        borderRadius: 10,
-                        backgroundColor: selected ? '#DCFCE7' : '#F8FAFC',
-                        borderWidth: 1,
-                        borderColor: selected ? '#86EFAC' : '#E2E8F0',
-                        marginBottom: 6,
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: NAVY }}>{name}</Text>
-                      <Text style={{ fontSize: 11, color: TEXT_SUB, marginTop: 2 }}>
-                        Roster category: {r.categorySlug || '—'}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                });
-              })()}
             </ScrollView>
 
             {/* Actions */}
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
               <TouchableOpacity
-                onPress={() => setSubstituteModal({ visible: false, team: 'home', oldPlayerId: null, newPlayerId: null })}
+                onPress={() => { setFillTarget(null); setSubstituteModal({ visible: false, team: 'home', oldPlayerId: null, newPlayerId: null }); }}
                 disabled={substituteSubmitting}
                 style={{
                   flex: 1,
                   paddingVertical: 14,
                   borderRadius: 10,
-                  backgroundColor: '#F1F5F9',
-                  borderWidth: 1,
-                  borderColor: '#CBD5E1',
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: '800', color: NAVY }}>CANCEL</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleSubstitute}
-                disabled={substituteSubmitting || !substituteModal.oldPlayerId || !substituteModal.newPlayerId}
-                style={{
-                  flex: 1.4,
-                  paddingVertical: 14,
-                  borderRadius: 10,
                   backgroundColor: NAVY,
                   alignItems: 'center',
-                  opacity: substituteSubmitting || !substituteModal.oldPlayerId || !substituteModal.newPlayerId ? 0.5 : 1,
                 }}
               >
-                {substituteSubmitting ? (
-                  <ActivityIndicator color={WHITE} />
-                ) : (
-                  <Text style={{ fontSize: 13, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>
-                    APPLY SUBSTITUTION
-                  </Text>
-                )}
+                <Text style={{ fontSize: 13, fontWeight: '800', color: WHITE, letterSpacing: 0.5 }}>DONE</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2543,6 +3389,18 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   pointBadgeText: { color: WHITE, fontSize: 10, fontWeight: '700' },
+  courtBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EDE9FE',
+    borderWidth: 1,
+    borderColor: '#C4B5FD',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  courtBadgeText: { color: '#6D28D9', fontSize: 10, fontWeight: '800' },
+  courtBadgePencil: { color: '#6D28D9', fontSize: 11, fontWeight: '800' },
   matchStatusDot: { width: 8, height: 8, borderRadius: 4, marginLeft: 'auto' },
 
   matchPlayers: { flexDirection: 'row', alignItems: 'center' },

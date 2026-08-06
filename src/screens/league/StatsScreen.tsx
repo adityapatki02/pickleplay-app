@@ -42,6 +42,7 @@ const WHITE = '#FFFFFF';
 // CATEGORY_FILTERS pills below but kept separate so we can tune the column
 // rendering independently (shorter labels, color chip).
 const CATEGORY_LABEL: Record<string, { label: string; color: string }> = {
+  // SPPL
   kids:    { label: 'Kids', color: PURPLE },
   teen:    { label: 'Teen', color: ORANGE },
   women1:  { label: 'W1',   color: RED },
@@ -49,6 +50,12 @@ const CATEGORY_LABEL: Record<string, { label: string; color: string }> = {
   men1:    { label: 'M1',   color: BLUE },
   men2:    { label: 'M2',   color: BLUE },
   men3:    { label: 'M3',   color: BLUE },
+  // SBPL
+  women13: { label: 'W 1-3', color: RED },
+  women45: { label: 'W 4-5', color: RED },
+  menA:    { label: 'Men A', color: BLUE },
+  menB:    { label: 'Men B', color: BLUE },
+  menC:    { label: 'Men C', color: BLUE },
 };
 function catLabelOf(slug: string | null | undefined): { label: string; color: string } {
   return (slug && CATEGORY_LABEL[slug]) || { label: '—', color: TEXT_MUTED };
@@ -61,24 +68,14 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'all', label: 'ALL PLAYERS' },
 ];
 
-type CategoryFilter =
-  | 'all'
-  | 'kids'
-  | 'teen'
-  | 'women1'
-  | 'women2'
-  | 'men1'
-  | 'men2'
-  | 'men3';
-const CATEGORY_FILTERS: { key: CategoryFilter; label: string; color: string }[] = [
-  { key: 'all', label: 'ALL', color: NAVY },
-  { key: 'kids', label: 'KIDS', color: PURPLE },
-  { key: 'teen', label: 'TEEN', color: ORANGE },
-  { key: 'women1', label: 'W1', color: RED },
-  { key: 'women2', label: 'W2', color: RED },
-  { key: 'men1', label: 'M1', color: BLUE },
-  { key: 'men2', label: 'M2', color: BLUE },
-  { key: 'men3', label: 'M3', color: BLUE },
+// Category is league-defined (SPPL vs SBPL differ), so the filter pills are
+// derived at runtime from the categories actually present in the stats data
+// (see `categoryFilters` in the component). `CategoryFilter` is just the slug.
+type CategoryFilter = string;
+// Fixed display order so pills read consistently regardless of data order.
+const CATEGORY_ORDER = [
+  'kids', 'teen', 'women1', 'women2', 'women13', 'women45',
+  'men1', 'men2', 'men3', 'menA', 'menB', 'menC',
 ];
 
 // Stage filter — slices the same PlayerStat row to show league-only or
@@ -225,6 +222,24 @@ const StatsScreen: React.FC = () => {
     if (activeTab === 'top') await fetchTop(selectedMetric, categoryFilter, stageFilter);
     setRefreshing(false);
   }, [fetchData, fetchTop, activeTab, selectedMetric, categoryFilter, stageFilter]);
+
+  // Category filter pills — derived from the categories that actually appear in
+  // this league's stats (SPPL vs SBPL differ), so the pills always match.
+  const categoryFilters = React.useMemo(() => {
+    const present = new Set<string>();
+    for (const s of allStats) {
+      Object.keys((s as any).categoryBreakdown || {}).forEach((k) => present.add(k));
+    }
+    const cats = CATEGORY_ORDER.filter((k) => present.has(k));
+    return [
+      { key: 'all', label: 'ALL', color: NAVY },
+      ...cats.map((k) => ({
+        key: k,
+        label: (CATEGORY_LABEL[k]?.label || k).toUpperCase(),
+        color: CATEGORY_LABEL[k]?.color || NAVY,
+      })),
+    ];
+  }, [allStats]);
 
   // ── Helpers ──
   // Project each row into the requested stage view BEFORE sorting/filtering so
@@ -505,7 +520,7 @@ const StatsScreen: React.FC = () => {
             <View style={styles.filterRow}>
               <Text style={styles.filterLabel}>CATEGORY</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                {CATEGORY_FILTERS.map((c) => {
+                {categoryFilters.map((c) => {
                   const active = categoryFilter === c.key;
                   return (
                     <TouchableOpacity

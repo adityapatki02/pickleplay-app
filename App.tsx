@@ -5,6 +5,7 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { RazorpayCheckoutHost } from './src/components/RazorpayCheckoutHost';
+import { DuprSsoHost } from './src/components/DuprSsoHost';
 import { YoidenFontMap } from './src/config/yoiden-fonts';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -41,6 +42,8 @@ export default function App() {
       <RootNavigator />
       {/* App-root Razorpay WebView checkout overlay (driven imperatively). */}
       <RazorpayCheckoutHost />
+      {/* App-root DUPR SSO WebView overlay (driven imperatively). */}
+      <DuprSsoHost />
     </View>
   );
 }

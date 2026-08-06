@@ -18,6 +18,7 @@ import { getLeagues, getSeasons, getTies, getStandings, getFranchises, getTie } 
 import { getFantasyTrends, getFantasyLeaderboard, FantasyTrends, FantasyLeaderboardRow } from '../../api/fantasy.api';
 import { useAuthStore } from '../../store/authStore';
 import type { League, LeagueSeason, Tie, LeagueStanding, Franchise } from '../../types/league.types';
+import { computeMatchBonus, bonusToSides, SeasonBonusRules } from '../../utils/bonus';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -395,6 +396,7 @@ export default function OrganizerHomeScreen() {
                   away={away}
                   liveDetail={liveTieDetails[tie.id]}
                   isMyAssignedTie={!!user?.id && (tie as any).scorerId === user.id}
+                  bonusRules={leagueSeasons[leagueId]?.bonusRules}
                   onPress={() => openTieDetail(tie.id, leagueId)}
                 />
               ))}
@@ -478,6 +480,7 @@ function FixtureTile({
   away,
   liveDetail,
   isMyAssignedTie,
+  bonusRules,
   onPress,
 }: {
   tie: Tie;
@@ -485,6 +488,7 @@ function FixtureTile({
   away?: Franchise;
   liveDetail?: Tie;
   isMyAssignedTie?: boolean;
+  bonusRules?: SeasonBonusRules;
   onPress: () => void;
 }) {
   const when = tie.scheduledStart ? new Date(tie.scheduledStart) : (tie.matchDay ? new Date(tie.matchDay) : null);
@@ -533,28 +537,14 @@ function FixtureTile({
       // Rally Point Game: no bonus per SPPL rulebook § 15
       if ((m as any).isRallyPointGame) continue;
 
-      // Bonus rules branch on match scoringMode.
-      // rally_21 (knockout): loser≤7 → +2 winner, 14-19 + win=21 → +1 loser, 20 + win=21 → +2 loser
-      // rally_15 (league):   loser≤4 → +2 winner, 11-13 + win=15 → +1 loser, 14 → +2 loser
-      const mode = (mm as any).scoringMode;
-      const is21 = mode === 'rally_21';
-      if (is21) {
-        if (loserScore <= 7) {
-          if (homeWon) tieHomeLive += 2; else tieAwayLive += 2;
-        } else if (loserScore >= 14 && loserScore <= 19 && winnerScore === 21) {
-          if (homeWon) tieAwayLive += 1; else tieHomeLive += 1;
-        } else if (loserScore === 20 && winnerScore === 21) {
-          if (homeWon) tieAwayLive += 2; else tieHomeLive += 2;
-        }
-      } else {
-        if (loserScore <= 4) {
-          if (homeWon) tieHomeLive += 2; else tieAwayLive += 2;
-        } else if (loserScore >= 11 && loserScore <= 13 && winnerScore === 15) {
-          if (homeWon) tieAwayLive += 1; else tieHomeLive += 1;
-        } else if (loserScore === 14) {
-          if (homeWon) tieAwayLive += 2; else tieHomeLive += 2;
-        }
-      }
+      // Bonus via the shared util (honors the season's bonusRules — SBPL narrows
+      // the close-loss band; defaults to SPPL when bonusRules is absent).
+      const sides = bonusToSides(
+        computeMatchBonus(winnerScore, loserScore, (mm as any).scoringMode, bonusRules),
+        homeWon,
+      );
+      tieHomeLive += sides.home;
+      tieAwayLive += sides.away;
     }
   }
   const tieHomeDisplay = tie.status === 'completed' ? tie.homeStandingPoints : tieHomeLive;
