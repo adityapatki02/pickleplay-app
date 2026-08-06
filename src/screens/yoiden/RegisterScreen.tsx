@@ -108,7 +108,10 @@ export default function RegisterScreen({ navigation, route }: Props) {
         paymentMethod: 'online' | 'venue';
         lookingForPartner?: boolean;
       } = {
-        categoryId,
+        // Use the RESOLVED category id, not the raw route param — the generic REGISTER
+        // button navigates without a categoryId (single-category fallback above), so the
+        // param can be undefined and would POST to /categories/undefined/register (500).
+        categoryId: category.id,
         paymentMethod,
       };
 
