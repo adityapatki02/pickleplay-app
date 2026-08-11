@@ -49,3 +49,6 @@ google-play-service-account.json
 
 # Apple App Store Connect API key (secret — never commit)
 *.p8
+
+# Netlify deploy state (not source)
+.netlify/

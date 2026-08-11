@@ -1064,7 +1064,7 @@ const s = StyleSheet.create({
     backgroundColor: YColors.line,
   },
   gridTileCountText: {
-    color: YColors.lime,
+    color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '900',
     letterSpacing: 0.6,
@@ -1341,7 +1341,7 @@ const s = StyleSheet.create({
     marginRight: 4,
   },
   seedNum: {
-    color: YColors.lime,
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '900',
   },

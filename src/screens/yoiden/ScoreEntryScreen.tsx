@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   SafeAreaView,
   StatusBar,
@@ -22,6 +21,7 @@ import { TournamentCategory } from '../../types/tournament.types';
 import { colors, spacing, typography, borderRadius, shadows } from '../../config/theme';
 import { OrgTournamentsStackParamList } from '../../navigation/types';
 import { xAlert, xConfirm } from '../../utils/alert';
+import { chooseAction } from '../../utils/notify';
 import { YColors, YTopBar } from '../../components/yoiden';
 
 const NAVY = YColors.ink;
@@ -172,34 +172,16 @@ function InlineScoreForm({
   };
 
   const handleWalkover = () => {
-    if (Platform.OS === 'web') {
-      // eslint-disable-next-line no-restricted-globals
-      const pick = confirm(`Walkover\n\nAward walkover to ${teamAName}?\n\nOK = ${teamAName}, Cancel = ${teamBName}`);
-      if (pick) {
-        if (match.teamAId) applyWalkover(match.teamAId);
-      } else {
-        // eslint-disable-next-line no-restricted-globals
-        if (confirm(`Walkover\n\nAward walkover to ${teamBName}?`)) {
-          if (match.teamBId) applyWalkover(match.teamBId);
-        }
-      }
-    } else {
-      Alert.alert(
-        'Walkover',
-        'Select the winner for this walkover:',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: teamAName,
-            onPress: () => { if (match.teamAId) applyWalkover(match.teamAId); },
-          },
-          {
-            text: teamBName,
-            onPress: () => { if (match.teamBId) applyWalkover(match.teamBId); },
-          },
-        ]
-      );
-    }
+    void chooseAction({
+      title: 'Walkover',
+      message: 'Select the winner for this walkover:',
+      options: [
+        { label: teamAName, value: match.teamAId ?? '' },
+        { label: teamBName, value: match.teamBId ?? '' },
+      ],
+    }).then((winner) => {
+      if (winner) applyWalkover(winner);
+    });
   };
 
   return (
@@ -353,7 +335,7 @@ const inlineStyles = StyleSheet.create({
   winnerLabel: {
     fontSize: typography.fontSize.xs,
     fontWeight: '900',
-    color: '#C8F232', // YColors.lime
+    color: '#FFFFFF',
     letterSpacing: 2,
   },
   winnerName: {

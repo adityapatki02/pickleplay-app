@@ -192,7 +192,7 @@ export default function OrganizerHomeScreen() {
         away: franchiseMap[tie.awayTeamId],
       }));
     })
-    .filter(({ tie }) => tie.status !== 'completed' && tie.status !== 'cancelled')
+    .filter(({ tie }) => tie.status !== 'completed' && (tie.status as string) !== 'cancelled')
     .sort((a, b) => {
       const aT = new Date(a.tie.scheduledStart || a.tie.matchDay || 0).getTime();
       const bT = new Date(b.tie.scheduledStart || b.tie.matchDay || 0).getTime();

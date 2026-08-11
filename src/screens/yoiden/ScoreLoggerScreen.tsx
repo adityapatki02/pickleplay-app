@@ -732,12 +732,12 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
   },
   bracketTileName: {
-    fontSize: 28, fontWeight: '900', color: YColors.lime,
+    fontSize: 28, fontWeight: '900', color: '#FFFFFF',
     letterSpacing: 0.5, lineHeight: 30,
   },
   // Lime-pill on ink-tile inverts the regular pill so it's readable on the dark bg
   bracketPill: {
-    backgroundColor: YColors.lime,
+    backgroundColor: YColors.accent,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
@@ -751,7 +751,7 @@ const s = StyleSheet.create({
   gridTileFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
   pill: { backgroundColor: YColors.ink, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
   pillMuted: { backgroundColor: YColors.line },
-  pillText: { color: YColors.lime, fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
+  pillText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
   pillTextMuted: { color: YColors.ink2 },
 
   // Form
@@ -796,7 +796,7 @@ const s = StyleSheet.create({
 
   // Winner banner — appears once enough games are filled to decide a winner
   winnerBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 16, paddingVertical: 10, paddingHorizontal: 14, backgroundColor: YColors.ink, borderRadius: 10 },
-  winnerLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.8, color: YColors.lime },
+  winnerLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.8, color: '#FFFFFF' },
   winnerName: { fontSize: 14, fontWeight: '900', color: '#FFFFFF', flexShrink: 1 },
   winnerLabelMuted: { fontSize: 10, fontWeight: '900', letterSpacing: 1.8, color: '#FFB300' },
   winnerNameMuted: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.85)' },
@@ -835,7 +835,7 @@ const s = StyleSheet.create({
   // Walk-in add button + modal input
   walkinBtn: {
     marginTop: 12, paddingVertical: 10,
-    backgroundColor: YColors.lime, borderRadius: 10,
+    backgroundColor: YColors.accent, borderRadius: 10,
     alignItems: 'center', borderWidth: 1, borderColor: YColors.ink,
   },
   walkinBtnText: { color: YColors.ink, fontSize: 12, fontWeight: '900', letterSpacing: 1.4 },

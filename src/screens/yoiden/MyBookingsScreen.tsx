@@ -34,7 +34,7 @@ type Rt = RouteProp<BookStackParamList, 'MyBookings'>;
 const statusColor = (s: string): { bg: string; fg: string } => {
   switch (s) {
     case 'confirmed':
-      return { bg: YColors.lime, fg: '#000' };
+      return { bg: YColors.accent, fg: '#fff' };
     case 'pending':
       return { bg: YColors.bg4, fg: '#000' };
     case 'cancelled':
@@ -137,7 +137,7 @@ export default function MyBookingsScreen() {
               return (
                 <Pressable
                   key={b.id}
-                  style={[styles.card, b.id === justBooked && { borderColor: YColors.lime, borderWidth: 2 }]}
+                  style={[styles.card, b.id === justBooked && { borderColor: YColors.brandLine, borderWidth: 2 }]}
                   onPress={() => nav.navigate('BookingDetail', { bookingId: b.id })}
                 >
                   <View style={styles.cardHead}>

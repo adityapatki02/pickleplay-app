@@ -54,9 +54,9 @@ const statusLabel = (status?: string, isFeatured?: boolean) => {
 };
 
 const statusColor = (status?: string, isFeatured?: boolean) => {
-  if (isFeatured) return YColors.lime;
+  if (isFeatured) return YColors.accent;
   if (status === 'in_progress') return YColors.live;
-  if (status === 'registration_open') return YColors.lime;
+  if (status === 'registration_open') return YColors.accent;
   if (status === 'registration_closed' || status === 'cancelled') return YColors.ink3;
   return YColors.accent;
 };
@@ -124,11 +124,11 @@ export const YTournamentRow: React.FC<YTournamentRowProps> = ({
       {/* Body */}
       <View style={styles.body}>
         <View style={styles.metaRow}>
-          <YBadge color={tagBg} bg={tagBg === YColors.lime ? YColors.lime : undefined}>
+          <YBadge color={tagBg}>
             {tag}
           </YBadge>
           {hosting ? (
-            <YBadge color="#000" bg={YColors.lime}>HOSTING</YBadge>
+            <YBadge color={YColors.accentDeep} bg="rgba(24,88,214,0.12)">HOSTING</YBadge>
           ) : tournament.city ? (
             <YMono
               size={10}

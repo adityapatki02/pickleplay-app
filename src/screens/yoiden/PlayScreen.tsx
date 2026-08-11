@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 4,
     borderRadius: 2,
-    backgroundColor: YColors.lime,
+    backgroundColor: YColors.accent,
     marginBottom: 12,
   },
   sectionRow: {

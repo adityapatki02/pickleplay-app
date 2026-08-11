@@ -619,7 +619,7 @@ const s = StyleSheet.create({
     borderRadius: 999,
   },
   gridTileCountPillEmpty: { backgroundColor: YColors.line },
-  gridTileCountText: { color: YColors.lime, fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
+  gridTileCountText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
   gridTileCountTextEmpty: { color: YColors.ink2 },
 
   // Scroll

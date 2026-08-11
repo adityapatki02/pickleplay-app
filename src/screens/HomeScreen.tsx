@@ -306,7 +306,7 @@ export default function HomeScreen() {
   // Flatten all ties across leagues, keep only upcoming/live, sort earliest first, top 5
   const upcomingFixtures = myLeagues
     .flatMap((ml) => ml.ties.map((tie) => ({ tie, leagueId: ml.league.id, seasonId: ml.seasonId })))
-    .filter(({ tie }) => tie.status !== 'completed' && tie.status !== 'cancelled')
+    .filter(({ tie }) => tie.status !== 'completed' && (tie.status as string) !== 'cancelled')
     .sort((a, b) => {
       const aT = new Date(a.tie.scheduledStart || a.tie.matchDay || 0).getTime();
       const bT = new Date(b.tie.scheduledStart || b.tie.matchDay || 0).getTime();

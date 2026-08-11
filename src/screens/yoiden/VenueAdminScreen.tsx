@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert,
+  View, StyleSheet, Pressable, ScrollView, ActivityIndicator,
   Modal, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Svg, { Path } from 'react-native-svg';
 import type { MeStackParamList } from '../../navigation/nav-types';
 import { YColors, YDisplay, YUiText } from '../../components/yoiden';
+import { xAlert } from '../../utils/alert';
 import { venuesApi } from '../../api/venues.api';
 import type { Venue, VenueCourt, Booking } from '../../types/booking.types';
 
@@ -108,14 +109,14 @@ export default function VenueAdminScreen({ route }: Props) {
   const confirmMarkPaid = async () => {
     if (!payModal || !selectedVenue) return;
     const amount = Number(payAmount);
-    if (!payAmount.trim() || isNaN(amount) || amount < 0) { Alert.alert('Invalid amount', 'Please enter a valid amount.'); return; }
+    if (!payAmount.trim() || isNaN(amount) || amount < 0) { xAlert('Invalid amount', 'Please enter a valid amount.'); return; }
     const { bookingId } = payModal;
     setPayModal(null);
     setActionLoading(bookingId);
     try {
       await venuesApi.markBookingPaid(selectedVenue.id, bookingId, amount);
       setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, paymentStatus: 'paid' as any, amount } : b));
-    } catch { Alert.alert('Error', 'Could not mark as paid.'); }
+    } catch { xAlert('Error', 'Could not mark as paid.'); }
     finally { setActionLoading(null); }
   };
 
@@ -126,9 +127,9 @@ export default function VenueAdminScreen({ route }: Props) {
 
   const confirmAddBooking = async () => {
     if (!addModal || !selectedVenue || !selectedCourt) return;
-    if (!addName.trim()) { Alert.alert('Name required', 'Please enter the guest name.'); return; }
+    if (!addName.trim()) { xAlert('Name required', 'Please enter the guest name.'); return; }
     const amount = Number(addAmount);
-    if (isNaN(amount) || amount < 0) { Alert.alert('Invalid amount', 'Please enter a valid amount.'); return; }
+    if (isNaN(amount) || amount < 0) { xAlert('Invalid amount', 'Please enter a valid amount.'); return; }
     setAddModal(null);
     try {
       const res = await venuesApi.createManualBooking(selectedVenue.id, {
@@ -143,7 +144,7 @@ export default function VenueAdminScreen({ route }: Props) {
       }) as any;
       const newBooking = res?.data?.data ?? res?.data;
       if (newBooking) setBookings(prev => [...prev, newBooking]);
-    } catch { Alert.alert('Error', 'Could not create booking.'); }
+    } catch { xAlert('Error', 'Could not create booking.'); }
   };
 
   const handleCancel = (bookingId: string) => {
@@ -153,14 +154,14 @@ export default function VenueAdminScreen({ route }: Props) {
 
   const confirmCancel = async () => {
     if (!cancelModal || !selectedVenue) return;
-    if (!cancelReason.trim()) { Alert.alert('Reason required', 'Please enter a reason for cancellation.'); return; }
+    if (!cancelReason.trim()) { xAlert('Reason required', 'Please enter a reason for cancellation.'); return; }
     const { bookingId } = cancelModal;
     setCancelModal(null);
     setActionLoading(bookingId);
     try {
       await venuesApi.cancelBooking(selectedVenue.id, bookingId, cancelReason.trim());
       setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled' as any } : b));
-    } catch { Alert.alert('Error', 'Could not cancel booking.'); }
+    } catch { xAlert('Error', 'Could not cancel booking.'); }
     finally { setActionLoading(null); }
   };
 

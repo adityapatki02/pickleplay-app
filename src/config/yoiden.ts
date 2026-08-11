@@ -21,7 +21,10 @@ export const YColors = {
   // Brand
   accent: '#1858D6',       // deep blue
   accentDeep: '#0E3FA5',
-  lime: '#C8F232',         // pop
+  navy: '#1C3A72',         // dark navy blue (deeper than accent, clearly blue not black)
+  orange: '#FF4D2E',       // neon orange highlight (from yoiden.com) — use sparingly
+  lime: '#C8F232',         // DEPRECATED — migrate to brandLine (lines) or accent (fills)
+  brandLine: '#C8F232',    // the ONLY sanctioned chartreuse use: hairlines / underlines / rules
   live: '#FF3D5C',         // live/danger
   gold: '#E6A82B',
 

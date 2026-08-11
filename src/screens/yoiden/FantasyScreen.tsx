@@ -21,7 +21,7 @@ export default function FantasyScreen() {
 
         <View style={styles.heroCard}>
           <View style={styles.heroInner}>
-            <YBadge color="#000" bg={YColors.lime}>COMING SOON</YBadge>
+            <YBadge color={YColors.accentDeep} bg="rgba(24,88,214,0.12)">COMING SOON</YBadge>
             <YDisplay size={36} color="#fff" style={{ marginTop: 18, lineHeight: 34 }}>
               PICK·{'\n'}YOUR·{'\n'}SQUAD
             </YDisplay>

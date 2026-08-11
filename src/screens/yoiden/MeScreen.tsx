@@ -226,7 +226,7 @@ export default function MeScreen() {
         {/* Identity card */}
         <View style={styles.idCard}>
           <View style={styles.idHeader}>
-            <YAvatar initials={initials(fullName)} size={72} color={YColors.lime} />
+            <YAvatar initials={initials(fullName)} size={72} color={YColors.accentDeep} textColor="#fff" />
             <View style={{ flex: 1, marginLeft: 16 }}>
               <YDisplay size={28}>{fullName.split(' ')[0]?.toUpperCase()}</YDisplay>
               {fullName.split(' ').slice(1).join(' ') ? (
@@ -252,7 +252,7 @@ export default function MeScreen() {
           {/* Tags row */}
           <View style={styles.tagRow}>
             {skill ? (
-              <YBadge color="#000" bg={YColors.lime}>
+              <YBadge color={YColors.accentDeep} bg="rgba(24,88,214,0.12)">
                 {SKILL_LABEL[skill] || skill.toUpperCase()}
               </YBadge>
             ) : null}
@@ -446,12 +446,12 @@ export default function MeScreen() {
                 <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
                   <Path
                     d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
-                    stroke={YColors.lime}
+                    stroke={YColors.accent}
                     strokeWidth={1.8}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
-                  <Path d="M9 22V12h6v10" stroke={YColors.lime} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                  <Path d="M9 22V12h6v10" stroke={YColors.accent} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
                 </Svg>
               </View>
               <View style={{ flex: 1 }}>
@@ -464,7 +464,7 @@ export default function MeScreen() {
                     : (myVenues[0].city?.toUpperCase() ?? 'MANAGE COURTS & BOOKINGS')}
                 </YUiText>
               </View>
-              <YBadge color="#000" bg={YColors.lime}>ADMIN</YBadge>
+              <YBadge color={YColors.accentDeep} bg="rgba(24,88,214,0.12)">ADMIN</YBadge>
               <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ marginLeft: 8 }}>
                 <Path d="M9 6l6 6-6 6" stroke={YColors.ink3} strokeWidth={2} strokeLinecap="round" />
               </Svg>
@@ -521,7 +521,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 4,
     borderRadius: 2,
-    backgroundColor: YColors.lime,
+    backgroundColor: YColors.brandLine,
     marginLeft: 20,
     marginTop: 24,
     marginBottom: -14,
@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     backgroundColor: YColors.bg2,
     borderWidth: 1,
-    borderColor: YColors.lime,
+    borderColor: YColors.brandLine,
     borderRadius: 14,
     padding: 16,
     flexDirection: 'row',

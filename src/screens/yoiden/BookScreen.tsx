@@ -157,7 +157,7 @@ export default function BookScreen() {
                       </YUiText>
                     </View>
                     {priceRange(v) ? (
-                      <YBadge color="#000" bg={YColors.lime}>
+                      <YBadge color={YColors.accentDeep} bg="rgba(24,88,214,0.12)">
                         {priceRange(v)}/hr
                       </YBadge>
                     ) : null}

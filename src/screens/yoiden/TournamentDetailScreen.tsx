@@ -54,7 +54,7 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_COLOR: Record<string, string> = {
   draft: YColors.ink3,
   published: YColors.accent,
-  registration_open: YColors.lime,
+  registration_open: YColors.accent,
   registration_closed: YColors.ink3,
   in_progress: YColors.live,
   completed: YColors.ink3,
@@ -297,10 +297,10 @@ export default function TournamentDetailScreen() {
 
           {/* Top-right badges */}
           <View style={styles.coverBadges}>
-            <YBadge color={statusColor === YColors.lime ? '#000' : '#fff'} bg={statusColor}>
+            <YBadge color="#fff" bg={statusColor}>
               {statusLabel}
             </YBadge>
-            {t.isFeatured ? <YBadge color="#000" bg={YColors.lime}>FEATURED</YBadge> : null}
+            {t.isFeatured ? <YBadge color={YColors.accentDeep} bg="rgba(24,88,214,0.12)">FEATURED</YBadge> : null}
             {isOrganizer ? <YBadge color="#fff" bg="#000">YOU HOST</YBadge> : null}
           </View>
 
@@ -740,7 +740,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
-    backgroundColor: YColors.lime,
+    backgroundColor: YColors.accent,
   },
   catCancelBtn: {
     backgroundColor: YColors.bg3,
@@ -827,14 +827,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   visToggleActive: {
-    backgroundColor: YColors.lime,
+    backgroundColor: YColors.accent,
     borderColor: YColors.ink,
   },
   shareBtn: {
     marginTop: 12,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: YColors.lime,
+    backgroundColor: YColors.accent,
     alignItems: 'center',
   },
   linkRow: {

@@ -430,17 +430,17 @@ const s = StyleSheet.create({
   gridTileName: { fontSize: 13, fontWeight: '900', color: YColors.ink, letterSpacing: 0.3, textTransform: 'uppercase', lineHeight: 16 },
   pill: { backgroundColor: YColors.ink, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, alignSelf: 'flex-start', marginTop: 10 },
   pillMuted: { backgroundColor: YColors.line },
-  pillText: { color: YColors.lime, fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
+  pillText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
   pillTextMuted: { color: YColors.ink2 },
   bracketTile: { width: '48.5%', minHeight: 110, backgroundColor: YColors.ink, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 16, justifyContent: 'space-between' },
-  bracketTileName: { fontSize: 28, fontWeight: '900', color: YColors.lime, letterSpacing: 0.5, lineHeight: 30 },
-  bracketPill: { backgroundColor: YColors.lime, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, alignSelf: 'flex-start' },
+  bracketTileName: { fontSize: 28, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.5, lineHeight: 30 },
+  bracketPill: { backgroundColor: YColors.accent, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, alignSelf: 'flex-start' },
   bracketPillText: { color: YColors.ink, fontSize: 10, fontWeight: '900', letterSpacing: 0.6 },
 
   // Champion banner
   championCard: {
     marginTop: 12, marginBottom: 6, padding: 18, borderRadius: 16,
-    backgroundColor: YColors.lime, borderWidth: 1, borderColor: YColors.ink,
+    backgroundColor: YColors.accent, borderWidth: 1, borderColor: YColors.ink,
   },
   championEyebrow: { fontSize: 11, fontWeight: '900', letterSpacing: 1.6, color: YColors.ink, marginBottom: 6 },
   championName: { fontSize: 22, fontWeight: '900', color: YColors.ink, letterSpacing: 0.4, lineHeight: 26 },
@@ -454,7 +454,7 @@ const s = StyleSheet.create({
   // Pool tables
   poolCard: { marginBottom: 14, backgroundColor: YColors.bg2, borderRadius: 14, borderWidth: 1, borderColor: YColors.line, overflow: 'hidden' },
   poolHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: YColors.ink, paddingHorizontal: 14, paddingVertical: 10 },
-  poolBadge: { color: YColors.lime, fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
+  poolBadge: { color: '#FFFFFF', fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
   poolCount: { color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '700', letterSpacing: 1 },
   tableRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: YColors.line },
   tableRowTop: { backgroundColor: 'rgba(200, 242, 50, 0.18)' },
@@ -471,7 +471,7 @@ const s = StyleSheet.create({
   tabBtnTextActive: { color: '#FFFFFF' },
   tabBtnTextDisabled: { color: YColors.ink3 },
   tabBtnCount: { fontSize: 10, fontWeight: '900', color: YColors.ink3, backgroundColor: '#FFFFFF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999, overflow: 'hidden', minWidth: 22, textAlign: 'center' },
-  tabBtnCountActive: { color: YColors.ink, backgroundColor: YColors.lime },
+  tabBtnCountActive: { color: '#fff', backgroundColor: YColors.accent },
 
   // Round robin / pool matches list
   poolMatchesCard: { marginBottom: 14, backgroundColor: YColors.bg2, borderRadius: 14, borderWidth: 1, borderColor: YColors.line, overflow: 'hidden' },
@@ -485,5 +485,5 @@ const s = StyleSheet.create({
 
   // Knockout — round labels above each grouping
   koSection: { marginBottom: 16, backgroundColor: YColors.bg2, borderRadius: 14, borderWidth: 1, borderColor: YColors.line, overflow: 'hidden' },
-  koRoundLabel: { fontSize: 12, fontWeight: '900', letterSpacing: 1.4, color: YColors.lime, backgroundColor: YColors.ink, paddingHorizontal: 14, paddingVertical: 10, textTransform: 'uppercase' },
+  koRoundLabel: { fontSize: 12, fontWeight: '900', letterSpacing: 1.4, color: '#FFFFFF', backgroundColor: YColors.ink, paddingHorizontal: 14, paddingVertical: 10, textTransform: 'uppercase' },
 });

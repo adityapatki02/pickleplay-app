@@ -1515,7 +1515,7 @@ const s = StyleSheet.create({
   catGridFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
   catGridPill: { backgroundColor: YColors.ink, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
   catGridPillMuted: { backgroundColor: YColors.line },
-  catGridPillText: { color: YColors.lime, fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
+  catGridPillText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
   catGridPillTextMuted: { color: YColors.ink2 },
   catBackBtn: { paddingVertical: 6, alignSelf: 'flex-start' },
   catBackText: { fontSize: 12, fontWeight: '700', color: YColors.ink2 },

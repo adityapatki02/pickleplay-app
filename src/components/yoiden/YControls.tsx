@@ -38,7 +38,7 @@ export const YChip: React.FC<YChipProps> = ({ children, active = false, onPress,
 );
 
 // ── Button (primary / lime / accent / ghost / dark) ──────────────
-type YButtonVariant = 'primary' | 'lime' | 'accent' | 'ghost' | 'dark';
+type YButtonVariant = 'primary' | 'accent' | 'ghost' | 'dark';
 type YButtonSize = 'sm' | 'md' | 'lg';
 type YButtonProps = {
   children: React.ReactNode;
@@ -66,8 +66,7 @@ export const YButton: React.FC<YButtonProps> = ({
     lg: { pv: 18, ph: 22, fs: 14 },
   }[size];
   const variants: Record<YButtonVariant, { bg: string; color: string; border: string }> = {
-    primary: { bg: YColors.ink, color: '#fff', border: YColors.ink },
-    lime:    { bg: YColors.lime, color: '#000', border: YColors.lime },
+    primary: { bg: YColors.accentDeep, color: '#fff', border: YColors.accentDeep },
     accent:  { bg: YColors.accent, color: '#fff', border: YColors.accent },
     ghost:   { bg: 'transparent', color: YColors.ink, border: YColors.line2 },
     dark:    { bg: YColors.ink, color: '#fff', border: YColors.ink },

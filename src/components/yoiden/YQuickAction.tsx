@@ -15,7 +15,7 @@ type YQuickActionProps = {
 };
 
 const isLightBg = (c?: string) =>
-  c === YColors.lime || c === '#fff' || c === YColors.bg2 || c === YColors.bg3 || c === YColors.bg4;
+  c === '#fff' || c === YColors.bg2 || c === YColors.bg3 || c === YColors.bg4;
 
 export const YQuickAction: React.FC<YQuickActionProps> = ({
   label,

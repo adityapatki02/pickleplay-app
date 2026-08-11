@@ -1,22 +1,24 @@
+// Compatibility wrappers over the unified `notify` service.
+//
+// `xAlert` / `xConfirm` predate the toast host; they used window.alert/confirm on
+// web (reliable but blocking + unstyled). They now route through `notify` so every
+// existing caller gets the nicer cross-platform toast / confirm automatically.
+// New code should call `notify` / `confirmAction` directly.
 import { Alert, Platform } from 'react-native';
+import { notify, confirmAction } from './notify';
 
-/**
- * Cross-platform alert that works on both native and web.
- * On web, Alert.alert with buttons doesn't work — falls back to window.alert/confirm.
- */
+const looksLikeError = (title: string) =>
+  /error|fail|invalid|required|unable|couldn'?t|could not|not ready|denied|wrong|no /i.test(title);
+
+/** Cross-platform message. Errors/warnings render red, everything else neutral. */
 export function xAlert(title: string, message?: string) {
-  if (Platform.OS === 'web') {
-    // eslint-disable-next-line no-restricted-globals
-    alert(message ? `${title}\n\n${message}` : title);
-  } else {
-    Alert.alert(title, message);
-  }
+  const body = message ?? title;
+  const heading = message ? title : undefined;
+  if (looksLikeError(title)) notify.error(body, heading);
+  else notify.info(body, heading);
 }
 
-/**
- * Cross-platform confirm dialog. Returns true if user confirmed.
- * On native, uses Alert.alert with callbacks. On web, uses window.confirm.
- */
+/** Cross-platform confirm. Calls `onConfirm` if accepted, else `onCancel`. */
 export function xConfirm(
   title: string,
   message: string,
@@ -25,19 +27,16 @@ export function xConfirm(
   cancelText = 'Cancel',
   onCancel?: () => void,
 ) {
-  if (Platform.OS === 'web') {
-    // eslint-disable-next-line no-restricted-globals
-    if (confirm(`${title}\n\n${message}`)) {
-      onConfirm();
-    } else {
-      onCancel?.();
-    }
-  } else {
-    Alert.alert(title, message, [
-      { text: cancelText, style: 'cancel', onPress: onCancel },
-      { text: confirmText, onPress: onConfirm },
-    ]);
-  }
+  void confirmAction({
+    title,
+    message,
+    confirmLabel: confirmText,
+    cancelLabel: cancelText,
+    destructive: /cancel|delete|remove|reset/i.test(title),
+  }).then((ok) => {
+    if (ok) onConfirm();
+    else onCancel?.();
+  });
 }
 
 /**
@@ -53,7 +52,7 @@ export function xPrompt(
 ) {
   const { defaultValue = '' } = opts || {};
   if (Platform.OS === 'web') {
-    // eslint-disable-next-line no-restricted-globals
+    // eslint-disable-next-line no-alert
     const result = prompt(`${title}\n\n${message}`, defaultValue);
     if (result !== null) onSubmit(result);
     return;

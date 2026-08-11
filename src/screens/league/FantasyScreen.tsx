@@ -1190,7 +1190,7 @@ export default function FantasyScreen() {
         windowHeight: node.scrollHeight,
       });
       const blob: Blob | null = await new Promise((resolve) =>
-        canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.95),
+        canvas.toBlob((b: Blob | null) => resolve(b), 'image/jpeg', 0.95),
       );
       if (!blob) throw new Error('Canvas capture failed — blob is null');
       const filename = `sppl-fantasy-trends-${new Date().toISOString().slice(0, 10)}.jpg`;

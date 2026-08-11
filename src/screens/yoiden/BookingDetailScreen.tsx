@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
-  Alert,
   Linking,
   Modal,
   Platform,
@@ -18,6 +17,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
 import { YColors, YDisplay, YEyebrow, YUiText, YMono } from '../../components/yoiden';
+import { notify, confirmAction } from '../../utils/notify';
 import { REFUND_URL } from '../../config/constants';
 import { bookingsApi } from '../../api/bookings.api';
 import { useAuthStore } from '../../store/authStore';
@@ -122,38 +122,38 @@ export default function BookingDetailScreen() {
         ? `You're cancelling more than 24 hours before your slot, so ₹${amount} will be refunded to your original payment method.`
         : 'Cancellations within 24 hours of the slot are non-refundable. You can still cancel, but no refund will be issued.';
 
-    Alert.alert('Cancel booking?', message, [
-      { text: 'Keep booking', style: 'cancel' },
-      {
-        text: isPaid && !eligible ? 'Cancel anyway' : 'Cancel booking',
-        style: 'destructive',
-        onPress: async () => {
-          setCancelling(true);
-          try {
-            // Paid → refund endpoint (refunds if eligible, else cancels without refund).
-            // Unpaid → plain cancel.
-            if (isPaid) {
-              await bookingsApi.refund(bookingId);
-            } else {
-              await bookingsApi.cancel(bookingId);
-            }
-            await load();
-            Alert.alert(
-              'Booking cancelled',
-              isPaid
-                ? eligible
-                  ? `₹${amount} will be refunded to your original payment method within 5–7 business days.`
-                  : 'Your booking has been cancelled. No refund was issued (within 24 hours of the slot).'
-                : 'Your booking has been cancelled.',
-            );
-          } catch (e: any) {
-            Alert.alert('Error', e?.response?.data?.message || e?.message || 'Could not cancel');
-          } finally {
-            setCancelling(false);
-          }
-        },
-      },
-    ]);
+    void confirmAction({
+      title: 'Cancel booking?',
+      message,
+      confirmLabel: isPaid && !eligible ? 'Cancel anyway' : 'Cancel booking',
+      cancelLabel: 'Keep booking',
+      destructive: true,
+    }).then(async (ok) => {
+      if (!ok) return;
+      setCancelling(true);
+      try {
+        // Paid → refund endpoint (refunds if eligible, else cancels without refund).
+        // Unpaid → plain cancel.
+        if (isPaid) {
+          await bookingsApi.refund(bookingId);
+        } else {
+          await bookingsApi.cancel(bookingId);
+        }
+        await load();
+        notify.success(
+          isPaid
+            ? eligible
+              ? `₹${amount} will be refunded to your original payment method within 5–7 business days.`
+              : 'Your booking has been cancelled. No refund was issued (within 24 hours of the slot).'
+            : 'Your booking has been cancelled.',
+          'Booking cancelled',
+        );
+      } catch (e: any) {
+        notify.error(e?.response?.data?.message || e?.message || 'Could not cancel');
+      } finally {
+        setCancelling(false);
+      }
+    });
   };
 
   const handleModify = () => setShowModify(true);
@@ -172,7 +172,7 @@ export default function BookingDetailScreen() {
   const handleDownloadInvoice = async () => {
     if (!booking) return;
     if (!booking.invoiceNumber) {
-      Alert.alert('Invoice Not Ready', 'Invoice is generated after payment is confirmed. Please try again in a moment.');
+      notify.info('Invoice is generated after payment is confirmed. Please try again in a moment.', 'Invoice not ready');
       return;
     }
     setDownloading(true);
@@ -195,11 +195,11 @@ export default function BookingDetailScreen() {
             UTI: 'com.adobe.pdf',
           });
         } else {
-          Alert.alert('Saved', `Invoice saved to: ${uri}`);
+          notify.success(`Invoice saved to: ${uri}`, 'Saved');
         }
       }
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Could not generate invoice');
+      notify.error(e?.message || 'Could not generate invoice');
     } finally {
       setDownloading(false);
     }
@@ -410,7 +410,7 @@ export default function BookingDetailScreen() {
             <YEyebrow color={YColors.accent}>HELP</YEyebrow>
           </Pressable>
           <Pressable
-            style={[styles.bottomBtn, { backgroundColor: YColors.lime }]}
+            style={[styles.bottomBtn, { backgroundColor: YColors.accentDeep }]}
             onPress={() => nav.navigate('VenueDetail', { venueId: booking.venueId })}
           >
             <YEyebrow color="#000">VIEW VENUE</YEyebrow>

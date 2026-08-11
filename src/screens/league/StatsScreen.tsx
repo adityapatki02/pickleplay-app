@@ -263,7 +263,6 @@ const StatsScreen: React.FC = () => {
           sortBy === 'pointsScored' ? 'pointsScored' :
           sortBy === 'bonusPointsEarned' ? 'bonusPointsEarned' :
           sortBy === 'teamPointsEarned' ? 'teamPointsEarned' :
-          sortBy === 'totalContribution' ? null :
           'matchesPlayed';
         if (sortBy === 'totalContribution') {
           const aTotal = a.view.teamPointsEarned + a.view.bonusPointsEarned;

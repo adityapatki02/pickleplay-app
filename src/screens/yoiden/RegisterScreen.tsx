@@ -8,9 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   SafeAreaView,
-  Alert,
   StyleSheet,
-  Platform,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { DiscoverStackParamList } from '../../navigation/types';
@@ -20,8 +18,11 @@ import { registrationsApi } from '../../api/registrations.api';
 import { paymentsApi } from '../../api/payments.api';
 import { openRazorpay } from '../../utils/razorpay';
 import { useAuthStore } from '../../store/authStore';
+import { getDuprMe } from '../../api/dupr.api';
+import { DUPR_ENABLED } from '../../config/constants';
 import { TournamentCategory } from '../../types/tournament.types';
 import { YColors, YTopBar } from '../../components/yoiden';
+import { notify, confirmAction } from '../../utils/notify';
 
 type Props = NativeStackScreenProps<DiscoverStackParamList, 'Registration'>;
 
@@ -44,6 +45,24 @@ export default function RegisterScreen({ navigation, route }: Props) {
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [submitLoading, setSubmitLoading] = useState(false);
   const [waitlistPosition, setWaitlistPosition] = useState<number | null>(null);
+
+  // DUPR gating. `duprLinked` is checked up-front for DUPR-rated categories so we
+  // can warn the user BEFORE they tap Register (null = not yet known / not a DUPR
+  // event). `duprBlockMsg` holds the exact server reason if a register attempt is
+  // rejected for a DUPR reason — shown inline because Alert.alert doesn't render on web.
+  const duprRated: boolean = Boolean((category as any)?.duprRated) && DUPR_ENABLED;
+  const [duprLinked, setDuprLinked] = useState<boolean | null>(null);
+  const [duprBlockMsg, setDuprBlockMsg] = useState<string | null>(null);
+
+  const goToConnectDupr = () => {
+    // RegisterScreen lives in the Discover stack; the Connect DUPR card is on the Me tab.
+    const parent = navigation.getParent();
+    if (parent) {
+      (parent as any).navigate('MeTab', { screen: 'Me' });
+    } else {
+      (navigation as any).navigate('MeTab', { screen: 'Me' });
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -85,6 +104,20 @@ export default function RegisterScreen({ navigation, route }: Props) {
     fetchCategory();
     return () => { cancelled = true; };
   }, [tournamentId, categoryId]);
+
+  // For DUPR-rated categories, check link status up-front so we can show the
+  // "connect DUPR first" banner before the user tries (and fails) to register.
+  useEffect(() => {
+    if (!duprRated) {
+      setDuprLinked(null);
+      return;
+    }
+    let cancelled = false;
+    getDuprMe()
+      .then((res) => { if (!cancelled) setDuprLinked(Boolean(res.data?.linked)); })
+      .catch(() => { if (!cancelled) setDuprLinked(null); });
+    return () => { cancelled = true; };
+  }, [duprRated]);
 
   // Auto-navigate back on success
   useEffect(() => {
@@ -138,7 +171,7 @@ export default function RegisterScreen({ navigation, route }: Props) {
       // registration via the Razorpay webhook once payment is captured.
       if (paymentMethod === 'online' && Number(category.entryFee) > 0) {
         if (!registrationId) {
-          Alert.alert('Payment error', 'Could not start payment. You are registered with payment pending — you can complete it from your registrations.');
+          notify.info('You are registered — payment is pending. Complete it anytime from your registrations.', 'Payment pending');
           setSubmitState('success');
           return;
         }
@@ -147,7 +180,7 @@ export default function RegisterScreen({ navigation, route }: Props) {
           const orderRes = await paymentsApi.createOrder(registrationId);
           order = (orderRes.data as any)?.data ?? (orderRes.data as any);
         } catch {
-          Alert.alert('Payment unavailable', 'We could not start the payment right now. You are registered with payment pending — complete it later from your registrations.');
+          notify.info('Couldn\'t start payment right now. You are registered with payment pending — complete it later from your registrations.', 'Payment pending');
           setSubmitState('success');
           return;
         }
@@ -169,7 +202,7 @@ export default function RegisterScreen({ navigation, route }: Props) {
           setSubmitState('success');
         } catch (rzpErr: any) {
           console.warn('[Razorpay]', rzpErr?.description ?? rzpErr);
-          Alert.alert('Payment not completed', 'Your payment was not completed. Your registration is saved with payment pending — you can complete it later from your registrations.');
+          notify.info('Payment wasn\'t completed. Your registration is saved with payment pending — complete it later.', 'Payment pending');
           setSubmitState('idle');
         }
         return;
@@ -185,24 +218,26 @@ export default function RegisterScreen({ navigation, route }: Props) {
         serverMessage.toLowerCase().includes('already registered') ||
         serverMessage.toLowerCase().includes('duplicate')
       ) {
-        Alert.alert('Already Registered', 'You are already registered in this category.');
+        notify.error('You are already registered in this category.', 'Already registered');
       } else if (
         serverMessage.toLowerCase().includes('full') ||
         serverMessage.toLowerCase().includes('no spots')
       ) {
-        Alert.alert('Category Full', 'This category is currently full. Try joining the waitlist.');
+        notify.error('This category is currently full. Try joining the waitlist.', 'Category full');
       } else if (
         serverMessage.toLowerCase().includes('closed') ||
         serverMessage.toLowerCase().includes('deadline')
       ) {
-        Alert.alert('Registration Closed', 'The registration deadline has passed for this tournament.');
+        notify.error('The registration deadline has passed for this tournament.', 'Registration closed');
       } else if (serverMessage.toLowerCase().includes('dupr')) {
-        // DUPR gating (not linked / not eligible / premium / rating band). Make it explicit
-        // this is a DUPR-account requirement, not a generic failure, so the user knows why
-        // and what to do. Connect DUPR from the Me tab.
-        Alert.alert('DUPR account required', `${serverMessage}\n\nGo to the Me tab and tap "Connect DUPR", then try again.`);
+        // DUPR gating (not linked / not eligible / premium / rating band). Show it as a
+        // persistent on-screen banner with a Connect-DUPR button — Alert.alert doesn't
+        // render on web, so a popup here would be silently swallowed on the console.
+        setDuprBlockMsg(serverMessage);
+        setDuprLinked(false);
+        notify.error(serverMessage, 'DUPR account required');
       } else {
-        Alert.alert('Registration Failed', serverMessage);
+        notify.error(serverMessage, 'Registration failed');
       }
     } finally {
       setSubmitLoading(false);
@@ -212,24 +247,25 @@ export default function RegisterScreen({ navigation, route }: Props) {
   const handleRegisterPress = (paymentMethod: 'online' | 'venue') => {
     if (!category) return;
 
+    // Known-not-linked DUPR-rated category: don't fire a doomed request — surface the
+    // connect banner immediately instead.
+    if (duprRated && duprLinked === false) {
+      setDuprBlockMsg(
+        'This is a DUPR-rated event. Connect your DUPR account first, then register.',
+      );
+      return;
+    }
+
     const paymentLabel =
       paymentMethod === 'online' ? `Pay Online (₹${category.entryFee})` : 'Pay at Venue';
 
-    // Alert.alert buttons don't work on web — use platform-appropriate confirm
-    if (Platform.OS === 'web') {
-      // eslint-disable-next-line no-restricted-globals
-      const confirmed = confirm(`Register for "${category.name}"?\nPayment: ${paymentLabel}`);
-      if (confirmed) handleSubmit(paymentMethod);
-    } else {
-      Alert.alert(
-        'Confirm Registration',
-        `Register for "${category.name}"?\nPayment: ${paymentLabel}`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Confirm', onPress: () => handleSubmit(paymentMethod) },
-        ]
-      );
-    }
+    void confirmAction({
+      title: 'Confirm registration',
+      message: `Register for "${category.name}"?\nPayment: ${paymentLabel}`,
+      confirmLabel: 'Confirm',
+    }).then((ok) => {
+      if (ok) handleSubmit(paymentMethod);
+    });
   };
 
   // — Loading state —
@@ -317,6 +353,26 @@ export default function RegisterScreen({ navigation, route }: Props) {
             </View>
           )}
         </View>
+
+        {/* DUPR gating banner — shown before registering when this is a DUPR-rated
+            category and the account isn't connected (or a register attempt was blocked). */}
+        {duprRated && (duprLinked === false || duprBlockMsg) && (
+          <View style={styles.duprBlock}>
+            <Text style={styles.duprBlockTitle}>🎾 Connect DUPR to register</Text>
+            <Text style={styles.duprBlockBody}>
+              {duprBlockMsg
+                ? duprBlockMsg
+                : 'This is a DUPR-rated event. You need to connect your DUPR account before you can register.'}
+            </Text>
+            <TouchableOpacity
+              style={styles.duprBlockButton}
+              onPress={goToConnectDupr}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.duprBlockButtonText}>CONNECT DUPR</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Doubles partner section */}
         {isDoubles && (
@@ -489,6 +545,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
+  },
+  duprBlock: {
+    backgroundColor: '#FFF4E5',
+    borderWidth: 1,
+    borderColor: '#F0B27A',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  duprBlockTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: '800',
+    color: '#B9770E',
+    marginBottom: spacing.xs,
+  },
+  duprBlockBody: {
+    fontSize: typography.fontSize.sm,
+    color: '#7E5109',
+    lineHeight: 20,
+    marginBottom: spacing.md,
+  },
+  duprBlockButton: {
+    backgroundColor: '#B9770E',
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  duprBlockButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: typography.fontSize.sm,
+    letterSpacing: 0.5,
   },
   errorText: {
     fontSize: typography.fontSize.base,

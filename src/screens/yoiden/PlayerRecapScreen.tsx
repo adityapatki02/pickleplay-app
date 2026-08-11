@@ -82,7 +82,7 @@ export default function PlayerRecapScreen() {
   if (loading) {
     return (
       <SafeAreaView style={s.screen}>
-        <View style={s.center}><ActivityIndicator size="large" color={YColors.lime} /></View>
+        <View style={s.center}><ActivityIndicator size="large" color={YColors.accent} /></View>
       </SafeAreaView>
     );
   }
@@ -233,7 +233,7 @@ const s = StyleSheet.create({
   statCard: {
     flex: 1, backgroundColor: YColors.ink, paddingVertical: 16, alignItems: 'center', borderRadius: 14,
   },
-  statNum: { fontSize: 32, fontWeight: '900', color: YColors.lime, letterSpacing: 0.5 },
+  statNum: { fontSize: 32, fontWeight: '900', color: YColors.accent, letterSpacing: 0.5 },
   statLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
 
   // Empty
@@ -267,7 +267,7 @@ const s = StyleSheet.create({
   scoreWinner: { color: YColors.ink },
 
   outcomeBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, marginTop: 12 },
-  outcomeWin: { backgroundColor: YColors.lime },
+  outcomeWin: { backgroundColor: YColors.accent },
   outcomeLoss: { backgroundColor: '#E76F51' },
   outcomeText: { fontSize: 10, fontWeight: '900', letterSpacing: 1.2, color: '#FFFFFF' },
 

@@ -377,17 +377,17 @@ const s = StyleSheet.create({
   gridTileName: { fontSize: 13, fontWeight: '900', color: YColors.ink, letterSpacing: 0.3, textTransform: 'uppercase', lineHeight: 16 },
   pill: { backgroundColor: YColors.ink, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, alignSelf: 'flex-start', marginTop: 10 },
   pillMuted: { backgroundColor: YColors.line },
-  pillText: { color: YColors.lime, fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
+  pillText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
   pillTextMuted: { color: YColors.ink2 },
   bracketTile: { width: '48.5%', minHeight: 110, backgroundColor: YColors.ink, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 16, justifyContent: 'space-between' },
-  bracketTileName: { fontSize: 28, fontWeight: '900', color: YColors.lime, letterSpacing: 0.5, lineHeight: 30 },
-  bracketPill: { backgroundColor: YColors.lime, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, alignSelf: 'flex-start' },
+  bracketTileName: { fontSize: 28, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.5, lineHeight: 30 },
+  bracketPill: { backgroundColor: YColors.accent, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, alignSelf: 'flex-start' },
   bracketPillText: { color: YColors.ink, fontSize: 10, fontWeight: '900', letterSpacing: 0.6 },
 
   // Champion banner
   championCard: {
     marginTop: 12, marginBottom: 6, padding: 18, borderRadius: 16,
-    backgroundColor: YColors.lime, borderWidth: 1, borderColor: YColors.ink,
+    backgroundColor: YColors.accent, borderWidth: 1, borderColor: YColors.ink,
   },
   championEyebrow: { fontSize: 11, fontWeight: '900', letterSpacing: 1.6, color: YColors.ink, marginBottom: 6 },
   championName: { fontSize: 22, fontWeight: '900', color: YColors.ink, letterSpacing: 0.4, lineHeight: 26 },
@@ -400,7 +400,7 @@ const s = StyleSheet.create({
   // Ranking table
   rankCard: { backgroundColor: YColors.bg2, borderRadius: 14, borderWidth: 1, borderColor: YColors.line, overflow: 'hidden' },
   rankHeaderRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: YColors.ink },
-  thCell: { fontSize: 10, fontWeight: '900', letterSpacing: 0.8, color: YColors.lime },
+  thCell: { fontSize: 10, fontWeight: '900', letterSpacing: 0.8, color: '#FFFFFF' },
   rankRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: YColors.line, gap: 10 },
   rankRowTop: { backgroundColor: 'rgba(200, 242, 50, 0.18)' },
   tdRank: { width: 26, fontSize: 14, fontWeight: '900', color: YColors.ink, textAlign: 'left' },

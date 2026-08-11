@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   View,
   ScrollView,
   StyleSheet,
@@ -27,6 +26,7 @@ import {
   YBadge,
   YButton,
 } from '../../components/yoiden';
+import { notify, confirmAction } from '../../utils/notify';
 import { openRazorpay } from '../../utils/razorpay';
 import { resizeUrl } from '../../utils/img';
 import { venuesApi } from '../../api/venues.api';
@@ -48,6 +48,8 @@ const mapAvailability = (raw: any[]): CourtAvailability[] =>
       peakWindows: c.peakWindows ?? c.court?.peakWindows ?? [],
       isActive: true,
       displayOrder: c.displayOrder ?? c.court?.displayOrder ?? 0,
+      openTime: c.openTime ?? c.court?.openTime ?? '',
+      closeTime: c.closeTime ?? c.court?.closeTime ?? '',
     },
     chunks: (c.slots ?? c.chunks ?? []).map((s: any) => ({
       startTime: s.startTime,
@@ -334,49 +336,41 @@ export default function VenueDetailScreen() {
     if (!confirmed) {
       // Payment failed/cancelled — we also take offline payments, so offer to
       // keep the booking and pay at the venue instead of just cancelling.
-      Alert.alert(
-        "Payment didn't go through",
-        'Keep your booking and pay at the venue? Your court stays reserved.',
-        [
-          {
-            text: 'Cancel booking',
-            style: 'destructive',
-            onPress: async () => {
-              // If the backend says PAYMENT_ALREADY_CAPTURED the webhook got there
-              // first — the booking IS confirmed and paid, so show it instead of
-              // leaving the user thinking it was cancelled.
-              try {
-                await bookingsApi.cancel(p.booking.id);
-              } catch (cancelErr: any) {
-                const msg = cancelErr?.response?.data?.message ?? cancelErr?.message ?? '';
-                if (msg === 'PAYMENT_ALREADY_CAPTURED') {
-                  await loadAvailability();
-                  setSelected([]);
-                  nav.navigate('MyBookings', undefined);
-                  return;
-                }
-              }
-              await loadAvailability();
-              setSelected([]);
-            },
-          },
-          {
-            text: 'Pay at venue',
-            onPress: async () => {
-              try {
-                await bookingsApi.switchToOffline(p.booking.id);
-                setSelected([]);
-                setGuestName('');
-                setGuestPhone('');
-                await loadAvailability();
-                nav.navigate('BookingSuccess', p.success);
-              } catch (_) {
-                Alert.alert('Could not hold your booking', 'Please try again.');
-              }
-            },
-          },
-        ],
-      );
+      const payAtVenue = await confirmAction({
+        title: "Payment didn't go through",
+        message: 'Keep your booking and pay at the venue? Choose "Cancel booking" to release the court.',
+        confirmLabel: 'Pay at venue',
+        cancelLabel: 'Cancel booking',
+      });
+      if (payAtVenue) {
+        try {
+          await bookingsApi.switchToOffline(p.booking.id);
+          setSelected([]);
+          setGuestName('');
+          setGuestPhone('');
+          await loadAvailability();
+          nav.navigate('BookingSuccess', p.success);
+        } catch (_) {
+          notify.error('Please try again.', 'Could not hold your booking');
+        }
+      } else {
+        // If the backend says PAYMENT_ALREADY_CAPTURED the webhook got there
+        // first — the booking IS confirmed and paid, so show it instead of
+        // leaving the user thinking it was cancelled.
+        try {
+          await bookingsApi.cancel(p.booking.id);
+        } catch (cancelErr: any) {
+          const msg = cancelErr?.response?.data?.message ?? cancelErr?.message ?? '';
+          if (msg === 'PAYMENT_ALREADY_CAPTURED') {
+            await loadAvailability();
+            setSelected([]);
+            nav.navigate('MyBookings', undefined);
+            return;
+          }
+        }
+        await loadAvailability();
+        setSelected([]);
+      }
       return;
     }
     setSelected([]);
@@ -863,7 +857,7 @@ export default function VenueDetailScreen() {
               </YButton>
             </View>
             <View style={{ flex: 1 }}>
-              <YButton variant="lime" size="md" disabled={submitting} onPress={() => submit('online')}>
+              <YButton variant="primary" size="md" disabled={submitting} onPress={() => submit('online')}>
                 PAY ONLINE
               </YButton>
             </View>
@@ -940,7 +934,7 @@ const styles = StyleSheet.create({
   // Full screen width so the two flex:1 court columns lay out side-by-side.
   colHead: { width: SCREEN_WIDTH, flexDirection: 'row', alignItems: 'center', paddingVertical: 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: YColors.line },
   colHeadCell: { flex: 1, alignItems: 'center' },
-  courtCapsule: { backgroundColor: YColors.lime, paddingHorizontal: 22, paddingVertical: 7, borderRadius: 999 },
+  courtCapsule: { backgroundColor: YColors.accent, paddingHorizontal: 22, paddingVertical: 7, borderRadius: 999 },
   row: { flexDirection: 'row', alignItems: 'center', paddingLeft: 12, paddingRight: 10 },
   timeCol: { width: TIME_COL, alignItems: 'center', justifyContent: 'center', paddingVertical: 3 },
   cell: { flex: 1, marginHorizontal: 5, marginVertical: 3, minHeight: 38, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F4F8FF', borderWidth: 1, borderColor: '#DCE7FA' },

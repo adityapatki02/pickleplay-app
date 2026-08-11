@@ -18,6 +18,7 @@ import { IndoorNavigator } from './IndoorNavigator';
 import { TournamentKioskNavigator } from './TournamentKioskNavigator';
 import TournamentPublicScreen from '../screens/public/TournamentPublicScreen';
 import StandingsScreen from '../screens/yoiden/StandingsScreen';
+import { NotifyHost } from '../components/yoiden/NotifyHost';
 import { ManageProvider } from '../screens/indoor/manageContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -148,6 +149,7 @@ export const RootNavigator: React.FC = () => {
   } : undefined;
 
   return (
+    <View style={{ flex: 1 }}>
     <NavigationContainer
       linking={linking as any}
       documentTitle={{
@@ -171,6 +173,8 @@ export const RootNavigator: React.FC = () => {
         )}
       </Stack.Navigator>
     </NavigationContainer>
+    <NotifyHost />
+    </View>
   );
 };
 
