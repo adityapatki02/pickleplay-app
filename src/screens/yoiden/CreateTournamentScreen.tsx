@@ -23,6 +23,7 @@ import {
   enableTournamentDupr,
   type DuprAdminClub,
 } from '../../api/dupr.api';
+import { DUPR_ENABLED } from '../../config/constants';
 import { useTournamentStore } from '../../store/tournamentStore';
 import {
   CategoryFormat,
@@ -504,6 +505,7 @@ export default function CreateTournamentScreen() {
     { loading: true, connected: false, clubs: [] },
   );
   useEffect(() => {
+    if (!DUPR_ENABLED) return;
     let alive = true;
     getMyDuprAdminClubs()
       .then((res) => {
@@ -883,6 +885,7 @@ export default function CreateTournamentScreen() {
   const renderStep3 = () => (
     <View>
       {/* ── DUPR rating ─────────────────────────────────────────────── */}
+      {DUPR_ENABLED && (
       <View style={duprStyles.card}>
         <Text style={duprStyles.title}>DUPR RATING</Text>
         {dupr.loading ? (
@@ -936,6 +939,7 @@ export default function CreateTournamentScreen() {
           </>
         )}
       </View>
+      )}
 
       {form.categories.map((cat) => (
         <View key={cat._id} style={styles.catCard}>
