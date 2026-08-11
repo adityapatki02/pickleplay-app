@@ -145,6 +145,8 @@ export interface CreateCategoryInput {
   pointsPerGame?: number;
   winBy?: number;
   estimatedMatchDurationMin?: number;
+  /** Push this category's results to DUPR (requires an attached DUPR club + pickleball). */
+  duprRated?: boolean;
 }
 
 export interface Team {

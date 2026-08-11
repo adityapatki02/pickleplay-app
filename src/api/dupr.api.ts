@@ -32,3 +32,31 @@ export const linkDupr = (payload: DuprSsoResult) =>
 export const getDuprMe = () => apiClient.get<DuprMeResponse>('/dupr/me');
 
 export const unlinkDupr = () => apiClient.post<{ ok: true }>('/dupr/unlink');
+
+export type DuprAdminClub = {
+  clubId: number;
+  clubName: string;
+  role: 'DIRECTOR' | 'ORGANIZER';
+};
+
+export type DuprAdminClubsResponse = {
+  /** false → the user hasn't connected DUPR yet (prompt them to connect). */
+  connected: boolean;
+  /** DUPR clubs where the user is a DIRECTOR/ORGANIZER — empty ⇒ show apply CTA. */
+  clubs: DuprAdminClub[];
+};
+
+/** Live list of clubs the current user can submit results under (never cached). */
+export const getMyDuprAdminClubs = () =>
+  apiClient.get<DuprAdminClubsResponse>('/dupr/my-admin-clubs');
+
+/** Attach a DUPR club to a tournament (server re-verifies the role live). */
+export const enableTournamentDupr = (tournamentId: string, clubId: number) =>
+  apiClient.post<{ ok: true; duprClubId: number }>(
+    `/dupr/tournaments/${tournamentId}/enable`,
+    { clubId },
+  );
+
+/** Detach DUPR from a tournament. */
+export const disableTournamentDupr = (tournamentId: string) =>
+  apiClient.post<{ ok: true }>(`/dupr/tournaments/${tournamentId}/disable`);

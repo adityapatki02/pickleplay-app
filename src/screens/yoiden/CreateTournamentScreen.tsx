@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,11 @@ import { useNavigation, CommonActions } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { xAlert, xConfirm } from '../../utils/alert';
 import { tournamentsApi } from '../../api/tournaments.api';
+import {
+  getMyDuprAdminClubs,
+  enableTournamentDupr,
+  type DuprAdminClub,
+} from '../../api/dupr.api';
 import { useTournamentStore } from '../../store/tournamentStore';
 import {
   CategoryFormat,
@@ -33,6 +38,77 @@ import * as ImagePicker from 'expo-image-picker';
 
 const NAVY = YColors.ink;
 const BLUE_ACCENT = YColors.accent;
+
+// DUPR section. Palette rule: lime (brandLine) is used only as a hairline; blue
+// owns the actionable/selected states.
+const duprStyles = StyleSheet.create({
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: YColors.brandLine,
+    padding: 16,
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1,
+    color: NAVY,
+    marginBottom: 8,
+  },
+  note: { fontSize: 13, lineHeight: 19, color: '#64748B' },
+  sub: { fontSize: 13, fontWeight: '600', color: NAVY, marginBottom: 10 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  chipActive: { backgroundColor: BLUE_ACCENT, borderColor: BLUE_ACCENT },
+  chipText: { fontSize: 13, fontWeight: '600', color: NAVY },
+  chipTextActive: { color: '#fff' },
+  chipRole: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: '#94A3B8' },
+  hint: { fontSize: 12, lineHeight: 17, color: '#64748B', marginTop: 10 },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  toggleLabel: { fontSize: 14, fontWeight: '600', color: NAVY },
+  toggleHint: { fontSize: 12, color: '#64748B', marginTop: 2 },
+  toggle: {
+    width: 46,
+    height: 28,
+    borderRadius: 999,
+    backgroundColor: '#CBD5E1',
+    padding: 3,
+    justifyContent: 'center',
+  },
+  toggleOn: { backgroundColor: BLUE_ACCENT },
+  toggleKnob: {
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    backgroundColor: '#fff',
+    alignSelf: 'flex-start',
+  },
+  toggleKnobOn: { alignSelf: 'flex-end' },
+  badge: {
+    backgroundColor: NAVY,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  badgeText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5, color: '#fff' },
+});
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,6 +138,8 @@ interface FormData {
   // Step 3 — CATEGORIES
   categories: CategoryDraft[];
   banner: { uri: string; name: string; type: string } | null;
+  /** DUPR club to submit rated results under; null = not a DUPR event. */
+  duprClubId: number | null;
 }
 
 const INITIAL_FORM: FormData = {
@@ -78,6 +156,7 @@ const INITIAL_FORM: FormData = {
   contactEmail: '',
   categories: [],
   banner: null,
+  duprClubId: null,
 };
 
 const INITIAL_CATEGORY: Omit<CategoryDraft, '_id'> = {
@@ -419,6 +498,32 @@ export default function CreateTournamentScreen() {
 
   const [manualVenue, setManualVenue] = useState(false);
 
+  // DUPR eligibility — the clubs this organizer can submit rated results under.
+  // Fetched live (never cached) so a freshly granted ORGANIZER role appears.
+  const [dupr, setDupr] = useState<{ loading: boolean; connected: boolean; clubs: DuprAdminClub[] }>(
+    { loading: true, connected: false, clubs: [] },
+  );
+  useEffect(() => {
+    let alive = true;
+    getMyDuprAdminClubs()
+      .then((res) => {
+        if (!alive) return;
+        setDupr({
+          loading: false,
+          connected: !!res.data?.connected,
+          clubs: res.data?.clubs ?? [],
+        });
+      })
+      .catch(() => {
+        // Endpoint unavailable / not signed in for DUPR — treat as "not connected"
+        // rather than blocking tournament creation.
+        if (alive) setDupr({ loading: false, connected: false, clubs: [] });
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   // Extract lat/lng from a Google Maps URL
   const parseMapsLink = (url: string): { lat: number; lng: number } | null => {
     // Format: /@18.5204,73.8567,17z or ?q=18.5204,73.8567
@@ -541,6 +646,20 @@ export default function CreateTournamentScreen() {
       for (const cat of form.categories) {
         const { _id, paymentMode, ...catInput } = cat;
         await tournamentsApi.addCategory(tId, catInput);
+      }
+
+      // Attach the DUPR club (server re-verifies the organizer's DIRECTOR/
+      // ORGANIZER role live). Best-effort: the tournament already exists, so a
+      // failure here shouldn't abort creation — surface it and let them retry.
+      if (form.duprClubId != null) {
+        try {
+          await enableTournamentDupr(tId, form.duprClubId);
+        } catch {
+          xAlert(
+            'DUPR not attached',
+            "The tournament was created, but linking it to your DUPR club didn't go through. You can retry from the tournament page.",
+          );
+        }
       }
 
       // Banner upload is best-effort — the tournament already exists, and the
@@ -763,11 +882,73 @@ export default function CreateTournamentScreen() {
 
   const renderStep3 = () => (
     <View>
+      {/* ── DUPR rating ─────────────────────────────────────────────── */}
+      <View style={duprStyles.card}>
+        <Text style={duprStyles.title}>DUPR RATING</Text>
+        {dupr.loading ? (
+          <ActivityIndicator color={BLUE_ACCENT} style={{ alignSelf: 'flex-start', marginTop: 4 }} />
+        ) : !dupr.connected ? (
+          <Text style={duprStyles.note}>
+            Connect your DUPR account from your profile to submit official ratings for this event.
+          </Text>
+        ) : dupr.clubs.length === 0 ? (
+          <Text style={duprStyles.note}>
+            You're not a director or organizer of a DUPR club yet. Apply on DUPR to run rated events —
+            your clubs will appear here once approved.
+          </Text>
+        ) : (
+          <>
+            <Text style={duprStyles.sub}>Submit this event's results to a DUPR club</Text>
+            <View style={duprStyles.chipRow}>
+              <TouchableOpacity
+                onPress={() => update({ duprClubId: null })}
+                activeOpacity={0.8}
+                style={[duprStyles.chip, form.duprClubId == null && duprStyles.chipActive]}
+              >
+                <Text style={[duprStyles.chipText, form.duprClubId == null && duprStyles.chipTextActive]}>
+                  Not rated
+                </Text>
+              </TouchableOpacity>
+              {dupr.clubs.map((club) => {
+                const active = form.duprClubId === club.clubId;
+                return (
+                  <TouchableOpacity
+                    key={club.clubId}
+                    onPress={() => update({ duprClubId: club.clubId })}
+                    activeOpacity={0.8}
+                    style={[duprStyles.chip, active && duprStyles.chipActive]}
+                  >
+                    <Text style={[duprStyles.chipText, active && duprStyles.chipTextActive]}>
+                      {club.clubName}
+                    </Text>
+                    <Text style={[duprStyles.chipRole, active && duprStyles.chipTextActive]}>
+                      {club.role}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {form.duprClubId != null && (
+              <Text style={duprStyles.hint}>
+                Turn on "DUPR rated" per category below. Only pickleball results with all players DUPR-linked are submitted.
+              </Text>
+            )}
+          </>
+        )}
+      </View>
+
       {form.categories.map((cat) => (
         <View key={cat._id} style={styles.catCard}>
           <View style={styles.catCardRow}>
             <View style={styles.catCardInfo}>
-              <Text style={styles.catCardName}>{cat.name}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.catCardName}>{cat.name}</Text>
+                {cat.duprRated && form.duprClubId != null && (
+                  <View style={duprStyles.badge}>
+                    <Text style={duprStyles.badgeText}>DUPR</Text>
+                  </View>
+                )}
+              </View>
               <Text style={styles.catCardMeta}>
                 {cat.format.toUpperCase()} · {cat.gender.toUpperCase()} · ₹{cat.entryFee} · {cat.maxTeams} teams
               </Text>
@@ -887,6 +1068,21 @@ export default function CreateTournamentScreen() {
             selected={categoryDraft.paymentMode}
             onSelect={(v) => setCategoryDraft((p) => ({ ...p, paymentMode: v }))}
           />
+          {form.duprClubId != null && (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setCategoryDraft((p) => ({ ...p, duprRated: !p.duprRated }))}
+              style={duprStyles.toggleRow}
+            >
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text style={duprStyles.toggleLabel}>DUPR rated category</Text>
+                <Text style={duprStyles.toggleHint}>Results count toward players' DUPR ratings</Text>
+              </View>
+              <View style={[duprStyles.toggle, categoryDraft.duprRated && duprStyles.toggleOn]}>
+                <View style={[duprStyles.toggleKnob, categoryDraft.duprRated && duprStyles.toggleKnobOn]} />
+              </View>
+            </TouchableOpacity>
+          )}
           <View style={styles.catFormActions}>
             <TouchableOpacity
               style={styles.cancelBtn}
