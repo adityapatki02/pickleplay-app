@@ -29,7 +29,18 @@ import { useAuthStore } from '../../store/authStore';
 import { authApi } from '../../api/auth.api';
 import { tournamentsApi } from '../../api/tournaments.api';
 import { registrationsApi } from '../../api/registrations.api';
-import { linkDupr, getDuprMe, unlinkDupr, DuprMeResponse } from '../../api/dupr.api';
+import {
+  linkDupr,
+  getDuprMe,
+  unlinkDupr,
+  DuprMeResponse,
+  getMyDuprInvites,
+  getMyDuprAdminClubs,
+  acceptDuprInvite,
+  declineDuprInvite,
+  DuprInvite,
+} from '../../api/dupr.api';
+import { chooseAction } from '../../utils/notify';
 import { presentDuprSso } from '../../utils/dupr-host-bridge';
 import { PRIVACY_URL, TERMS_URL, DUPR_ENABLED } from '../../config/constants';
 import { xConfirm, xAlert } from '../../utils/alert';
@@ -87,14 +98,16 @@ export default function MeScreen() {
 
   const [duprMe, setDuprMe] = useState<DuprMeResponse | null>(null);
   const [duprBusy, setDuprBusy] = useState(false);
+  const [duprInvites, setDuprInvites] = useState<DuprInvite[]>([]);
 
   const fetchAll = useCallback(async () => {
     try {
-      const [regsRes, hostedRes, venueRes, duprRes] = await Promise.allSettled([
+      const [regsRes, hostedRes, venueRes, duprRes, invitesRes] = await Promise.allSettled([
         registrationsApi.getMyRegistrations(),
         tournamentsApi.getMyTournaments(),
         venuesApi.getMyVenues(),
         DUPR_ENABLED ? getDuprMe() : Promise.resolve(null),
+        DUPR_ENABLED ? getMyDuprInvites() : Promise.resolve(null),
       ]);
       if (regsRes.status === 'fulfilled') {
         const data = unwrap<Registration[]>(regsRes.value);
@@ -111,6 +124,10 @@ export default function MeScreen() {
       }
       if (duprRes.status === 'fulfilled') {
         setDuprMe(unwrap<DuprMeResponse>(duprRes.value));
+      }
+      if (invitesRes.status === 'fulfilled' && invitesRes.value) {
+        const data = unwrap<DuprInvite[]>(invitesRes.value);
+        setDuprInvites(Array.isArray(data) ? data : []);
       }
     } finally {
       setLoading(false);
@@ -159,6 +176,56 @@ export default function MeScreen() {
     () => xConfirm('Disconnect DUPR', 'Your DUPR rating will no longer sync to your Yoiden profile.', doDisconnectDupr),
     [doDisconnectDupr],
   );
+
+  // Accept a co-owner invite: pick which of your DUPR clubs authorizes the event
+  // (the server re-verifies the role live), then attach it.
+  const handleAcceptInvite = useCallback(async (invite: DuprInvite) => {
+    try {
+      const res = await getMyDuprAdminClubs();
+      const body = res.data;
+      if (!body?.connected) {
+        xAlert('Connect DUPR', 'Connect your DUPR account first, then accept this invite.');
+        return;
+      }
+      const clubs = body.clubs ?? [];
+      if (clubs.length === 0) {
+        xAlert('No DUPR club', "You're not a director or organizer of a DUPR club yet.");
+        return;
+      }
+      let clubId = clubs[0].clubId;
+      if (clubs.length > 1) {
+        const choice = await chooseAction({
+          title: 'Authorize under which club?',
+          options: clubs.map((c) => ({ label: `${c.clubName} (${c.role})`, value: String(c.clubId) })),
+        });
+        if (!choice) return;
+        clubId = Number(choice);
+      }
+      await acceptDuprInvite(invite.id, clubId);
+      setDuprInvites((prev) => prev.filter((i) => i.id !== invite.id));
+      xAlert('DUPR authorized', `"${invite.tournamentName ?? 'The event'}" is now DUPR-rated under your club.`);
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || 'Could not accept the invite.';
+      xAlert('DUPR', Array.isArray(msg) ? msg.join('\n') : msg);
+    }
+  }, []);
+
+  const handleDeclineInvite = useCallback((invite: DuprInvite) => {
+    xConfirm(
+      'Decline invite',
+      `Decline the DUPR co-owner invite for "${invite.tournamentName ?? 'this event'}"?`,
+      async () => {
+        try {
+          await declineDuprInvite(invite.id);
+          setDuprInvites((prev) => prev.filter((i) => i.id !== invite.id));
+        } catch {
+          /* leave it in the list; pull-to-refresh will reconcile */
+        }
+      },
+      'Decline',
+      'Cancel',
+    );
+  }, []);
 
   useEffect(() => {
     fetchAll();
@@ -350,6 +417,33 @@ export default function MeScreen() {
             </>
           )}
         </View>
+        {duprInvites.length > 0 && (
+          <View style={styles.inviteCard}>
+            <YUiText size={11} weight={900} color={YColors.ink} style={{ letterSpacing: 1, marginBottom: 10 }}>
+              DUPR CO-OWNER INVITES
+            </YUiText>
+            <YUiText size={12} color={YColors.ink2} style={{ marginBottom: 12, lineHeight: 17 }}>
+              An organizer asked you to authorize a DUPR-rated event under your club.
+            </YUiText>
+            {duprInvites.map((inv) => (
+              <View key={inv.id} style={styles.inviteRow}>
+                <YUiText size={14} weight={700} color={YColors.ink} style={{ marginBottom: 8 }}>
+                  {inv.tournamentName ?? 'Tournament'}
+                </YUiText>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <YButton variant="accent" size="sm" onPress={() => handleAcceptInvite(inv)}>
+                    AUTHORIZE
+                  </YButton>
+                  <Pressable onPress={() => handleDeclineInvite(inv)} hitSlop={8} style={{ justifyContent: 'center' }}>
+                    <YUiText size={11} weight={800} color={YColors.ink3} style={{ letterSpacing: 0.8 }}>
+                      DECLINE
+                    </YUiText>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
         <Pressable onPress={openSupport} hitSlop={8} style={{ alignSelf: 'center', marginTop: 10 }}>
           <YUiText size={11} color={YColors.ink3} style={{ textAlign: 'center' }}>
             Match dispute? <YUiText size={11} weight={800} color={YColors.accent}>Contact support</YUiText>
@@ -657,6 +751,20 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 6,
+  },
+  inviteCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: YColors.brandLine,
+    padding: 16,
+    marginTop: 12,
+  },
+  inviteRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#EEF2F6',
+    paddingTop: 12,
+    marginTop: 4,
   },
   duprPill: {
     marginTop: 16,

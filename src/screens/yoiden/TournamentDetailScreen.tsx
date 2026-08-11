@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -34,6 +34,13 @@ import { useAuthStore } from '../../store/authStore';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
 import { xAlert, xConfirm } from '../../utils/alert';
+import { DUPR_ENABLED } from '../../config/constants';
+import {
+  inviteDuprCoOwner,
+  getTournamentDuprInvites,
+  revokeDuprInvite,
+  type DuprTournamentInvite,
+} from '../../api/dupr.api';
 
 type Route = RouteProp<PlayStackParamList, 'TournamentDetail'>;
 type Nav = NativeStackNavigationProp<PlayStackParamList, 'TournamentDetail'>;
@@ -491,6 +498,8 @@ export default function TournamentDetailScreen() {
                 </View>
               </>
             ) : null}
+
+            {DUPR_ENABLED ? <DuprCoOwnerManage tournamentId={t.id} /> : null}
           </>
         ) : null}
 
@@ -607,6 +616,129 @@ export default function TournamentDetailScreen() {
     </SafeAreaView>
   );
 }
+
+// ─── DUPR co-owner management (organizer) ───────────────────────
+// Lets an organizer who doesn't hold a DUPR club role invite a DIRECTOR/
+// ORGANIZER co-owner to authorize this event under their club.
+const DuprCoOwnerManage: React.FC<{ tournamentId: string }> = ({ tournamentId }) => {
+  const [invites, setInvites] = useState<DuprTournamentInvite[]>([]);
+  const [contact, setContact] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await getTournamentDuprInvites(tournamentId);
+      setInvites(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      /* non-fatal */
+    } finally {
+      setLoaded(true);
+    }
+  }, [tournamentId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const authorized = invites.find((i) => i.status === 'accepted');
+
+  const sendInvite = useCallback(async () => {
+    const value = contact.trim();
+    if (!value) return;
+    const who = value.includes('@') ? { email: value } : { phone: value };
+    setBusy(true);
+    try {
+      await inviteDuprCoOwner(tournamentId, who);
+      setContact('');
+      await load();
+      xAlert('Invite sent', 'They can authorize this event from their profile once they open the app.');
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || 'Could not send the invite.';
+      xAlert('DUPR', Array.isArray(msg) ? msg.join('\n') : msg);
+    } finally {
+      setBusy(false);
+    }
+  }, [contact, tournamentId, load]);
+
+  const revoke = useCallback(
+    (inviteId: string) => {
+      xConfirm('Revoke invite', 'Cancel this pending co-owner invite?', async () => {
+        try {
+          await revokeDuprInvite(inviteId);
+          await load();
+        } catch {
+          /* non-fatal */
+        }
+      });
+    },
+    [load],
+  );
+
+  if (!loaded) return null;
+
+  return (
+    <>
+      <YSectionHead eyebrow="ORGANIZER · DUPR" title="RATED EVENT AUTHORIZATION" />
+      <View style={styles.duprManageCard}>
+        {authorized ? (
+          <YUiText size={13} color={YColors.ink2} style={{ lineHeight: 19 }}>
+            ✓ Authorized by{' '}
+            <YUiText size={13} weight={800} color={YColors.ink}>
+              {authorized.invitee.name ?? 'a co-owner'}
+            </YUiText>
+            . Results for DUPR-rated categories will be submitted under their club.
+          </YUiText>
+        ) : (
+          <>
+            <YUiText size={13} color={YColors.ink2} style={{ lineHeight: 19, marginBottom: 12 }}>
+              Not a DUPR club director yourself? Invite a co-owner who is — they authorize this event
+              under their club.
+            </YUiText>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TextInput
+                value={contact}
+                onChangeText={setContact}
+                placeholder="Co-owner's email or phone"
+                placeholderTextColor={YColors.ink3}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                style={styles.duprInput}
+              />
+              <YButton variant="accent" size="md" onPress={sendInvite} disabled={busy || !contact.trim()}>
+                {busy ? '…' : 'INVITE'}
+              </YButton>
+            </View>
+          </>
+        )}
+
+        {invites.filter((i) => i.status === 'pending').length > 0 && (
+          <View style={{ marginTop: 14 }}>
+            {invites
+              .filter((i) => i.status === 'pending')
+              .map((i) => (
+                <View key={i.id} style={styles.duprInviteRow}>
+                  <View style={{ flex: 1 }}>
+                    <YUiText size={13} weight={700} color={YColors.ink}>
+                      {i.invitee.name ?? 'Invited co-owner'}
+                    </YUiText>
+                    <YUiText size={11} color={YColors.ink3}>
+                      Pending{i.invitee.duprLinked ? ' · DUPR connected' : ' · not yet on DUPR'}
+                    </YUiText>
+                  </View>
+                  <Pressable onPress={() => revoke(i.id)} hitSlop={8}>
+                    <YUiText size={11} weight={800} color={YColors.ink3} style={{ letterSpacing: 0.6 }}>
+                      REVOKE
+                    </YUiText>
+                  </Pressable>
+                </View>
+              ))}
+          </View>
+        )}
+      </View>
+    </>
+  );
+};
 
 // ─── ManageTile ─────────────────────────────────────────────────
 const ManageTile: React.FC<{
@@ -875,6 +1007,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+  },
+  duprManageCard: {
+    marginHorizontal: 16,
+    backgroundColor: YColors.bg2,
+    borderWidth: 1,
+    borderColor: YColors.brandLine,
+    borderRadius: 14,
+    padding: 16,
+  },
+  duprInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: YColors.line2,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: YColors.ink,
+    backgroundColor: '#fff',
+  },
+  duprInviteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: YColors.line2,
+    paddingTop: 10,
+    marginTop: 8,
   },
   manageTile: {
     width: '48.5%',

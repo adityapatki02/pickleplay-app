@@ -60,3 +60,49 @@ export const enableTournamentDupr = (tournamentId: string, clubId: number) =>
 /** Detach DUPR from a tournament. */
 export const disableTournamentDupr = (tournamentId: string) =>
   apiClient.post<{ ok: true }>(`/dupr/tournaments/${tournamentId}/disable`);
+
+// ── Co-owner invites (Option B) ──────────────────────────────────────
+
+export type DuprInvite = {
+  id: string;
+  tournamentId: string;
+  tournamentName: string | null;
+  createdAt: string;
+};
+
+export type DuprTournamentInvite = {
+  id: string;
+  status: 'pending' | 'accepted' | 'declined' | 'revoked';
+  clubId: number | null;
+  invitee: { name: string | null; duprLinked: boolean };
+  createdAt: string;
+  respondedAt: string | null;
+};
+
+/** Organizer invites a co-owner (existing Yoiden user) by email or phone. */
+export const inviteDuprCoOwner = (
+  tournamentId: string,
+  who: { email?: string; phone?: string },
+) => apiClient.post<{ ok: true; inviteId: string }>(`/dupr/tournaments/${tournamentId}/invite`, who);
+
+/** Pending co-owner invites addressed to the current user. */
+export const getMyDuprInvites = () => apiClient.get<DuprInvite[]>('/dupr/invites');
+
+/** Accept an invite under one of your DUPR clubs (server re-verifies the role live). */
+export const acceptDuprInvite = (inviteId: string, clubId: number) =>
+  apiClient.post<{ ok: true; tournamentId: string; duprClubId: number }>(
+    `/dupr/invites/${inviteId}/accept`,
+    { clubId },
+  );
+
+/** Decline a co-owner invite. */
+export const declineDuprInvite = (inviteId: string) =>
+  apiClient.post<{ ok: true }>(`/dupr/invites/${inviteId}/decline`);
+
+/** Organizer/authorizer view of all invites + statuses for a tournament. */
+export const getTournamentDuprInvites = (tournamentId: string) =>
+  apiClient.get<DuprTournamentInvite[]>(`/dupr/tournaments/${tournamentId}/invites`);
+
+/** Inviting organizer revokes a pending invite. */
+export const revokeDuprInvite = (inviteId: string) =>
+  apiClient.post<{ ok: true }>(`/dupr/invites/${inviteId}/revoke`);
