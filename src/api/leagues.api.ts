@@ -57,6 +57,10 @@ export const getSeason = (leagueId: string, seasonId: string) =>
 export const updateSeason = (leagueId: string, seasonId: string, data: Partial<CreateSeasonInput>) =>
   apiClient.patch<LeagueSeason>(`/leagues/${leagueId}/seasons/${seasonId}`, data).then((r) => (r.data as any)?.data ?? r.data);
 
+/** Set per-court live-stream links, e.g. { "1": "https://…", "2": "…" }. Organiser only. */
+export const setStreamLinks = (leagueId: string, seasonId: string, links: Record<string, string>) =>
+  apiClient.patch<LeagueSeason>(`/leagues/${leagueId}/seasons/${seasonId}/stream-links`, { links }).then((r) => (r.data as any)?.data ?? r.data);
+
 // ═══════════════════════════════════════════════════════════════════════
 // Franchises
 // ═══════════════════════════════════════════════════════════════════════
