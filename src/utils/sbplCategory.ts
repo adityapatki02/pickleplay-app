@@ -25,10 +25,25 @@ export function sbplGroupForCategory(sub?: string | null): string | null {
 // the one court. Returns null when no court is assigned.
 export const SBPL_COURT_SPLIT_SLOT = 7;
 export function courtForSlot(
-  tie: { courtNumber?: number | null; courtNumber2?: number | null },
+  tie: {
+    courtNumber?: number | null;
+    courtNumber2?: number | null;
+    courtNumber3?: number | null;
+    courtNumber4?: number | null;
+  },
   slotNumber: number,
   boundary: number = SBPL_COURT_SPLIT_SLOT,
 ): number | null {
+  // Four-court mode (e.g. the 3rd-place playoff) — only when both the 3rd and
+  // 4th courts are set. Spreads the 15 games by category across four courts.
+  // Mirrors the backend courtForSlot exactly. Existing 2-court ties fall
+  // through and are unaffected.
+  if (tie.courtNumber3 != null && tie.courtNumber4 != null) {
+    if (slotNumber <= 4) return tie.courtNumber ?? null;   // Kids + Women 1-3 (1-4)
+    if (slotNumber <= 7) return tie.courtNumber2 ?? null;  // Women 4-5 (5-7)
+    if (slotNumber <= 12) return tie.courtNumber3;         // Men A + Men C (8-12)
+    return tie.courtNumber4;                               // Men B (13-15)
+  }
   if (tie.courtNumber2 == null) return tie.courtNumber ?? null;
   return slotNumber <= boundary ? (tie.courtNumber ?? null) : tie.courtNumber2;
 }

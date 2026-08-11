@@ -24,11 +24,19 @@ const BORDER = '#E2E8F0';
 interface Props {
   trends: FantasyTrends;
   seasonLabel?: string;
+  /** Footer line (league + dates). Defaults to SPPL branding; the SBPL screen
+   *  passes its own so the shared component isn't hardcoded to one league. */
+  footerLabel?: string;
 }
 
-/** Which colour each Dream Team category gets in the summary list. */
+/** Which colour each Dream Team category gets in the summary list.
+ *  Covers BOTH formats' bucket keys — SPPL (teenBoys/m1/w1/…) and SBPL
+ *  sbpl_15game (women13/women45/menA/menB/menC). The rows actually shown are
+ *  driven by whichever buckets the /trends payload returns (see topByCategory),
+ *  so this stays format-agnostic. */
 const CATEGORY_META: Array<{ key: string; label: string; icon: string; color: string }> = [
   { key: 'kids',      label: 'Kids',       icon: '🧒', color: PURPLE },
+  // SPPL buckets
   { key: 'teenBoys',  label: 'Teen Boys',  icon: '👦', color: ORANGE },
   { key: 'teenGirls', label: 'Teen Girls', icon: '👧', color: ORANGE },
   { key: 'm1',        label: 'Men 1',      icon: '🏅', color: BLUE },
@@ -36,9 +44,15 @@ const CATEGORY_META: Array<{ key: string; label: string; icon: string; color: st
   { key: 'm2',        label: 'Men 2',      icon: '🏅', color: BLUE },
   { key: 'w2',        label: 'Women 2',    icon: '🏅', color: PINK },
   { key: 'm3',        label: 'Men 3',      icon: '🏅', color: BLUE },
+  // SBPL (sbpl_15game) buckets
+  { key: 'women13',   label: 'Women 1-3',  icon: '🏅', color: PINK },
+  { key: 'women45',   label: 'Women 4-5',  icon: '🏅', color: PINK },
+  { key: 'menA',      label: 'Men A',      icon: '🏅', color: BLUE },
+  { key: 'menB',      label: 'Men B',      icon: '🏅', color: BLUE },
+  { key: 'menC',      label: 'Men C',      icon: '🏅', color: BLUE },
 ];
 
-export default function FantasyTrendsShareCard({ trends, seasonLabel = 'SPPL 2026' }: Props) {
+export default function FantasyTrendsShareCard({ trends, seasonLabel = 'SPPL 2026', footerLabel = 'SPPL · MAY 1–3, 2026' }: Props) {
   const topChampion = trends.champions?.[0];
   // Tournament progression — show fan picks at every knockout stage so
   // viewers can spot their team at multiple points.
@@ -61,11 +75,12 @@ export default function FantasyTrendsShareCard({ trends, seasonLabel = 'SPPL 202
     return best;
   })();
 
-  // Top pick per category (1 per bucket)
-  const topByCategory = CATEGORY_META.map((c) => {
-    const picks = (trends.topPicks && trends.topPicks[c.key]) || [];
-    return { ...c, top: picks[0] || null };
-  });
+  // Top pick per category (1 per bucket) — driven by the buckets the payload
+  // actually contains, so only the current format's categories are listed
+  // (SBPL: kids/women13/women45/menA/menB/menC; SPPL: the SPPL set).
+  const topByCategory = CATEGORY_META
+    .filter((c) => !!(trends.topPicks && trends.topPicks[c.key]))
+    .map((c) => ({ ...c, top: (trends.topPicks![c.key] || [])[0] || null }));
 
   return (
     <View style={s.card} collapsable={false}>
@@ -184,7 +199,7 @@ export default function FantasyTrendsShareCard({ trends, seasonLabel = 'SPPL 202
 
       {/* ── Footer ── */}
       <View style={s.footer}>
-        <Text style={s.footerTitle}>🎾 SPPL · MAY 1–3, 2026</Text>
+        <Text style={s.footerTitle}>🎾 {footerLabel}</Text>
         <Text style={s.footerSub}>Powered by Yoiden</Text>
       </View>
     </View>

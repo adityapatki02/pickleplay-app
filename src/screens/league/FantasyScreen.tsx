@@ -1592,7 +1592,11 @@ export default function FantasyScreen() {
           }}
         >
           <View ref={shareCardRef} collapsable={false}>
-            <FantasyTrendsShareCard trends={trends} />
+            <FantasyTrendsShareCard
+              trends={trends}
+              seasonLabel={config?.form2Shape && 'menA' in config.form2Shape ? 'SBPL 2026' : 'SPPL 2026'}
+              footerLabel={config?.form2Shape && 'menA' in config.form2Shape ? 'SBPL · JUL 31 – AUG 2, 2026' : undefined}
+            />
           </View>
         </View>
       ) : null}

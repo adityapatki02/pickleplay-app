@@ -434,9 +434,15 @@ export type TieConfigUpdate = {
   courtNumber?: number | null;
   /** Second court for two-court (SBPL) ties. null clears. */
   courtNumber2?: number | null;
+  /** Optional 3rd/4th courts for a 4-court tie (e.g. the 3rd-place playoff). */
+  courtNumber3?: number | null;
+  courtNumber4?: number | null;
   /** Two authorized scorers for two-court (SBPL) ties. null to unassign. */
   scorer1Id?: string | null;
   scorer2Id?: string | null;
+  /** Optional 3rd/4th scorers for a 4-court tie. null to unassign. */
+  scorer3Id?: string | null;
+  scorer4Id?: string | null;
   /** Manually set home/away team on a tie (used for knockout stage confirmations). null to clear. */
   homeTeamId?: string | null;
   awayTeamId?: string | null;

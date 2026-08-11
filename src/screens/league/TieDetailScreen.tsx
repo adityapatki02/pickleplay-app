@@ -165,6 +165,8 @@ const TieDetailScreen: React.FC = () => {
     if (!authUser?.id || !t) return s;
     if (t.scorer1Id === authUser.id && t.courtNumber != null) s.add(t.courtNumber);
     if (t.scorer2Id === authUser.id && t.courtNumber2 != null) s.add(t.courtNumber2);
+    if (t.scorer3Id === authUser.id && t.courtNumber3 != null) s.add(t.courtNumber3);
+    if (t.scorer4Id === authUser.id && t.courtNumber4 != null) s.add(t.courtNumber4);
     return s;
   }, [authUser?.id, tie]);
 
@@ -196,6 +198,27 @@ const TieDetailScreen: React.FC = () => {
   );
   /** Should the current viewer see player names anywhere on this screen? */
   const canSeeLineups = isAdmin || lineupRevealed;
+  // SBPL kids-first: a category locked early (e.g. 'kids') is revealed to
+  // EVERYONE for its own slots, even though the rest of the tie's lineup stays
+  // hidden until the full lock. So per-slot name reveal is category-aware —
+  // the whole-tie `canSeeLineups` gate OR this slot's category being locked.
+  const canSeeSlotNames = (categorySlug?: string | null): boolean => {
+    if (canSeeLineups) return true;
+    if (!categorySlug) return false;
+    const lc = (tie as any)?.lockedCategories;
+    return Array.isArray(lc) && lc.includes(categorySlug);
+  };
+  // Badge shown when a team's sheet contains any auto-applied default slots.
+  // If every defaulted slot is kids (the kids-deadline fallback), say so
+  // explicitly; if a whole-tie default is ever applied, fall back to the
+  // generic label. Returns null when nothing was defaulted.
+  const defaultUsedLabel = (sheet?: TieSheet | null): string | null => {
+    const defaulted = ((sheet as any)?.lineupData || []).filter((l: any) => l.fromDefault);
+    if (defaulted.length === 0) return null;
+    return defaulted.every((l: any) => l.categorySlug === 'kids')
+      ? 'KIDS DEFAULT USED'
+      : 'DEFAULT USED';
+  };
   const [tieSheets, setTieSheets] = useState<TieSheet[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -962,6 +985,10 @@ const TieDetailScreen: React.FC = () => {
 
   const homeSheet = tieSheets.find((s) => s.franchiseId === tie?.homeTeamId);
   const awaySheet = tieSheets.find((s) => s.franchiseId === tie?.awayTeamId);
+  // Lineups are fully locked once both sheets are 'locked' — true after a full
+  // lock even while the tie is in_progress (kids-first), where tie.status stays
+  // 'in_progress' and so wouldn't otherwise flip the button to its re-lock state.
+  const lineupsLocked = (homeSheet as any)?.status === 'locked' && (awaySheet as any)?.status === 'locked';
 
   // Tie sheet downloader — opens the print-friendly HTML page with both
   // teams' lineups pre-filled, ready for the admin to save as PDF or
@@ -1220,16 +1247,28 @@ const TieDetailScreen: React.FC = () => {
     if (!tie) return null;
     const currentCourt = (tie as any).courtNumber ?? null;
     const currentCourt2 = (tie as any).courtNumber2 ?? null;
+    const currentCourt3 = (tie as any).courtNumber3 ?? null;
+    const currentCourt4 = (tie as any).courtNumber4 ?? null;
     const currentScorerId = (tie as any).scorerId ?? null;
     const currentScorer1Id = (tie as any).scorer1Id ?? null;
     const currentScorer2Id = (tie as any).scorer2Id ?? null;
+    const currentScorer3Id = (tie as any).scorer3Id ?? null;
+    const currentScorer4Id = (tie as any).scorer4Id ?? null;
     // SBPL ties play across two courts with two scorers; other formats use one.
     const twoCourt = seasonFormat === 'sbpl_15game';
+    // Four-court tie (opt-in, e.g. the 3rd-place playoff): show Court 3 & 4
+    // controls only when this tie has been designated a 4-court tie. Normal
+    // 2-court ties never render these, so their controls are unchanged.
+    const fourCourt = twoCourt && (currentCourt3 != null || currentCourt4 != null);
 
     const updateTie = async (patch: {
       courtNumber?: number | null;
       courtNumber2?: number | null;
+      courtNumber3?: number | null;
+      courtNumber4?: number | null;
       scorerId?: string | null;
+      scorer3Id?: string | null;
+      scorer4Id?: string | null;
     }) => {
       try {
         setActionLoading(true);
@@ -1247,7 +1286,7 @@ const TieDetailScreen: React.FC = () => {
     const courtRow = (
       label: string,
       current: number | null,
-      field: 'courtNumber' | 'courtNumber2',
+      field: 'courtNumber' | 'courtNumber2' | 'courtNumber3' | 'courtNumber4',
     ) => (
       <>
         <Text style={{ fontSize: 11, fontWeight: '800', color: NAVY, letterSpacing: 1, marginTop: 8, marginBottom: 6 }}>{label}</Text>
@@ -1294,7 +1333,7 @@ const TieDetailScreen: React.FC = () => {
     const scorerRow = (
       label: string,
       current: string | null,
-      field: 'scorerId' | 'scorer1Id' | 'scorer2Id',
+      field: 'scorerId' | 'scorer1Id' | 'scorer2Id' | 'scorer3Id' | 'scorer4Id',
     ) => (
       <>
         <Text style={{ fontSize: 11, fontWeight: '800', color: NAVY, letterSpacing: 1, marginTop: 14, marginBottom: 6 }}>{label}</Text>
@@ -1352,6 +1391,16 @@ const TieDetailScreen: React.FC = () => {
             <View style={{ height: 1, backgroundColor: '#E2E8F0', marginTop: 16 }} />
             {courtRow('COURT 2', currentCourt2, 'courtNumber2')}
             {scorerRow(`SCORER · COURT ${currentCourt2 ?? 2}`, currentScorer2Id, 'scorer2Id')}
+            {fourCourt && (
+              <>
+                <View style={{ height: 1, backgroundColor: '#E2E8F0', marginTop: 16 }} />
+                {courtRow('COURT 3', currentCourt3, 'courtNumber3')}
+                {scorerRow(`SCORER · COURT ${currentCourt3 ?? 3}`, currentScorer3Id, 'scorer3Id')}
+                <View style={{ height: 1, backgroundColor: '#E2E8F0', marginTop: 16 }} />
+                {courtRow('COURT 4', currentCourt4, 'courtNumber4')}
+                {scorerRow(`SCORER · COURT ${currentCourt4 ?? 4}`, currentScorer4Id, 'scorer4Id')}
+              </>
+            )}
           </>
         ) : (
           <>
@@ -1637,9 +1686,9 @@ const TieDetailScreen: React.FC = () => {
           ) : (
             <Text style={[styles.sheetBadge, { color: TEXT_MUTED }]}>Not Submitted</Text>
           )}
-          {!!(homeSheet as any)?.lineupData?.some?.((l: any) => l.fromDefault) && (
+          {!!defaultUsedLabel(homeSheet) && (
             <Text style={{ fontSize: 10, fontWeight: '900', color: '#C2410C', backgroundColor: '#FFEDD5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, marginTop: 3, letterSpacing: 0.4 }}>
-              DEFAULT USED
+              {defaultUsedLabel(homeSheet)}
             </Text>
           )}
         </View>
@@ -1660,9 +1709,9 @@ const TieDetailScreen: React.FC = () => {
           ) : (
             <Text style={[styles.sheetBadge, { color: TEXT_MUTED }]}>Not Submitted</Text>
           )}
-          {!!(awaySheet as any)?.lineupData?.some?.((l: any) => l.fromDefault) && (
+          {!!defaultUsedLabel(awaySheet) && (
             <Text style={{ fontSize: 10, fontWeight: '900', color: '#C2410C', backgroundColor: '#FFEDD5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, marginTop: 3, letterSpacing: 0.4 }}>
-              DEFAULT USED
+              {defaultUsedLabel(awaySheet)}
             </Text>
           )}
         </View>
@@ -1687,9 +1736,19 @@ const TieDetailScreen: React.FC = () => {
         </TouchableOpacity>
       )}
 
-      {isAdmin && (tie.status === 'lineup_submitted' || tie.status === 'lineup_locked') && homeSheet && awaySheet && (
+      {/* Full lineup lock. Normally offered at lineup_submitted/locked. SBPL
+          kids-first: ALSO offer it while the tie is in_progress when kids were
+          locked & started early — the backend skips already-locked/played
+          categories and won't downgrade the status, so this just locks the
+          remaining (women/men) slots. Without this the button vanished the
+          moment kids were scored, stranding the main-tie lock. */}
+      {isAdmin && homeSheet && awaySheet && (
+        tie.status === 'lineup_submitted'
+        || tie.status === 'lineup_locked'
+        || (seasonFormat === 'sbpl_15game' && tie.status === 'in_progress' && kidsLocked)
+      ) && (
         <TouchableOpacity
-          style={[styles.lockBtn, tie.status === 'lineup_locked' && { backgroundColor: '#F97316' }]}
+          style={[styles.lockBtn, (tie.status === 'lineup_locked' || lineupsLocked) && { backgroundColor: '#F97316' }]}
           onPress={handleLockLineups}
           disabled={actionLoading}
         >
@@ -1697,7 +1756,7 @@ const TieDetailScreen: React.FC = () => {
             <ActivityIndicator color={WHITE} size="small" />
           ) : (
             <Text style={styles.lockBtnText}>
-              {tie.status === 'lineup_locked' ? 'RE-LOCK LINEUPS' : 'LOCK LINEUPS'}
+              {(tie.status === 'lineup_locked' || lineupsLocked) ? 'RE-LOCK LINEUPS' : 'LOCK LINEUPS'}
             </Text>
           )}
         </TouchableOpacity>
@@ -1899,11 +1958,20 @@ const TieDetailScreen: React.FC = () => {
     // Court-lock: a scorer assigned to the other court can't score this game.
     const courtEligible = canScoreMatch(tm);
     const lockedForScorer = isAssignedScorer && !isAdmin && !courtEligible;
+    // SBPL kids-first: a category locked early (in tie.lockedCategories) is
+    // ready to play immediately — its games must be scoreable even while the
+    // tie is still `lineup_submitted`/`scheduled` (the rest of the lineup is
+    // still open, so the tie hasn't reached lineup_locked/in_progress yet).
+    // Only THIS match's category being locked unlocks it — other categories
+    // stay gated. Backend finalize already permits this (rejects only when the
+    // whole tie is completed), so the UI just needs to match.
+    const catLocked = Array.isArray((tie as any)?.lockedCategories)
+      && (tie as any).lockedCategories.includes(tm.categorySlug);
     // Rally Point Game can be scored any time after tie starts (no lineup gate)
     const canEnterScore = courtEligible && (
       isRally
         ? (tie.status === 'in_progress' || tie.status === 'lineup_locked' || tie.status === 'scheduled' || tie.status === 'lineup_submitted')
-        : (tie.status === 'in_progress' || tie.status === 'lineup_locked')
+        : (tie.status === 'in_progress' || tie.status === 'lineup_locked' || catLocked)
     );
 
     return (
@@ -1965,7 +2033,7 @@ const TieDetailScreen: React.FC = () => {
             <Text style={styles.matchPlayerText} numberOfLines={2}>
               {isRally
                 ? homeName
-                : !canSeeLineups
+                : !canSeeSlotNames(tm.categorySlug)
                   ? homeName
                   : (tm.homePlayer1Id || tm.homePlayer2Id)
                     ? pairNameJSX(tm.homePlayer1Id, (tm as any).homePlayer1IsSub, tm.homePlayer2Id, (tm as any).homePlayer2IsSub)
@@ -1983,7 +2051,7 @@ const TieDetailScreen: React.FC = () => {
             <Text style={[styles.matchPlayerText, { textAlign: 'right' }]} numberOfLines={2}>
               {isRally
                 ? awayName
-                : !canSeeLineups
+                : !canSeeSlotNames(tm.categorySlug)
                   ? awayName
                   : (tm.awayPlayer1Id || tm.awayPlayer2Id)
                     ? pairNameJSX(tm.awayPlayer1Id, (tm as any).awayPlayer1IsSub, tm.awayPlayer2Id, (tm as any).awayPlayer2IsSub)

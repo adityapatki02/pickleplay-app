@@ -28,6 +28,7 @@ import {
   getStandings,
   getGroups,
   getFranchises,
+  getAllDefaultLineups,
   startLeaguePhase,
   importMasterCSV,
   generateCaptainTokens,
@@ -109,6 +110,12 @@ const SBPL_SPONSORS_RIGHT = [
   // Kamakhya is a wide/landscape logo — `cover` would crop its sides, so it
   // uses `contain` (full logo, blends on the dark card).
   { img: require('../../../assets/sbpl/kamakhya.png'), label: 'TROPHY SPONSOR', fit: 'contain' as const },
+  // Additional SBPL S2 sponsors. White-logo JPEGs sit on a white card (bg) with
+  // `contain` so nothing is cropped; DNINE ships on its own navy background.
+  { img: require('../../../assets/sbpl/dnine.jpg'), label: 'PERFORMANCE GEAR PARTNER' },
+  { img: require('../../../assets/sbpl/om-jewellers.jpg'), label: 'TOSS KA BOSS & UMPIRE SPONSOR', fit: 'contain' as const, bg: '#FFFFFF' },
+  { img: require('../../../assets/sbpl/shutter-sandwich.jpg'), label: 'MEDIA PARTNER', fit: 'contain' as const, bg: '#FFFFFF' },
+  { img: require('../../../assets/sbpl/xenon.jpg'), label: 'EMERGENCY HEALTH PARTNER', fit: 'contain' as const, bg: '#FFFFFF' },
 ];
 const ORANGE = '#F97316';
 const PINK = '#EC4899';
@@ -220,6 +227,9 @@ const LeagueDashboardScreen: React.FC = () => {
   const [captainEditMode, setCaptainEditMode] = useState<Record<string, boolean>>({});
   const [resolvedSeasonId, setResolvedSeasonId] = useState(routeSeasonId || '');
   const [showSetup, setShowSetup] = useState(false);
+  // Watch Live banner — collapsed by default so it doesn't push the sponsors
+  // down; tapping expands a dropdown of per-court stream links.
+  const [streamsOpen, setStreamsOpen] = useState(false);
   // SBPL sponsor slider — shows 2 logos at a time, auto-advances every 15s.
   const [sponsorPage, setSponsorPage] = useState(0);
   React.useEffect(() => {
@@ -243,12 +253,31 @@ const LeagueDashboardScreen: React.FC = () => {
       try {
         const res = await fetch(`${base}/scoreboard/master/${resolvedSeasonId}/data`, { cache: 'no-store' });
         const j = await res.json();
-        const ties = j?.data?.ties || [];
         const tiles: any[] = [];
-        for (const t of ties) {
-          for (const c of t.courts || []) {
+        // Master feed is court-centric: data.courts = [{ courtNumber, match, tie, next, tieId? }].
+        // (Legacy shape was data.ties[].courts[] — fall back to it if a court array isn't present.)
+        const courts = j?.data?.courts;
+        if (Array.isArray(courts)) {
+          for (const c of courts) {
             if (c.match) {
-              tiles.push({ ...c.match, tieId: t.tieId, courtNumber: c.courtNumber, homeTeam: t.homeTeam, awayTeam: t.awayTeam });
+              tiles.push({
+                ...c.match,
+                tieId: c.tieId ?? c.match?.tieId,
+                courtNumber: c.courtNumber,
+                homeTeam: c.tie?.homeTeam,
+                awayTeam: c.tie?.awayTeam,
+                homeStandingPoints: c.tie?.homeStandingPoints ?? 0,
+                awayStandingPoints: c.tie?.awayStandingPoints ?? 0,
+              });
+            }
+          }
+        } else {
+          const ties = j?.data?.ties || [];
+          for (const t of ties) {
+            for (const c of t.courts || []) {
+              if (c.match) {
+                tiles.push({ ...c.match, tieId: t.tieId, courtNumber: c.courtNumber, homeTeam: t.homeTeam, awayTeam: t.awayTeam });
+              }
             }
           }
         }
@@ -329,6 +358,8 @@ const LeagueDashboardScreen: React.FC = () => {
   const [standings, setStandings] = useState<LeagueStanding[]>([]);
   const [groups, setGroups] = useState<LeagueGroup[]>([]);
   const [franchises, setFranchises] = useState<Franchise[]>([]);
+  // Franchise IDs that have submitted a default tie sheet (for the admin tracker).
+  const [defaultSubmitted, setDefaultSubmitted] = useState<Set<string>>(new Set());
   const [knockoutData, setKnockoutData] = useState<KnockoutBracketData | null>(null);
   const season = store.currentSeason;
 
@@ -386,6 +417,20 @@ const LeagueDashboardScreen: React.FC = () => {
         setKnockoutData(koData);
       } catch {
         setKnockoutData(null);
+      }
+
+      // Default tie-sheet submission status (admin tracker) — a franchise counts
+      // as "submitted" once it has any default-lineup rows for this season.
+      try {
+        const defaults = await getAllDefaultLineups(leagueId, seasonId);
+        const ids = new Set<string>(
+          (Array.isArray(defaults) ? defaults : [])
+            .map((d: any) => d?.franchiseId)
+            .filter(Boolean),
+        );
+        setDefaultSubmitted(ids);
+      } catch {
+        setDefaultSubmitted(new Set());
       }
     } catch (err: any) {
       console.warn('League dashboard fetch error:', err?.message);
@@ -555,8 +600,17 @@ const LeagueDashboardScreen: React.FC = () => {
     return Number.POSITIVE_INFINITY;
   };
   const isKnockoutTie = (t: any) => (t.round || '').startsWith('knockout_');
+  // 3rd-place playoff is created hidden (no teams) and only revealed once its
+  // SF-loser teams are assigned. Hide the placeholder from all lists until then.
+  // 3rd-place playoff is now shown on the portal even before its teams are set
+  // (they auto-fill from the SF losers). Kept as a helper (returns false) so the
+  // call sites stay unchanged.
+  const isHiddenPlayoff = (_t: any) => false;
+  // Upcoming = not-yet-started ties only. Live (in_progress) ties belong in the
+  // "Live Now" section, so exclude them here — otherwise they'd show twice, and
+  // a LIVE match would be mislabelled as "upcoming".
   const upcomingTies = ties
-    .filter((t) => t.status !== 'completed' && t.status !== 'postponed')
+    .filter((t) => t.status !== 'completed' && t.status !== 'postponed' && t.status !== 'in_progress' && !isHiddenPlayoff(t))
     .slice()
     .sort((a, b) => {
       // League (pool) ties are always played before knockouts, so surface the
@@ -605,6 +659,7 @@ const LeagueDashboardScreen: React.FC = () => {
     knockout_eliminator: 'Eliminator',
     knockout_q2: 'Qualifier 2',
     knockout_final: 'Final',
+    knockout_third_place: '3rd Place Playoff',
     // Legacy
     knockout_sf1: 'Semi-Final 1',
     knockout_sf2: 'Semi-Final 2',
@@ -798,10 +853,23 @@ const LeagueDashboardScreen: React.FC = () => {
                     ))}
                   </View>
                 </View>
-                {/* teams */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: YColors.ink2, flex: 1 }} numberOfLines={1}>{m.homeTeam?.name || ''}</Text>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: YColors.ink2, flex: 1, textAlign: 'right' }} numberOfLines={1}>{m.awayTeam?.name || ''}</Text>
+                {/* teams + TIE POINTS — divided from the match score above by a
+                    top border so it's clear these are tie standing points, not
+                    the live game score. */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: YColors.line2 }}>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ backgroundColor: hc, borderRadius: 6, minWidth: 22, paddingHorizontal: 6, paddingVertical: 2, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '900', color: '#fff', fontVariant: ['tabular-nums'] as any }}>{m.homeStandingPoints ?? 0}</Text>
+                    </View>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: YColors.ink2, flex: 1 }} numberOfLines={1}>{m.homeTeam?.name || ''}</Text>
+                  </View>
+                  <Text style={{ fontSize: 8, fontWeight: '900', color: YColors.ink3, letterSpacing: 0.8, marginHorizontal: 8 }}>★ TIE PTS</Text>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: YColors.ink2, flex: 1, textAlign: 'right' }} numberOfLines={1}>{m.awayTeam?.name || ''}</Text>
+                    <View style={{ backgroundColor: ac, borderRadius: 6, minWidth: 22, paddingHorizontal: 6, paddingVertical: 2, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '900', color: '#fff', fontVariant: ['tabular-nums'] as any }}>{m.awayStandingPoints ?? 0}</Text>
+                    </View>
+                  </View>
                 </View>
               </TouchableOpacity>
             );
@@ -825,7 +893,7 @@ const LeagueDashboardScreen: React.FC = () => {
           <View style={{ flexDirection: 'row', gap: 16 }}>
             {page.map((s) => (
               <View key={s.label} style={{ flex: 1, minWidth: 0, alignItems: 'center' }}>
-                <View style={styles.sbplSponsorCard}>
+                <View style={[styles.sbplSponsorCard, (s as any).bg ? { backgroundColor: (s as any).bg } : null]}>
                   <Image source={s.img} style={styles.sbplSponsorCardImg} resizeMode={(s as any).fit || 'cover'} />
                 </View>
                 <Text style={styles.sbplShowcaseLbl} numberOfLines={2}>{s.label}</Text>
@@ -885,6 +953,7 @@ const LeagueDashboardScreen: React.FC = () => {
       knockout_q1: 'QUALIFIER 1', knockout_eliminator: 'ELIMINATOR',
       knockout_q2: 'QUALIFIER 2', knockout_final: 'FINAL',
       knockout_sf1: 'SEMIFINAL 1', knockout_sf2: 'SEMIFINAL 2',
+      knockout_third_place: '3RD PLACE PLAYOFF',
     };
     const KO_PLACEHOLDERS: Record<string, [string, string]> = {
       knockout_qf1: ['AB1', 'CD4'],
@@ -898,6 +967,7 @@ const LeagueDashboardScreen: React.FC = () => {
       knockout_sf1: ['A1', 'B2'],
       knockout_sf2: ['B1', 'A2'],
       knockout_final: isCross ? ['SF1', 'SF2'] : ['Winner Q1', 'Winner Q2'],
+      knockout_third_place: ['SF1 Loser', 'SF2 Loser'],
     };
     const stageLabel = KNOCKOUT_LABELS[tie.round] || null;
     const koPh = KO_PLACEHOLDERS[tie.round];
@@ -926,6 +996,8 @@ const LeagueDashboardScreen: React.FC = () => {
             {timeLabel ? <YBadge color="#92400E" bg="#FEF3C7">{timeLabel}</YBadge> : null}
             {(tie as any).courtNumber ? <YBadge color="#0369A1" bg="#E0F2FE">{`COURT ${(tie as any).courtNumber}`}</YBadge> : null}
             {(tie as any).courtNumber2 ? <YBadge color="#0369A1" bg="#E0F2FE">{`COURT ${(tie as any).courtNumber2}`}</YBadge> : null}
+            {(tie as any).courtNumber3 ? <YBadge color="#0369A1" bg="#E0F2FE">{`COURT ${(tie as any).courtNumber3}`}</YBadge> : null}
+            {(tie as any).courtNumber4 ? <YBadge color="#0369A1" bg="#E0F2FE">{`COURT ${(tie as any).courtNumber4}`}</YBadge> : null}
             {tie.notes ? <YBadge color="#7C3AED" bg="#EDE9FE">{tie.notes}</YBadge> : null}
             {isMyAssignedTie ? <YBadge color="#fff" bg="#06D6A0">MY TIE</YBadge> : null}
             {stageLabel ? <YBadge color="#1D4ED8" bg="#DBEAFE">{stageLabel}</YBadge> : null}
@@ -1005,14 +1077,6 @@ const LeagueDashboardScreen: React.FC = () => {
         },
         color: '#0891B2',
         bg: '#CFFAFE',
-      },
-      {
-        icon: '📝',
-        title: 'Default Lineups',
-        sub: 'Upload fallback lineups (used if captains miss deadline)',
-        onPress: () => setShowDefaultsModal(true),
-        color: '#059669',
-        bg: '#D1FAE5',
       },
       {
         icon: '🎯',
@@ -1254,6 +1318,43 @@ const LeagueDashboardScreen: React.FC = () => {
             <Text style={{ fontSize: 18, color: TEXT_MUTED }}>›</Text>
           </TouchableOpacity>
         ))}
+
+        {/* Default tie-sheet submission tracker — team name + Submitted/Pending */}
+        <View style={{ backgroundColor: WHITE, borderRadius: 12, padding: 14, marginTop: 4, borderWidth: 1, borderColor: BORDER }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: TEXT_COLOR }}>Default Tie Sheets</Text>
+            <Text style={{ fontSize: 12, fontWeight: '800', color: TEXT_SUB }}>
+              {franchises.filter((f) => defaultSubmitted.has(f.id)).length}/{franchises.length} submitted
+            </Text>
+          </View>
+          {[...franchises]
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+            .map((f, i, arr) => {
+              const done = defaultSubmitted.has(f.id);
+              return (
+                <View
+                  key={f.id}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: 7,
+                    borderBottomWidth: i === arr.length - 1 ? 0 : 1,
+                    borderBottomColor: '#F1F5F9',
+                  }}
+                >
+                  <Text style={{ fontSize: 13, color: TEXT_COLOR, flex: 1, marginRight: 8 }} numberOfLines={1}>
+                    {f.name}
+                  </Text>
+                  <View style={{ backgroundColor: done ? '#D1FAE5' : '#FEE2E2', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 0.3, color: done ? '#059669' : '#DC2626' }}>
+                      {done ? 'SUBMITTED' : 'PENDING'}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+        </View>
       </View>
     );
   };
@@ -1375,8 +1476,13 @@ const LeagueDashboardScreen: React.FC = () => {
 
   // ── Live / Next Up tie highlight ──
   const renderLiveTie = () => {
-    const liveTie = ties.find((t) => t.status === 'in_progress');
-    if (!liveTie) return null;
+    // ALL ties currently in progress — a live event runs many at once, so show
+    // every one here (soonest-started first), not just the first found.
+    const liveTies = ties
+      .filter((t) => t.status === 'in_progress' && !isHiddenPlayoff(t))
+      .slice()
+      .sort((a, b) => tieTimeKey(a) - tieTimeKey(b));
+    if (liveTies.length === 0) return null;
     return (
       <View style={{ marginBottom: 16 }}>
         <View style={styles.sectionHeaderRow}>
@@ -1385,7 +1491,7 @@ const LeagueDashboardScreen: React.FC = () => {
             <Text style={styles.sectionTitle}>Live Now</Text>
           </View>
         </View>
-        {renderTieCard(liveTie)}
+        {liveTies.map((t) => <View key={t.id}>{renderTieCard(t)}</View>)}
       </View>
     );
   };
@@ -1599,6 +1705,73 @@ const LeagueDashboardScreen: React.FC = () => {
       contentContainerStyle={styles.tabContent}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
+      {/* Watch Live — a compact banner that expands a dropdown of per-court
+          YouTube links from season.streamLinks. Collapsed by default so it
+          doesn't push the sponsors down. Organiser swaps links daily via the
+          streamLinks JSON (set-stream-links.sh / PATCH endpoint) — no rebuild. */}
+      {(() => {
+        const links: Record<string, string> = ((season as any)?.streamLinks) || {};
+        const courts = Object.keys(links)
+          .filter((k) => !!links[k])
+          .sort((a, b) => Number(a) - Number(b));
+        if (!courts.length) return null;
+        return (
+          <View
+            style={{
+              marginHorizontal: 14,
+              marginTop: 10,
+              marginBottom: 12,
+              backgroundColor: '#0B0E16',
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: '#C9A227',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Banner (always visible, compact) */}
+            <TouchableOpacity
+              onPress={() => setStreamsOpen((o) => !o)}
+              activeOpacity={0.85}
+              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, gap: 8 }}
+            >
+              <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: '#EF4444' }} />
+              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '900', letterSpacing: 0.5 }}>WATCH LIVE</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700' }}>
+                {'· ' + courts.length + ' court' + (courts.length === 1 ? '' : 's') + ' · YouTube'}
+              </Text>
+              <View style={{ flex: 1 }} />
+              <Text style={{ color: '#C9A227', fontSize: 12, fontWeight: '900' }}>{streamsOpen ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
+            {/* Dropdown (only when expanded) */}
+            {streamsOpen ? (
+              <View style={{ paddingHorizontal: 10, paddingBottom: 10, gap: 8 }}>
+                {courts.map((c) => (
+                  <TouchableOpacity
+                    key={`stream-${c}`}
+                    onPress={() => Linking.openURL(links[c])}
+                    activeOpacity={0.85}
+                    style={{
+                      backgroundColor: '#EF4444',
+                      borderRadius: 10,
+                      paddingVertical: 11,
+                      paddingHorizontal: 12,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, color: '#fff' }}>▶</Text>
+                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '900', letterSpacing: 0.3 }}>Watch Court {c}</Text>
+                    <View style={{ flex: 1 }} />
+                    <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 }}>● LIVE</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        );
+      })()}
+
       {/* Captain shortcut — a logged-in captain (matched by phone) gets a blue
           tile that opens their tie-sheet portal in the browser. */}
       {captainTeams.map((ct, i) => (
@@ -1778,8 +1951,9 @@ const LeagueDashboardScreen: React.FC = () => {
           </Text>
         </View>
       ) : (() => {
-        const upcoming = ties.filter((t) => t.status !== 'completed');
-        const completed = ties.filter((t) => t.status === 'completed');
+        const hiddenPO = (_t: any) => false;  // 3rd-place playoff now visible pre-teams
+        const upcoming = ties.filter((t) => t.status !== 'completed' && !hiddenPO(t));
+        const completed = ties.filter((t) => t.status === 'completed' && !hiddenPO(t));
         const shown = fixtureTab === 'completed' ? completed : upcoming;
         const sorted = [...shown].sort((a, b) => {
           // Completed: newest first. Upcoming: soonest first.
