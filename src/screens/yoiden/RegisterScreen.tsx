@@ -18,7 +18,8 @@ import { registrationsApi } from '../../api/registrations.api';
 import { paymentsApi } from '../../api/payments.api';
 import { openRazorpay } from '../../utils/razorpay';
 import { useAuthStore } from '../../store/authStore';
-import { getDuprMe } from '../../api/dupr.api';
+import { getDuprMe, linkDupr } from '../../api/dupr.api';
+import { presentDuprSso } from '../../utils/dupr-host-bridge';
 import { DUPR_ENABLED } from '../../config/constants';
 import { TournamentCategory } from '../../types/tournament.types';
 import { YColors, YTopBar } from '../../components/yoiden';
@@ -54,13 +55,22 @@ export default function RegisterScreen({ navigation, route }: Props) {
   const [duprLinked, setDuprLinked] = useState<boolean | null>(null);
   const [duprBlockMsg, setDuprBlockMsg] = useState<string | null>(null);
 
-  const goToConnectDupr = () => {
-    // RegisterScreen lives in the Discover stack; the Connect DUPR card is on the Me tab.
-    const parent = navigation.getParent();
-    if (parent) {
-      (parent as any).navigate('MeTab', { screen: 'Me' });
-    } else {
-      (navigation as any).navigate('MeTab', { screen: 'Me' });
+  // Connect DUPR right here (popup) instead of navigating to the Me tab, so the
+  // half-filled registration form is never lost. On success, unblock inline.
+  const [duprConnecting, setDuprConnecting] = useState(false);
+  const handleConnectDupr = async () => {
+    if (duprConnecting) return;
+    setDuprConnecting(true);
+    try {
+      const result = await presentDuprSso();
+      await linkDupr(result);
+      setDuprLinked(true);
+      setDuprBlockMsg(null);
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || '';
+      if (msg && !/cancel/i.test(msg)) notify.error(msg);
+    } finally {
+      setDuprConnecting(false);
     }
   };
 
@@ -366,10 +376,13 @@ export default function RegisterScreen({ navigation, route }: Props) {
             </Text>
             <TouchableOpacity
               style={styles.duprBlockButton}
-              onPress={goToConnectDupr}
+              onPress={handleConnectDupr}
+              disabled={duprConnecting}
               activeOpacity={0.85}
             >
-              <Text style={styles.duprBlockButtonText}>CONNECT DUPR</Text>
+              <Text style={styles.duprBlockButtonText}>
+                {duprConnecting ? 'CONNECTING…' : 'CONNECT DUPR'}
+              </Text>
             </TouchableOpacity>
           </View>
         )}

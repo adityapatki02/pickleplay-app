@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -21,9 +21,13 @@ import { tournamentsApi } from '../../api/tournaments.api';
 import {
   getMyDuprAdminClubs,
   enableTournamentDupr,
+  linkDupr,
   type DuprAdminClub,
 } from '../../api/dupr.api';
+import { presentDuprSso } from '../../utils/dupr-host-bridge';
 import { DUPR_ENABLED } from '../../config/constants';
+import { useAuthStore } from '../../store/authStore';
+import { saveDraft, loadDraft, clearDraft } from '../../utils/formDraft';
 import { useTournamentStore } from '../../store/tournamentStore';
 import {
   CategoryFormat,
@@ -109,6 +113,29 @@ const duprStyles = StyleSheet.create({
     paddingVertical: 2,
   },
   badgeText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5, color: '#fff' },
+});
+
+// Resume-draft banner (shown when an unfinished tournament is found on reopen).
+const draftStyles = StyleSheet.create({
+  banner: {
+    backgroundColor: '#FFF7E6',
+    borderWidth: 1,
+    borderColor: '#F0C15A',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 14,
+  },
+  bannerTitle: { fontSize: 13, fontWeight: '800', color: '#8A5A00', marginBottom: 4 },
+  bannerBody: { fontSize: 13, lineHeight: 18, color: '#7A5A1E' },
+  bannerActions: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 12 },
+  resumeBtn: {
+    backgroundColor: BLUE_ACCENT,
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  resumeBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.6, color: '#fff' },
+  discardText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.6, color: '#94734A' },
 });
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -526,6 +553,95 @@ export default function CreateTournamentScreen() {
     };
   }, []);
 
+  // ── Inline DUPR connect (no navigating away, so the form is never lost) ──
+  const [duprConnecting, setDuprConnecting] = useState(false);
+  const handleConnectDupr = useCallback(async () => {
+    if (duprConnecting) return;
+    setDuprConnecting(true);
+    try {
+      const result = await presentDuprSso();
+      await linkDupr(result);
+      const res = await getMyDuprAdminClubs();
+      setDupr({
+        loading: false,
+        connected: !!res.data?.connected,
+        clubs: res.data?.clubs ?? [],
+      });
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || '';
+      if (msg && !/cancel/i.test(msg)) xAlert('DUPR', msg);
+    } finally {
+      setDuprConnecting(false);
+    }
+  }, [duprConnecting]);
+
+  // ── Draft autosave + resume ──────────────────────────────────────────────
+  // Everything typed is saved locally so nothing is lost on navigate-away /
+  // reload / app-close. On reopen, if an unfinished draft exists we offer to
+  // resume it (rather than silently reopening) so a fresh start isn't hijacked.
+  const authUser = useAuthStore((s) => s.user);
+  const draftKey = `draft:createTournament:${authUser?.id ?? 'anon'}`;
+  const [resumeDraft, setResumeDraft] = useState<null | {
+    form: FormData;
+    step: number;
+    visibility: 'public' | 'unlisted' | 'draft';
+    tournamentFormatType: 'pool_knockout' | 'knockout_only';
+  }>(null);
+  const [draftLoaded, setDraftLoaded] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    loadDraft<{
+      form: FormData;
+      step: number;
+      visibility: 'public' | 'unlisted' | 'draft';
+      tournamentFormatType: 'pool_knockout' | 'knockout_only';
+    }>(draftKey).then((d) => {
+      if (!alive) return;
+      const meaningful =
+        !!d &&
+        (!!d.form?.name?.trim() ||
+          !!d.form?.venueName?.trim() ||
+          (d.form?.categories?.length ?? 0) > 0 ||
+          (d.step ?? 1) > 1);
+      if (meaningful) setResumeDraft(d);
+      setDraftLoaded(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [draftKey]);
+
+  // Debounced save. Held off until the draft has loaded and (if any) the
+  // resume prompt is resolved, so we never overwrite a stored draft with the
+  // still-empty form behind the prompt.
+  useEffect(() => {
+    if (!draftLoaded || resumeDraft) return;
+    const pristine =
+      !form.name.trim() &&
+      !form.venueName.trim() &&
+      form.categories.length === 0 &&
+      step === 1;
+    if (pristine) return;
+    const t = setTimeout(() => {
+      saveDraft(draftKey, { form, step, visibility, tournamentFormatType });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [form, step, visibility, tournamentFormatType, draftLoaded, resumeDraft, draftKey]);
+
+  const resumeFromDraft = () => {
+    if (!resumeDraft) return;
+    setForm(resumeDraft.form);
+    setStep(resumeDraft.step ?? 1);
+    setVisibility(resumeDraft.visibility ?? 'unlisted');
+    setTournamentFormatType(resumeDraft.tournamentFormatType ?? 'pool_knockout');
+    setResumeDraft(null);
+  };
+  const discardDraft = () => {
+    clearDraft(draftKey);
+    setResumeDraft(null);
+  };
+
   // Extract lat/lng from a Google Maps URL
   const parseMapsLink = (url: string): { lat: number; lng: number } | null => {
     // Format: /@18.5204,73.8567,17z or ?q=18.5204,73.8567
@@ -678,6 +794,8 @@ export default function CreateTournamentScreen() {
       }
 
       addTournament(tournament);
+      // The tournament exists now — drop the local draft so it doesn't resurface.
+      clearDraft(draftKey);
 
       // Non-draft events get a shareable link straight away. Copy it to the
       // clipboard now so the organizer can paste it to their group without
@@ -891,9 +1009,20 @@ export default function CreateTournamentScreen() {
         {dupr.loading ? (
           <ActivityIndicator color={BLUE_ACCENT} style={{ alignSelf: 'flex-start', marginTop: 4 }} />
         ) : !dupr.connected ? (
-          <Text style={duprStyles.note}>
-            Connect your DUPR account from your profile to submit official ratings for this event.
-          </Text>
+          <>
+            <Text style={duprStyles.note}>
+              Connect your DUPR account to submit official ratings for this event.
+            </Text>
+            <YButton
+              variant="accent"
+              size="sm"
+              style={{ marginTop: 12, alignSelf: 'flex-start' }}
+              onPress={handleConnectDupr}
+              disabled={duprConnecting}
+            >
+              {duprConnecting ? 'CONNECTING…' : 'CONNECT DUPR'}
+            </YButton>
+          </>
         ) : dupr.clubs.length === 0 ? (
           <Text style={duprStyles.note}>
             You're not a director or organizer of a DUPR club yet. Apply on DUPR to run rated events —
@@ -1132,6 +1261,23 @@ export default function CreateTournamentScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {resumeDraft && (
+            <View style={draftStyles.banner}>
+              <Text style={draftStyles.bannerTitle}>Unfinished tournament</Text>
+              <Text style={draftStyles.bannerBody}>
+                You have a tournament you started but didn't finish
+                {resumeDraft.form?.name?.trim() ? ` — "${resumeDraft.form.name.trim()}"` : ''}.
+              </Text>
+              <View style={draftStyles.bannerActions}>
+                <TouchableOpacity onPress={resumeFromDraft} style={draftStyles.resumeBtn} activeOpacity={0.85}>
+                  <Text style={draftStyles.resumeBtnText}>RESUME</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={discardDraft} hitSlop={8} style={{ justifyContent: 'center' }}>
+                  <Text style={draftStyles.discardText}>START FRESH</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
           <View style={styles.formCard}>
             {step === 1 && renderStep1()}
             {step === 2 && renderStep2()}
