@@ -39,7 +39,7 @@ import {
 import { colors, spacing, typography, borderRadius, shadows } from '../../config/theme';
 import DatePickerModal, { DateField } from '../../components/ui/DatePickerModal';
 import PlacesAutocomplete, { PlaceResult } from '../../components/ui/PlacesAutocomplete';
-import { YColors, YTopBar, YButton } from '../../components/yoiden';
+import { YColors, YTopBar, YButton, YDisplay } from '../../components/yoiden';
 import * as ImagePicker from 'expo-image-picker';
 
 const NAVY = YColors.ink;
@@ -478,7 +478,8 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
 
 const stepStyles = StyleSheet.create({
   container: {
-    paddingVertical: spacing.md,
+    paddingTop: 4,
+    paddingBottom: 8,
     alignItems: 'center',
     backgroundColor: 'transparent',
     borderBottomWidth: 1,
@@ -487,12 +488,12 @@ const stepStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: 3,
   },
   dot: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1316,7 +1317,12 @@ export default function CreateTournamentScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <YTopBar eyebrow="HOST" title="CREATE TOURNAMENT" onBack={goBack} />
+        <YTopBar
+          eyebrow="HOST"
+          title={<YDisplay size={22}>CREATE TOURNAMENT</YDisplay>}
+          onBack={goBack}
+          style={{ paddingTop: 12, paddingBottom: 8 }}
+        />
 
         {/* Step indicator */}
         <StepIndicator current={step} total={TOTAL_STEPS} />
