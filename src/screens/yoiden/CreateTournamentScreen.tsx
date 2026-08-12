@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -514,6 +514,13 @@ export default function CreateTournamentScreen() {
   const navigation = useNavigation();
   const { addTournament } = useTournamentStore();
   const [step, setStep] = useState(1);
+  // Reset scroll to the top on each step change — otherwise the new step opens
+  // scrolled to wherever the previous step was (usually the bottom, since you
+  // scroll down to reach Next).
+  const scrollRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [step]);
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [saving, setSaving] = useState(false);
   // Discovery visibility for this event. Default 'unlisted' so a new event is
@@ -1257,6 +1264,7 @@ export default function CreateTournamentScreen() {
         {/* Step indicator */}
         <StepIndicator current={step} total={TOTAL_STEPS} />
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
