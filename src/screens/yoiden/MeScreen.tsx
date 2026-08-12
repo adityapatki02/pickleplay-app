@@ -203,7 +203,10 @@ export default function MeScreen() {
       }
       await acceptDuprInvite(invite.id, clubId);
       setDuprInvites((prev) => prev.filter((i) => i.id !== invite.id));
-      xAlert('DUPR authorized', `"${invite.tournamentName ?? 'The event'}" is now DUPR-rated under your club.`);
+      xAlert(
+        'You\'re now a co-owner',
+        `You can manage "${invite.tournamentName ?? 'the event'}" — and it's now DUPR-rated under your club. Find it under your hosted events.`,
+      );
     } catch (e: any) {
       const msg = e?.response?.data?.message || 'Could not accept the invite.';
       xAlert('DUPR', Array.isArray(msg) ? msg.join('\n') : msg);
@@ -420,10 +423,11 @@ export default function MeScreen() {
         {duprInvites.length > 0 && (
           <View style={styles.inviteCard}>
             <YUiText size={11} weight={900} color={YColors.ink} style={{ letterSpacing: 1, marginBottom: 10 }}>
-              DUPR CO-OWNER INVITES
+              TOURNAMENT CO-OWNER INVITES
             </YUiText>
             <YUiText size={12} color={YColors.ink2} style={{ marginBottom: 12, lineHeight: 17 }}>
-              An organizer asked you to authorize a DUPR-rated event under your club.
+              An organizer invited you to co-own their event. Accepting gives you full management
+              access — and authorizes its DUPR rating under your club.
             </YUiText>
             {duprInvites.map((inv) => (
               <View key={inv.id} style={styles.inviteRow}>
@@ -432,7 +436,7 @@ export default function MeScreen() {
                 </YUiText>
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <YButton variant="accent" size="sm" onPress={() => handleAcceptInvite(inv)}>
-                    AUTHORIZE
+                    ACCEPT
                   </YButton>
                   <Pressable onPress={() => handleDeclineInvite(inv)} hitSlop={8} style={{ justifyContent: 'center' }}>
                     <YUiText size={11} weight={800} color={YColors.ink3} style={{ letterSpacing: 0.8 }}>

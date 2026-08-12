@@ -108,7 +108,12 @@ export default function TournamentDetailScreen() {
     fetchDetail();
   }, [fetchDetail]);
 
-  const isOrganizer = !!t && !!currentUser && t.organizerId === currentUser.id;
+  // Owner OR an accepted co-owner gets the full management view.
+  const isOrganizer =
+    !!t &&
+    !!currentUser &&
+    (t.organizerId === currentUser.id ||
+      ((t as any).coOwnerIds ?? []).includes(currentUser.id));
 
   // ── Discovery visibility (organizer control) ──────────────────────────────
   const [visBusy, setVisBusy] = useState(false);
