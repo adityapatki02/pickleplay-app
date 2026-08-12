@@ -910,7 +910,7 @@ const styles = StyleSheet.create({
     backgroundColor: YColors.accentDeep,
   },
   leagueBanner: {
-    backgroundColor: '#0B2545', // deep navy — reads as broadcast, not chrome
+    backgroundColor: '#1858D6', // deep navy — reads as broadcast, not chrome
     borderRadius: 18,
     padding: 16,
     overflow: 'hidden',

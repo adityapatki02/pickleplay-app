@@ -20,7 +20,7 @@ import { registrationsApi } from '../api/registrations.api';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const NAVY = '#001E40';
-const BLUE = '#2196F3';
+const BLUE = '#1858D6';
 const GREEN = '#06D6A0';
 const ORANGE = '#FFB703';
 const RED = '#BA1A1A';
@@ -170,7 +170,7 @@ function LeaderboardRow({ rank, player, isMe }: { rank: number; player: any; isM
   const matches = player.matchesPlayed ?? 0;
 
   const initials = name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
-  const avatarColors = ['#001E40', '#2196F3', '#7B2FBE', '#00A86B', '#E85D04'];
+  const avatarColors = ['#001E40', '#1858D6', '#7B2FBE', '#00A86B', '#E85D04'];
   const bgColor = avatarColors[rank % avatarColors.length];
 
   return (
@@ -270,14 +270,14 @@ export default function StatsScreen() {
   // ── MY STATS TAB ──
   const renderMyStats = () => {
     if (loading) {
-      return <View style={s.center}><ActivityIndicator size="large" color={'#2196F3'} /></View>;
+      return <View style={s.center}><ActivityIndicator size="large" color={'#1858D6'} /></View>;
     }
 
     return (
       <ScrollView
         contentContainerStyle={s.scroll}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchData(true)} tintColor={'#2196F3'} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchData(true)} tintColor={'#1858D6'} />}
       >
         {/* Rating card */}
         <View style={s.ratingCard}>
@@ -392,14 +392,14 @@ export default function StatsScreen() {
   // ── LEADERBOARD TAB ──
   const renderLeaderboard = () => {
     if (loading) {
-      return <View style={s.center}><ActivityIndicator size="large" color={'#2196F3'} /></View>;
+      return <View style={s.center}><ActivityIndicator size="large" color={'#1858D6'} /></View>;
     }
 
     return (
       <ScrollView
         contentContainerStyle={s.scroll}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchData(true)} tintColor={'#2196F3'} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchData(true)} tintColor={'#1858D6'} />}
       >
         {/* Format toggle */}
         <View style={s.lbFormatRow}>
@@ -500,7 +500,7 @@ const s = StyleSheet.create({
     flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
     backgroundColor: '#F5F7FA',
   },
-  tabBtnActive: { backgroundColor: '#2196F3' },
+  tabBtnActive: { backgroundColor: '#1858D6' },
   tabText: { fontSize: 11, fontWeight: '800', color: '#94A3B8', letterSpacing: 1.2 },
   tabTextActive: { color: WHITE },
 
@@ -579,7 +579,7 @@ const s = StyleSheet.create({
     flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
     backgroundColor: '#F5F7FA', borderWidth: 1.5, borderColor: '#E2E8F0',
   },
-  lbFormatBtnActive: { backgroundColor: '#2196F3', borderColor: '#2196F3' },
+  lbFormatBtnActive: { backgroundColor: '#1858D6', borderColor: '#1858D6' },
   lbFormatText: { fontSize: 11, fontWeight: '800', color: '#94A3B8', letterSpacing: 1.2 },
   lbFormatTextActive: { color: WHITE },
 

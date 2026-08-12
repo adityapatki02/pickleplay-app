@@ -4,8 +4,8 @@
 export const light = {
   // Primary colors
   primary: '#001E40',       // Deep Navy
-  secondary: '#2196F3',     // Velocity Blue
-  accent: '#2196F3',        // Same as secondary
+  secondary: '#1858D6',     // Velocity Blue
+  accent: '#1858D6',        // Same as secondary
 
   // Backgrounds
   bg: '#FFFFFF',            // Main background
@@ -40,7 +40,7 @@ export const light = {
   success: '#06D6A0',
   warning: '#FFB703',
   error: '#EF4444',
-  info: '#2196F3',
+  info: '#1858D6',
 
   // Specific UI elements
   inputBg: '#F5F7FA',
@@ -71,7 +71,7 @@ export const light = {
   ratingBg: '#FFF8E1',
   ratingText: '#F59E0B',
   newBadgeBg: '#EFF6FF',
-  newBadgeText: '#2196F3',
+  newBadgeText: '#1858D6',
 
   // Check-in
   checkedInBg: '#F0FDF4',

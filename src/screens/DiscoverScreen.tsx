@@ -23,7 +23,7 @@ import { light } from '../config/lightTheme';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const NAVY = '#001E40';
-const BLUE_ACCENT = '#2196F3';
+const BLUE_ACCENT = '#1858D6';
 const TEXT_PRIMARY = '#1A1D21';
 const TEXT_SECONDARY = '#64748B';
 const TEXT_TERTIARY = '#94A3B8';

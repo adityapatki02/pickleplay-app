@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeIcon, ExploreIcon, CalendarIcon, ProfileIcon } from './TabIcons';
 
 const NAVY = '#001E40';
-const BLUE_ACCENT = '#2196F3';
+const BLUE_ACCENT = '#1858D6';
 
 type TabItem = {
   key: string;

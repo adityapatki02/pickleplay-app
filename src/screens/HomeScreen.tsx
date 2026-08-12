@@ -23,7 +23,7 @@ import { light } from '../config/lightTheme';
 
 // ─── Design tokens ──────────────────────────────────────────────────────────
 const NAVY = '#001E40';
-const BLUE_ACCENT = '#2196F3';
+const BLUE_ACCENT = '#1858D6';
 const RED = '#EF4444';
 const GREEN = '#22C55E';
 const TEXT_PRIMARY = '#1A1D21';
@@ -754,7 +754,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
-    backgroundColor: '#2196F3',
+    backgroundColor: '#1858D6',
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -926,7 +926,7 @@ const styles = StyleSheet.create({
   upcomingCardCat: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#2196F3',
+    color: '#1858D6',
     marginTop: 2,
   },
   upcomingChevron: {
@@ -943,7 +943,7 @@ const styles = StyleSheet.create({
   seeAllBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#2196F3',
+    color: '#1858D6',
     letterSpacing: 0.3,
   },
 
@@ -987,7 +987,7 @@ const styles = StyleSheet.create({
   leagueStatusBadgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#2196F3',
+    color: '#1858D6',
     letterSpacing: 1,
   },
   leaguePercent: {
@@ -1030,7 +1030,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   leagueArrow: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#1858D6',
     alignSelf: 'stretch',
     paddingVertical: 12,
     borderRadius: 12,

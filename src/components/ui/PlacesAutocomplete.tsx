@@ -32,7 +32,7 @@ interface Suggestion {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const NAVY = '#001E40';
-const BLUE = '#2196F3';
+const BLUE = '#1858D6';
 const GRAY = '#737780';
 const WHITE = '#FFFFFF';
 const BG = '#F8F9FA';

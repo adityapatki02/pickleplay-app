@@ -18,7 +18,7 @@ function parseISO(iso?: string): Date | null {
 }
 
 const NAVY  = '#001E40';
-const BLUE  = '#2196F3';
+const BLUE  = '#1858D6';
 const BG    = '#F8F9FA';
 const WHITE = '#FFFFFF';
 const GRAY  = '#737780';

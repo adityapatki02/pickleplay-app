@@ -1671,7 +1671,7 @@ const LeagueDashboardScreen: React.FC = () => {
             marginHorizontal: 14,
             marginTop: 6,
             marginBottom: 12,
-            backgroundColor: '#2196F3',
+            backgroundColor: '#1858D6',
             borderRadius: YRadius.xl,
             paddingVertical: 16,
             paddingHorizontal: 16,
@@ -2912,7 +2912,7 @@ const LeagueDashboardScreen: React.FC = () => {
           'Review the weighted ranking below. Confirm who advances to Q1 and Eliminator.',
           'CONFIRM H1–H4 & GENERATE PLAYOFFS',
           'playoffs',
-          '#2196F3',
+          '#1858D6',
         )}
 
         {/* Standings — live weighted ranking (appears as soon as any QF exists, updates with every completed match) */}
@@ -3005,7 +3005,7 @@ const LeagueDashboardScreen: React.FC = () => {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, marginBottom: 4 }}>
           <Text style={koStyles.sectionTitle}>QF FIXTURES</Text>
           {isAdmin && (qf1 || qf2 || qf3 || qf4) && (
-            <TouchableOpacity onPress={() => openRoundSetup('QF')} style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#2196F3' }}>
+            <TouchableOpacity onPress={() => openRoundSetup('QF')} style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#1858D6' }}>
               <Text style={{ fontSize: 11, fontWeight: '800', color: '#1E40AF' }}>⚙ SETUP</Text>
             </TouchableOpacity>
           )}
@@ -3066,7 +3066,7 @@ const LeagueDashboardScreen: React.FC = () => {
             <Text style={{ fontSize: 11, color: TEXT_SUB, marginBottom: 8 }}>
               Q1 winner → Final • Q1 loser → Q2 • Eliminator winner → Q2 • Q2 winner → Final
             </Text>
-            {summaryRow('Q1', q1Tie, '#2196F3')}
+            {summaryRow('Q1', q1Tie, '#1858D6')}
             {summaryRow('ELIM', eliminator, '#F97316')}
             {summaryRow('Q2', q2Tie, '#FFB300')}
           </View>
@@ -3075,14 +3075,14 @@ const LeagueDashboardScreen: React.FC = () => {
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, marginBottom: 4 }}>
             <Text style={koStyles.sectionTitle}>PLAYOFF FIXTURES</Text>
             {isAdmin && (q1Tie || eliminator || q2Tie) && (
-              <TouchableOpacity onPress={() => openRoundSetup('PLAYOFFS')} style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#2196F3' }}>
+              <TouchableOpacity onPress={() => openRoundSetup('PLAYOFFS')} style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#1858D6' }}>
                 <Text style={{ fontSize: 11, fontWeight: '800', color: '#1E40AF' }}>⚙ SETUP</Text>
               </TouchableOpacity>
             )}
           </View>
           <View style={{ paddingHorizontal: 14 }}>
             <View style={{ marginBottom: 8 }}>
-              <Text style={{ fontSize: 11, fontWeight: '800', color: '#2196F3', marginBottom: 4, letterSpacing: 0.5 }}>QUALIFIER 1</Text>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#1858D6', marginBottom: 4, letterSpacing: 0.5 }}>QUALIFIER 1</Text>
               {renderKnockoutTieCard(q1Tie || null, 'Q1', 'H1 vs H2 — Winner → Final, Loser → Q2')}
             </View>
             <View style={{ marginBottom: 8 }}>
@@ -3149,18 +3149,18 @@ const LeagueDashboardScreen: React.FC = () => {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, marginBottom: 4 }}>
           <Text style={koStyles.sectionTitle}>SF FIXTURES</Text>
           {isAdmin && (sf1 || sf2) && (
-            <TouchableOpacity onPress={() => openRoundSetup('SF')} style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#2196F3' }}>
+            <TouchableOpacity onPress={() => openRoundSetup('SF')} style={{ backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#1858D6' }}>
               <Text style={{ fontSize: 11, fontWeight: '800', color: '#1E40AF' }}>⚙ SETUP</Text>
             </TouchableOpacity>
           )}
         </View>
         <View style={{ paddingHorizontal: 14 }}>
           <View style={{ marginBottom: 8 }}>
-            <Text style={{ fontSize: 11, fontWeight: '800', color: '#2196F3', marginBottom: 4, letterSpacing: 0.5 }}>SEMIFINAL 1</Text>
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#1858D6', marginBottom: 4, letterSpacing: 0.5 }}>SEMIFINAL 1</Text>
             {renderKnockoutTieCard(sf1 || null, 'SF1', 'H1 vs H4 — winner → Final')}
           </View>
           <View style={{ marginBottom: 4 }}>
-            <Text style={{ fontSize: 11, fontWeight: '800', color: '#2196F3', marginBottom: 4, letterSpacing: 0.5 }}>SEMIFINAL 2</Text>
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#1858D6', marginBottom: 4, letterSpacing: 0.5 }}>SEMIFINAL 2</Text>
             {renderKnockoutTieCard(sf2 || null, 'SF2', 'H2 vs H3 — winner → Final')}
           </View>
         </View>
@@ -4989,7 +4989,7 @@ const LeagueDashboardScreen: React.FC = () => {
                   )}
 
                   {/* Helper note */}
-                  <View style={{ backgroundColor: '#EFF6FF', borderRadius: 8, padding: 10, marginTop: 8, borderLeftWidth: 3, borderLeftColor: '#2196F3' }}>
+                  <View style={{ backgroundColor: '#EFF6FF', borderRadius: 8, padding: 10, marginTop: 8, borderLeftWidth: 3, borderLeftColor: '#1858D6' }}>
                     <Text style={{ fontSize: 11, color: '#1E40AF', lineHeight: 16 }}>
                       💡 Scorers just sign into the Yoiden app with this phone number — their assigned matches appear on their home screen under <Text style={{ fontWeight: '700' }}>Scorer's Matches</Text>. Tap SEND WA to send them a heads-up. Assign matches to a scorer from each tie's detail screen.
                     </Text>

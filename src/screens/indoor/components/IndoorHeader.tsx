@@ -17,7 +17,7 @@ export function IndoorHeader({ onBack, title, right }: {
         {title ? <Text style={s.title} numberOfLines={1}>{title}</Text> : null}
       </View>
       {right ? <View>{right}</View> : null}
-      <LinearGradient colors={[ '#001E40', '#2196F3', '#06D6A0' ]} start={{x:0,y:0}} end={{x:1,y:0}}
+      <LinearGradient colors={[ '#001E40', '#1858D6', '#06D6A0' ]} start={{x:0,y:0}} end={{x:1,y:0}}
         style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 3 }} />
     </View>
   );

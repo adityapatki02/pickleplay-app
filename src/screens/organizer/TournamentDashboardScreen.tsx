@@ -21,7 +21,7 @@ import { Tournament, TournamentStatus, TournamentCategory } from '../../types/to
 import { colors, spacing, typography, borderRadius } from '../../config/theme';
 import { MyEventsStackParamList } from '../../navigation/types';
 
-const BLUE_ACCENT = '#2196F3';
+const BLUE_ACCENT = '#1858D6';
 const NAVY = '#001E40';
 
 type NavProp = NativeStackNavigationProp<MyEventsStackParamList, 'TournamentManage'>;

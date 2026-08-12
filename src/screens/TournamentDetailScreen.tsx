@@ -27,7 +27,7 @@ import { DiscoverStackParamList } from '../navigation/types';
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const NAVY = '#001E40';
-const BLUE = '#2196F3';
+const BLUE = '#1858D6';
 const BG = '#F3F4F5';
 const WHITE = '#FFFFFF';
 const GREEN = '#06D6A0';
@@ -473,7 +473,7 @@ function CategoryDetailCard({
     : undefined;
   const isFull = spotsLeft !== undefined && spotsLeft <= 0;
   const isCatOpen = category.status === 'open' && isOpen && !isFull;
-  const accentColors = [BLUE, '#7B2FBE', '#00A86B', '#E85D04', '#2196F3'];
+  const accentColors = [BLUE, '#7B2FBE', '#00A86B', '#E85D04', '#1858D6'];
   const accent = accentColors[index % accentColors.length];
 
   return (
@@ -612,7 +612,7 @@ function PlayersTab({ tournament }: { tournament: Tournament }) {
   if (loading) {
     return (
       <View style={s.emptyCenter}>
-        <ActivityIndicator size="large" color={'#2196F3'} />
+        <ActivityIndicator size="large" color={'#1858D6'} />
       </View>
     );
   }
@@ -695,7 +695,7 @@ function PlayerRow({ reg, index }: { reg: Registration; index: number }) {
   const initials = name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
   const skill = reg.user?.selfReportedSkill;
   const city = reg.user?.city;
-  const avatarColors = ['#001E40', '#2196F3', '#7B2FBE', '#00A86B', '#E85D04'];
+  const avatarColors = ['#001E40', '#1858D6', '#7B2FBE', '#00A86B', '#E85D04'];
   const bg = avatarColors[index % avatarColors.length];
 
   return (
@@ -812,7 +812,7 @@ export default function TournamentDetailScreen() {
           </TouchableOpacity>
         </View>
         <View style={s.loadingCenter}>
-          <ActivityIndicator size="large" color={'#2196F3'} />
+          <ActivityIndicator size="large" color={'#1858D6'} />
           <Text style={s.loadingText}>Loading tournament...</Text>
         </View>
       </SafeAreaView>
@@ -953,7 +953,7 @@ const s = StyleSheet.create({
     marginBottom: 24,
   },
   retryBtn: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#1858D6',
     paddingHorizontal: 28,
     paddingVertical: 12,
     borderRadius: 10,
@@ -1204,7 +1204,7 @@ const s = StyleSheet.create({
   mapsLink: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#2196F3',
+    color: '#1858D6',
     letterSpacing: 0.3,
   },
 
@@ -1281,7 +1281,7 @@ const s = StyleSheet.create({
   contactAction: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#2196F3',
+    color: '#1858D6',
     letterSpacing: 0.5,
   },
 
@@ -1410,7 +1410,7 @@ const s = StyleSheet.create({
     color: '#1A1D21',
   },
   registerBtn: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#1858D6',
     paddingHorizontal: 18,
     paddingVertical: 9,
     borderRadius: 22,
@@ -1443,8 +1443,8 @@ const s = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   catChipActive: {
-    backgroundColor: '#2196F3',
-    borderColor: '#2196F3',
+    backgroundColor: '#1858D6',
+    borderColor: '#1858D6',
   },
   catChipText: {
     fontSize: 11,

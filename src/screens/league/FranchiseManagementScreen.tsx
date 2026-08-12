@@ -54,7 +54,7 @@ export default function FranchiseManagementScreen() {
   // Modal form
   const [fname, setFname] = useState('');
   const [fshortName, setFshortName] = useState('');
-  const [fprimary, setFprimary] = useState('#2196F3');
+  const [fprimary, setFprimary] = useState('#1858D6');
   const [fsecondary, setFsecondary] = useState('#001E40');
   const [modalError, setModalError] = useState('');
 
@@ -82,7 +82,7 @@ export default function FranchiseManagementScreen() {
   const resetModal = () => {
     setFname('');
     setFshortName('');
-    setFprimary('#2196F3');
+    setFprimary('#1858D6');
     setFsecondary('#001E40');
     setModalError('');
   };
@@ -318,7 +318,7 @@ export default function FranchiseManagementScreen() {
               <Text style={styles.modalLabel}>PRIMARY COLOR (HEX)</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="#2196F3"
+                placeholder="#1858D6"
                 placeholderTextColor="#94A3B8"
                 value={fprimary}
                 onChangeText={setFprimary}

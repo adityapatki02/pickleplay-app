@@ -35,7 +35,7 @@ const COLORS = {
   surfaceAlt: '#F9FAFB',
   border: '#E2E8F0',
   navy: '#001E40',
-  blue: '#2196F3',
+  blue: '#1858D6',
   green: '#06D6A0',
   warn: '#FFB300',
   red: '#EF4444',

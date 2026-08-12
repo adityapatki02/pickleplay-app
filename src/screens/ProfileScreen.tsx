@@ -21,7 +21,7 @@ import { authApi } from '../api/auth.api';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const NAVY   = '#001E40';
-const BLUE   = '#2196F3';
+const BLUE   = '#1858D6';
 const BG     = '#FFFFFF';
 const WHITE  = '#FFFFFF';
 const GREEN  = '#06D6A0';
@@ -126,7 +126,7 @@ function getInitials(name: string): string {
 }
 
 function avatarColor(name: string): string {
-  const colors = ['#001E40', '#2196F3', '#7B2FBE', '#00A86B', '#E85D04', '#C77DFF'];
+  const colors = ['#001E40', '#1858D6', '#7B2FBE', '#00A86B', '#E85D04', '#C77DFF'];
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
   return colors[Math.abs(hash) % colors.length];
@@ -134,7 +134,7 @@ function avatarColor(name: string): string {
 
 const SKILL_LEVELS = ['beginner', 'intermediate', 'advanced', 'pro'] as const;
 const SKILL_LABELS = { beginner: 'BEGINNER', intermediate: 'INTER', advanced: 'ADVANCED', pro: 'PRO' };
-const SKILL_COLORS = { beginner: '#9ACBFF', intermediate: '#2196F3', advanced: '#001E40', pro: '#FFB703' };
+const SKILL_COLORS = { beginner: '#9ACBFF', intermediate: '#1858D6', advanced: '#001E40', pro: '#FFB703' };
 
 function SkillBar({ level }: { level: string | undefined }) {
   const idx = SKILL_LEVELS.indexOf(level as any);

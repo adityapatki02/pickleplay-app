@@ -386,7 +386,7 @@ export default function SeedingScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
         <SafeAreaView style={s.center}>
-          <ActivityIndicator size="large" color={'#2196F3'} />
+          <ActivityIndicator size="large" color={'#1858D6'} />
         </SafeAreaView>
       </SafeAreaView>
     );
@@ -648,7 +648,7 @@ export default function SeedingScreen() {
                                 {o.displayName ?? o.userName}
                               </Text>
                               {resolving ? (
-                                <ActivityIndicator size="small" color={'#2196F3'} />
+                                <ActivityIndicator size="small" color={'#1858D6'} />
                               ) : (
                                 <Text style={s.mergeArrow}>{'\u2192'}</Text>
                               )}
@@ -780,7 +780,7 @@ const s = StyleSheet.create({
     paddingVertical: 12,
   },
   backBtn: {
-    color: '#2196F3',
+    color: '#1858D6',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -808,7 +808,7 @@ const s = StyleSheet.create({
     paddingVertical: 10,
   },
   actionBtnText: {
-    color: '#2196F3',
+    color: '#1858D6',
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.3,
@@ -855,7 +855,7 @@ const s = StyleSheet.create({
     marginBottom: 10,
   },
   addSectionLabel: {
-    color: '#2196F3',
+    color: '#1858D6',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1,
@@ -922,7 +922,7 @@ const s = StyleSheet.create({
     fontWeight: '600',
   },
   addSubmitBtn: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#1858D6',
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 8,
@@ -976,7 +976,7 @@ const s = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#2196F3',
+    backgroundColor: '#1858D6',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 4,
@@ -1050,7 +1050,7 @@ const s = StyleSheet.create({
     marginRight: 8,
   },
   newBadgeText: {
-    color: '#2196F3',
+    color: '#1858D6',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1,
@@ -1092,7 +1092,7 @@ const s = StyleSheet.create({
     marginBottom: 6,
   },
   poolLabel: {
-    color: '#2196F3',
+    color: '#1858D6',
     fontSize: 13,
     fontWeight: '700',
     width: 56,
@@ -1112,7 +1112,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
   },
   generateBtn: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#1858D6',
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
@@ -1190,7 +1190,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   mergeBtnText: {
-    color: '#2196F3',
+    color: '#1858D6',
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -1233,7 +1233,7 @@ const s = StyleSheet.create({
     fontWeight: '600',
   },
   mergeArrow: {
-    color: '#2196F3',
+    color: '#1858D6',
     fontSize: 16,
     fontWeight: '700',
   },
@@ -1283,7 +1283,7 @@ const s = StyleSheet.create({
   },
   modalGenerateBtn: {
     flex: 1,
-    backgroundColor: '#2196F3',
+    backgroundColor: '#1858D6',
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',

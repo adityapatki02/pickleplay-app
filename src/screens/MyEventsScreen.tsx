@@ -23,7 +23,7 @@ import TournamentTile from '../components/ui/TournamentTile';
 import TournamentCarousel from '../components/ui/TournamentCarousel';
 // Light theme
 const NAVY = '#001E40';
-const BLUE = '#2196F3';
+const BLUE = '#1858D6';
 const BG = '#FFFFFF';
 const SURFACE = '#F5F7FA';
 const TEXT = '#1A1D21';
@@ -32,7 +32,7 @@ const TEXT3 = '#94A3B8';
 const BORDER = '#E2E8F0';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
-const BLUE_ACCENT = '#2196F3';
+const BLUE_ACCENT = '#1858D6';
 const RED = '#EF4444';
 const GREEN = '#22C55E';
 

@@ -1370,7 +1370,7 @@ const TieDetailScreen: React.FC = () => {
               marginTop: 12,
               backgroundColor: '#EFF6FF',
               borderWidth: 1,
-              borderColor: '#2196F3',
+              borderColor: '#1858D6',
               borderRadius: 10,
               paddingVertical: 12,
               alignItems: 'center',
@@ -2017,7 +2017,7 @@ const TieDetailScreen: React.FC = () => {
               <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
                 {homeMatchPts > 0 && (
                   <View style={{ backgroundColor: '#DBEAFE', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#2196F3' }}>+{homeMatchPts}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#1858D6' }}>+{homeMatchPts}</Text>
                   </View>
                 )}
                 {homeBonusPts > 0 && (
@@ -2030,14 +2030,14 @@ const TieDetailScreen: React.FC = () => {
                 )}
               </View>
               {/* Winner indicator */}
-              <Text style={{ fontSize: 10, fontWeight: '700', color: homeWon ? '#2196F3' : '#F97316' }}>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: homeWon ? '#1858D6' : '#F97316' }}>
                 {homeWon ? '← WIN' : 'WIN →'}
               </Text>
               {/* Away points */}
               <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
                 {awayMatchPts > 0 && (
                   <View style={{ backgroundColor: '#DBEAFE', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#2196F3' }}>+{awayMatchPts}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#1858D6' }}>+{awayMatchPts}</Text>
                   </View>
                 )}
                 {awayBonusPts > 0 && (
@@ -2643,7 +2643,7 @@ const TieDetailScreen: React.FC = () => {
                   activeOpacity={0.85}
                   style={{
                     flexGrow: 1, minWidth: 64, paddingVertical: 14, borderRadius: 10,
-                    backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#2196F3',
+                    backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#1858D6',
                     alignItems: 'center', opacity: openPortalBusy ? 0.5 : 1,
                   }}
                 >
@@ -2675,7 +2675,7 @@ const TieDetailScreen: React.FC = () => {
                 activeOpacity={0.85}
                 style={{
                   paddingVertical: 12, paddingHorizontal: 20, borderRadius: 10,
-                  backgroundColor: '#2196F3', opacity: (openPortalBusy || !openPortalMins) ? 0.5 : 1,
+                  backgroundColor: '#1858D6', opacity: (openPortalBusy || !openPortalMins) ? 0.5 : 1,
                 }}
               >
                 {openPortalBusy

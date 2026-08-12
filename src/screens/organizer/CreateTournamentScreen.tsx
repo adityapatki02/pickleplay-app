@@ -28,7 +28,7 @@ import DatePickerModal, { DateField } from '../../components/ui/DatePickerModal'
 import PlacesAutocomplete, { PlaceResult } from '../../components/ui/PlacesAutocomplete';
 
 const NAVY = '#001E40';
-const BLUE_ACCENT = '#2196F3';
+const BLUE_ACCENT = '#1858D6';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -570,7 +570,7 @@ export default function CreateTournamentScreen() {
               onPress={() => setManualVenue(true)}
               style={{ marginTop: 8 }}
             >
-              <Text style={{ fontSize: 12, fontWeight: '600', color: '#2196F3' }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#1858D6' }}>
                 Can't find your venue? Enter manually →
               </Text>
             </TouchableOpacity>
@@ -612,7 +612,7 @@ export default function CreateTournamentScreen() {
               onPress={() => setManualVenue(false)}
               style={{ marginTop: -4, marginBottom: 8 }}
             >
-              <Text style={{ fontSize: 12, fontWeight: '600', color: '#2196F3' }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: '#1858D6' }}>
                 ← Search with Google instead
               </Text>
             </TouchableOpacity>

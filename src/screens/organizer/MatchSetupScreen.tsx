@@ -23,7 +23,7 @@ type NavProp = NativeStackNavigationProp<MyEventsStackParamList, 'MatchSetup'>;
 type RouteType = RouteProp<MyEventsStackParamList, 'MatchSetup'>;
 
 const GREEN = '#06D6A0';
-const BLUE = '#2196F3';
+const BLUE = '#1858D6';
 const YELLOW = '#FFB703';
 const NAVY = '#001E40';
 

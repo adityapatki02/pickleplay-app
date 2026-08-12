@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { TournamentStatus } from '../../types/tournament.types';
 
 const NAVY = '#001E40';
-const BLUE = '#2196F3';
+const BLUE = '#1858D6';
 const GREEN = '#06D6A0';
 const ORANGE = '#F59E0B';
 const RED = '#EF4444';

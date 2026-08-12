@@ -22,7 +22,7 @@ import { registrationsApi } from '../../api/registrations.api';
 import { xAlert, xConfirm } from '../../utils/alert';
 
 const NAVY = '#001E40';
-const BLUE = '#2196F3';
+const BLUE = '#1858D6';
 const GREEN = '#06D6A0';
 const RED = '#FF3B30';
 

@@ -24,7 +24,7 @@ import { OrgTournamentsStackParamList } from '../../navigation/types';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const NAVY = '#001E40';
-const BLUE = '#2196F3';
+const BLUE = '#1858D6';
 const GREEN = '#06D6A0';
 const ORANGE = '#FFB703';
 const BG = '#F3F4F5';

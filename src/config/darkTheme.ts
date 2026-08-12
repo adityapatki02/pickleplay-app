@@ -22,7 +22,7 @@ export const dark = {
   textMuted: 'rgba(255,255,255,0.3)',
 
   // Brand
-  accent: '#2196F3',          // Yoiden blue
+  accent: '#1858D6',          // Yoiden blue
   accentLight: 'rgba(33,150,243,0.15)',
   accentGlow: 'rgba(33,150,243,0.25)',
 

@@ -21,7 +21,7 @@ import { OrgTournamentsStackParamList } from '../../navigation/types';
 
 const NAVY = '#001E40';
 const NAVY_MID = '#002E5F';
-const BLUE_ACCENT = '#2196F3';
+const BLUE_ACCENT = '#1858D6';
 const BG = '#F3F4F5';
 const { width: SW } = Dimensions.get('window');
 

@@ -190,7 +190,7 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(0,30,64,0.15)',
   },
   dotActive: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#1858D6',
     width: 20,
     borderRadius: 4,
   },

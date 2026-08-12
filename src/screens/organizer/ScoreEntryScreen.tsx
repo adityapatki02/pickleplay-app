@@ -24,7 +24,7 @@ import { OrgTournamentsStackParamList } from '../../navigation/types';
 import { xAlert, xConfirm } from '../../utils/alert';
 
 const NAVY = '#001E40';
-const BLUE_ACCENT = '#2196F3';
+const BLUE_ACCENT = '#1858D6';
 const TEXT_PRIMARY = '#1A1D21';
 const TEXT_SECONDARY = '#001E40';
 const BORDER_COLOR = '#E2E8F0';

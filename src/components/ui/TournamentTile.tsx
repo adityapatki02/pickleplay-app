@@ -12,7 +12,7 @@ const WHITE = '#FFFFFF';
 const GREEN = '#06D6A0';
 const ORANGE = '#FFB703';
 const RED = '#BA1A1A';
-const BLUE = '#2196F3';
+const BLUE = '#1858D6';
 const GRAY = '#737780';
 
 // ─── Gradient Palette ─────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ const CARD_IMAGES = [
 const GRADIENTS: [string, string][] = [
   ['#001E40', '#003366'],
   ['#0F2027', '#2C5364'],
-  ['#001E40', '#2196F3'],
+  ['#001E40', '#1858D6'],
   ['#1A2980', '#26D0CE'],
 ];
 

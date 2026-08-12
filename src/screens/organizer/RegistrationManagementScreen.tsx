@@ -481,7 +481,7 @@ export default function RegistrationManagementScreen() {
       {/* Content */}
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#2196F3" />
+          <ActivityIndicator size="large" color="#1858D6" />
         </View>
       ) : (
         <FlatList
@@ -497,8 +497,8 @@ export default function RegistrationManagementScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => fetchData(true)}
-              tintColor="#2196F3"
-              colors={['#2196F3']}
+              tintColor="#1858D6"
+              colors={['#1858D6']}
             />
           }
           ListEmptyComponent={
@@ -837,13 +837,13 @@ const styles = StyleSheet.create({
   },
   backIcon: {
     fontSize: typography.fontSize.lg,
-    color: '#2196F3',
+    color: '#1858D6',
     fontWeight: '700',
   },
   backLabel: {
     fontSize: typography.fontSize['2xs'],
     fontWeight: '700',
-    color: '#2196F3',
+    color: '#1858D6',
     letterSpacing: 1.5,
   },
   headerTitle: {
@@ -872,8 +872,8 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   filterChipActive: {
-    backgroundColor: '#2196F3',
-    borderColor: '#2196F3',
+    backgroundColor: '#1858D6',
+    borderColor: '#1858D6',
   },
   filterChipText: {
     fontSize: typography.fontSize.xs,
@@ -1001,7 +1001,7 @@ const styles = StyleSheet.create({
   editBtnText: {
     fontSize: typography.fontSize['2xs'],
     fontWeight: '700',
-    color: '#2196F3',
+    color: '#1858D6',
     letterSpacing: 1,
   },
   removeBtn: {
@@ -1050,18 +1050,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: '#2196F3',
+    borderColor: '#1858D6',
   },
   csvImportBtnText: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#2196F3',
+    color: '#1858D6',
     letterSpacing: 1,
   },
   csvFormatHelp: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#2196F3',
+    color: '#1858D6',
     marginTop: 4,
   },
   csvFormatExample: {
@@ -1141,8 +1141,8 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   catChipActive: {
-    backgroundColor: '#2196F3',
-    borderColor: '#2196F3',
+    backgroundColor: '#1858D6',
+    borderColor: '#1858D6',
   },
   catChipText: {
     fontSize: typography.fontSize.xs,

@@ -28,7 +28,7 @@ const TREND_GAP = 10;
 const TREND_ITEM_WIDTH = Math.floor((SCREEN_WIDTH - TREND_SIDE_PAD * 2 - TREND_GAP * 2) / 3);
 
 const NAVY = '#001E40';
-const BLUE = '#2196F3';
+const BLUE = '#1858D6';
 const GREEN = '#06D6A0';
 const ORANGE = '#F59E0B';
 const RED = '#EF4444';
@@ -236,7 +236,7 @@ export default function OrganizerHomeScreen() {
     label: `Pick ${topChampion.franchiseName} to win`,
   });
   if (topPlayer) trendTiles.push({
-    icon: '⭐', color: '#2196F3',
+    icon: '⭐', color: '#1858D6',
     value: `${topPlayer.pct}%`,
     label: `${topPlayer.playerName} most picked`,
   });
