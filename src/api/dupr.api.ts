@@ -79,6 +79,12 @@ export type DuprTournamentInvite = {
   respondedAt: string | null;
 };
 
+export type CoOwnerLookup = { found: boolean; name?: string | null; duprLinked?: boolean };
+
+/** Check whether an email/phone matches an existing Yoiden user (exact match). */
+export const lookupCoOwner = (value: string) =>
+  apiClient.get<CoOwnerLookup>('/dupr/coowner-lookup', { params: { value } });
+
 /** Organizer invites a co-owner (existing Yoiden user) by email or phone. */
 export const inviteDuprCoOwner = (
   tournamentId: string,

@@ -22,8 +22,10 @@ import {
   getMyDuprAdminClubs,
   enableTournamentDupr,
   inviteDuprCoOwner,
+  lookupCoOwner,
   linkDupr,
   type DuprAdminClub,
+  type CoOwnerLookup,
 } from '../../api/dupr.api';
 import { presentDuprSso } from '../../utils/dupr-host-bridge';
 import { DUPR_ENABLED } from '../../config/constants';
@@ -82,6 +84,8 @@ const duprStyles = StyleSheet.create({
   chipTextActive: { color: '#fff' },
   chipRole: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: '#94A3B8' },
   hint: { fontSize: 12, lineHeight: 17, color: '#64748B', marginTop: 10 },
+  lookupOk: { fontSize: 12, fontWeight: '700', color: '#0F9D58' },
+  lookupWarn: { fontSize: 12, fontWeight: '600', color: '#B8860B' },
   input: {
     marginTop: 12,
     borderWidth: 1,
@@ -601,6 +605,27 @@ export default function CreateTournamentScreen() {
       setDuprConnecting(false);
     }
   }, [duprConnecting]);
+
+  // Live check: does the typed co-owner email/phone match a Yoiden account?
+  const [coOwnerCheck, setCoOwnerCheck] = useState<{ checking: boolean; result: CoOwnerLookup | null }>(
+    { checking: false, result: null },
+  );
+  useEffect(() => {
+    const v = form.duprCoOwnerContact.trim();
+    // Only relevant on the "not an organizer → invite a co-owner" path.
+    const onCoOwnerPath = form.duprMode === 'on' && dupr.connected && dupr.clubs.length === 0;
+    if (!onCoOwnerPath || v.length < 4) {
+      setCoOwnerCheck({ checking: false, result: null });
+      return;
+    }
+    setCoOwnerCheck({ checking: true, result: null });
+    const t = setTimeout(() => {
+      lookupCoOwner(v)
+        .then((res) => setCoOwnerCheck({ checking: false, result: res.data }))
+        .catch(() => setCoOwnerCheck({ checking: false, result: null }));
+    }, 500);
+    return () => clearTimeout(t);
+  }, [form.duprCoOwnerContact, form.duprMode, dupr.connected, dupr.clubs.length]);
 
   // ── Draft autosave + resume ──────────────────────────────────────────────
   // Everything typed is saved locally so nothing is lost on navigate-away /
@@ -1128,6 +1153,18 @@ export default function CreateTournamentScreen() {
                   keyboardType="email-address"
                   style={duprStyles.input}
                 />
+                {coOwnerCheck.checking ? (
+                  <Text style={[duprStyles.hint, { marginTop: 6 }]}>Checking…</Text>
+                ) : coOwnerCheck.result?.found ? (
+                  <Text style={[duprStyles.lookupOk, { marginTop: 6 }]}>
+                    ✓ {coOwnerCheck.result.name || 'Yoiden user'}
+                    {coOwnerCheck.result.duprLinked ? '' : ' · not yet on DUPR'}
+                  </Text>
+                ) : coOwnerCheck.result && !coOwnerCheck.result.found ? (
+                  <Text style={[duprStyles.lookupWarn, { marginTop: 6 }]}>
+                    No Yoiden account with this — ask them to sign up first.
+                  </Text>
+                ) : null}
               </>
             )}
           </View>
