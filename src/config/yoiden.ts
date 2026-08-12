@@ -20,7 +20,7 @@ export const YColors = {
 
   // Brand
   accent: '#1858D6',       // deep blue
-  accentDeep: '#0E3FA5',
+  accentDeep: '#1858D6',   // reverted to the standard blue (was #0E3FA5 dark blue)
   navy: '#1C3A72',         // dark navy blue (deeper than accent, clearly blue not black)
   orange: '#FF4D2E',       // neon orange highlight (from yoiden.com) — use sparingly
   lime: '#C8F232',         // DEPRECATED — migrate to brandLine (lines) or accent (fills)
