@@ -1,13 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   Modal,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import Svg, { Path, Line } from 'react-native-svg';
+
+/** Parse an ISO date safely — returns null for empty/invalid input (never an
+ *  Invalid Date, which would make the month NaN and render an empty grid). */
+function parseISO(iso?: string): Date | null {
+  if (!iso || iso.length < 10) return null;
+  const d = new Date(iso + 'T00:00:00');
+  return isNaN(d.getTime()) ? null : d;
+}
 
 const NAVY  = '#001E40';
 const BLUE  = '#2196F3';
@@ -15,7 +23,6 @@ const BG    = '#F8F9FA';
 const WHITE = '#FFFFFF';
 const GRAY  = '#737780';
 const BORDER = '#E1E3E4';
-const { width: SW } = Dimensions.get('window');
 
 const MONTHS = [
   'January','February','March','April','May','June',
@@ -60,13 +67,27 @@ export default function DatePickerModal({
 }: Props) {
   const today = new Date();
 
-  // Parse initial value
-  const initDate = value && value.length === 10 ? new Date(value + 'T00:00:00') : today;
+  // Cell size from the LIVE window width (not a stale module-load snapshot),
+  // clamped so it's always sane — a bad width used to collapse the whole grid.
+  const { width: winW } = useWindowDimensions();
+  const cellSize = Math.max(34, Math.min(60, Math.floor(((winW || 360) - 48) / 7)));
+
+  // Parse initial value (guarded — never an Invalid Date)
+  const initDate = parseISO(value) ?? today;
   const [viewYear,  setViewYear]  = useState(initDate.getFullYear());
   const [viewMonth, setViewMonth] = useState(initDate.getMonth());       // 0–11
-  const [selected,  setSelected]  = useState<Date | null>(
-    value && value.length === 10 ? new Date(value + 'T00:00:00') : null
-  );
+  const [selected,  setSelected]  = useState<Date | null>(parseISO(value));
+
+  // Re-sync the calendar every time the modal opens or the value changes.
+  // Replaces Modal's onShow, which fires unreliably on react-native-web and
+  // sometimes left the grid rendering against a stale/empty month.
+  useEffect(() => {
+    if (!visible) return;
+    const d = parseISO(value) ?? new Date();
+    setViewYear(d.getFullYear());
+    setViewMonth(d.getMonth());
+    setSelected(parseISO(value));
+  }, [visible, value]);
 
   const minD = minDate ? new Date(minDate + 'T00:00:00') : null;
   const maxD = maxDate ? new Date(maxDate + 'T00:00:00') : null;
@@ -112,20 +133,11 @@ export default function DatePickerModal({
     onConfirm(iso);
   };
 
-  const handleOpen = () => {
-    // When modal opens, sync view to current value
-    const d = value && value.length === 10 ? new Date(value + 'T00:00:00') : today;
-    setViewYear(d.getFullYear());
-    setViewMonth(d.getMonth());
-    setSelected(value && value.length === 10 ? new Date(value + 'T00:00:00') : null);
-  };
-
   return (
     <Modal
       visible={visible}
       transparent
       animationType="slide"
-      onShow={handleOpen}
       onRequestClose={onCancel}
     >
       <TouchableOpacity style={s.backdrop} activeOpacity={1} onPress={onCancel} />
@@ -153,21 +165,26 @@ export default function DatePickerModal({
         {/* Day headers */}
         <View style={s.dayHeaders}>
           {DAYS.map(d => (
-            <Text key={d} style={s.dayHeader}>{d}</Text>
+            <Text key={d} style={[s.dayHeader, { width: cellSize }]}>{d}</Text>
           ))}
         </View>
 
         {/* Calendar grid */}
         <View style={s.grid}>
           {cells.map((cell, i) => {
-            if (!cell) return <View key={`e-${i}`} style={s.cell} />;
+            if (!cell) return <View key={`e-${i}`} style={[s.cell, { width: cellSize, height: cellSize }]} />;
             const dis = isDisabled(cell);
             const sel = isSelected(cell);
             const tod = isToday(cell);
             return (
               <TouchableOpacity
                 key={`d-${cell.getDate()}`}
-                style={[s.cell, sel && s.cellSelected, !sel && tod && s.cellToday]}
+                style={[
+                  s.cell,
+                  { width: cellSize, height: cellSize },
+                  sel && [s.cellSelected, { borderRadius: cellSize / 2 }],
+                  !sel && tod && [s.cellToday, { borderRadius: cellSize / 2 }],
+                ]}
                 onPress={() => !dis && setSelected(cell)}
                 disabled={dis}
                 activeOpacity={0.7}
@@ -284,8 +301,6 @@ const df = StyleSheet.create({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const CELL_SIZE = Math.floor((SW - 48) / 7);
-
 const s = StyleSheet.create({
   backdrop: {
     flex: 1,
@@ -328,22 +343,21 @@ const s = StyleSheet.create({
     flexDirection: 'row', marginBottom: 6,
   },
   dayHeader: {
-    width: CELL_SIZE, textAlign: 'center',
+    textAlign: 'center',
     fontSize: 11, fontWeight: '700', color: GRAY, letterSpacing: 0.5,
   },
   grid: {
     flexDirection: 'row', flexWrap: 'wrap',
   },
   cell: {
-    width: CELL_SIZE, height: CELL_SIZE,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: 2,
   },
   cellSelected: {
-    backgroundColor: NAVY, borderRadius: CELL_SIZE / 2,
+    backgroundColor: NAVY,
   },
   cellToday: {
-    borderWidth: 1.5, borderColor: BLUE, borderRadius: CELL_SIZE / 2,
+    borderWidth: 1.5, borderColor: BLUE,
   },
   cellText: {
     fontSize: 14, fontWeight: '600', color: NAVY,
