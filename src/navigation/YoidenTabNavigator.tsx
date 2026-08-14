@@ -38,6 +38,11 @@ import RankingsScreen from '../screens/yoiden/RankingsScreen';
 
 // Venue admin screen
 import VenueAdminScreen from '../screens/yoiden/VenueAdminScreen';
+import OwnerDashboardScreen from '../screens/yoiden/OwnerDashboardScreen';
+import HeatmapDetailScreen from '../screens/yoiden/HeatmapDetailScreen';
+import DuesDetailScreen from '../screens/yoiden/DuesDetailScreen';
+import CustomersDetailScreen from '../screens/yoiden/CustomersDetailScreen';
+import RevenueDetailScreen from '../screens/yoiden/RevenueDetailScreen';
 
 // Court booking screens
 import BookScreen from '../screens/yoiden/BookScreen';
@@ -149,6 +154,11 @@ const MeStackNavigator = () => (
   <MeStack.Navigator screenOptions={{ headerShown: false }}>
     <MeStack.Screen name="Me" component={MeScreen} />
     <MeStack.Screen name="VenueAdmin" component={VenueAdminScreen} />
+    <MeStack.Screen name="OwnerDashboard" component={OwnerDashboardScreen} />
+    <MeStack.Screen name="HeatmapDetail" component={HeatmapDetailScreen} />
+    <MeStack.Screen name="DuesDetail" component={DuesDetailScreen} />
+    <MeStack.Screen name="CustomersDetail" component={CustomersDetailScreen} />
+    <MeStack.Screen name="RevenueDetail" component={RevenueDetailScreen} />
     {registerDetailAndManageScreens(MeStack)}
   </MeStack.Navigator>
 );

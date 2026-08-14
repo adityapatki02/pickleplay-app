@@ -58,6 +58,11 @@ export type BookStackParamList = {
 export type MeStackParamList = DetailAndManageRoutes & {
   Me: undefined;
   VenueAdmin: { venueId: string };
+  OwnerDashboard: { venueId?: string };
+  HeatmapDetail: { venueId: string; courtId?: string };
+  DuesDetail: { venueId: string };
+  CustomersDetail: { venueId: string; month?: string; days?: number; daypart?: string };
+  RevenueDetail: { venueId: string; month?: string; days?: number; daypart?: string };
 };
 
 export type YoidenTabParamList = {
