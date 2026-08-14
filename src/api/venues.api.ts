@@ -31,6 +31,16 @@ export const venuesApi = {
       params: { limit, offset },
     }),
 
+  getAnalytics: (venueId: string, params?: { month?: string; days?: number; daypart?: string }) =>
+    apiClient.get<{ success: boolean; data: any }>(`/venues/${venueId}/analytics`, {
+      params: params || {},
+    }),
+
+  getHeatmap: (venueId: string, params?: { courtId?: string; weeks?: number; dayType?: string; daypart?: string }) =>
+    apiClient.get<{ success: boolean; data: any }>(`/venues/${venueId}/analytics/heatmap`, {
+      params: params || {},
+    }),
+
   markBookingPaid: (venueId: string, bookingId: string, amount?: number) =>
     apiClient.patch<{ success: boolean }>(`/venues/${venueId}/bookings/${bookingId}/pay`, { amount }),
 
@@ -42,9 +52,12 @@ export const venuesApi = {
   cancelBooking: (venueId: string, bookingId: string, reason: string) =>
     apiClient.patch<{ success: boolean }>(`/venues/${venueId}/bookings/${bookingId}/cancel`, { reason }),
 
-  rescheduleBooking: (venueId: string, bookingId: string, date: string, startTime: string, endTime: string) =>
+  markNoShow: (venueId: string, bookingId: string, noShow = true) =>
+    apiClient.patch<{ success: boolean }>(`/venues/${venueId}/bookings/${bookingId}/no-show`, { noShow }),
+
+  rescheduleBooking: (venueId: string, bookingId: string, date: string, startTime: string, endTime: string, courtId?: string) =>
     apiClient.patch<{ success: boolean }>(`/venues/${venueId}/bookings/${bookingId}/reschedule`, {
-      date, startTime, endTime,
+      date, startTime, endTime, courtId,
     }),
 
   // Owner management
