@@ -340,6 +340,8 @@ export default function HomeScreen() {
                 <View style={styles.nameRow}>
                   <YDisplay size={40} color="#fff">{firstName}</YDisplay>
                 </View>
+                {/* Lime signature accent under the name */}
+                <View style={styles.heroAccent} />
                 {/* Location sits below the name */}
                 <Pressable onPress={openLocation} hitSlop={8} style={styles.locTag}>
                   <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
@@ -444,7 +446,8 @@ export default function HomeScreen() {
             },
           ]).map((f) => {
             const active = activeFace === f.key;
-            const c = active ? '#fff' : YColors.accent;
+            // Active tile is lime-filled — dark ink icon + label read best on it.
+            const c = active ? YColors.ink : YColors.accent;
             return (
               <Pressable
                 key={f.key}
@@ -452,7 +455,7 @@ export default function HomeScreen() {
                 style={[styles.shortcutTile, active && styles.shortcutTilePrimary]}
               >
                 {f.icon(c)}
-                <YUiText size={13.5} weight={600} color={active ? '#fff' : YColors.ink} style={styles.shortcutLabel}>
+                <YUiText size={13.5} weight={active ? 800 : 600} color={YColors.ink} style={styles.shortcutLabel}>
                   {f.label}
                 </YUiText>
               </Pressable>
@@ -753,6 +756,14 @@ const styles = StyleSheet.create({
   nameRow: {
     marginTop: 10,
   },
+  heroAccent: {
+    width: 46,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: YColors.brandLine,
+    marginTop: 10,
+    marginBottom: 2,
+  },
   // Bare tappable location row — sits below the name, no pill
   locTag: {
     flexDirection: 'row',
@@ -1021,8 +1032,8 @@ const styles = StyleSheet.create({
     minHeight: 84,
   },
   shortcutTilePrimary: {
-    backgroundColor: YColors.accentDeep,
-    borderColor: YColors.accentDeep,
+    backgroundColor: YColors.brandLine,
+    borderColor: YColors.brandLine,
   },
   shortcutLabel: {
     textAlign: 'center',
