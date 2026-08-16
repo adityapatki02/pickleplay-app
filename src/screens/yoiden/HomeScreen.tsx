@@ -321,7 +321,7 @@ export default function HomeScreen() {
   const venuePhotoUrl = (v: ApiVenue): string => {
     const p = Array.isArray(v.photos) ? v.photos[0] : undefined;
     const raw = typeof p === 'string' ? p : (p as { url?: string } | undefined)?.url;
-    return raw ? thumbUrl(raw, 640) : `https://picsum.photos/seed/${v.id}/640/360`;
+    return (raw ? thumbUrl(raw, 640) : undefined) ?? `https://picsum.photos/seed/${v.id}/640/360`;
   };
   const priceRange = (v: ApiVenue): string => {
     const prices: number[] = [];
