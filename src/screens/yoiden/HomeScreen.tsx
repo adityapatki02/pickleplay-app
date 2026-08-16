@@ -30,6 +30,7 @@ import {
   YTopBar,
   YAvatar,
   YBadge,
+  YButton,
   YSectionHead,
   YTournamentRow,
   YStatTile,
@@ -315,6 +316,25 @@ export default function HomeScreen() {
       topRated: (v.rating ?? 0) >= 4.5,
     };
   };
+
+  // Compact court-card helpers (mirror the Book tab, from the full venue).
+  const venuePhotoUrl = (v: ApiVenue): string => {
+    const p = Array.isArray(v.photos) ? v.photos[0] : undefined;
+    const raw = typeof p === 'string' ? p : (p as { url?: string } | undefined)?.url;
+    return raw ? thumbUrl(raw, 640) : `https://picsum.photos/seed/${v.id}/640/360`;
+  };
+  const priceRange = (v: ApiVenue): string => {
+    const prices: number[] = [];
+    for (const c of v.courts ?? []) {
+      const perHour = 60 / (c.slotDurationMin || 60);
+      if (c.basePrice != null) prices.push(Number(c.basePrice) * perHour);
+      if (c.peakPrice != null) prices.push(Number(c.peakPrice) * perHour);
+    }
+    if (!prices.length) return '';
+    const min = Math.round(Math.min(...prices));
+    const max = Math.round(Math.max(...prices));
+    return min === max ? `₹${min}` : `₹${min}–₹${max}`;
+  };
   const displayVenues: Venue[] = apiVenues.map(toDisplayVenue);
   const sponsoredVenues = displayVenues.filter((v) => v.sponsored);
   const normalVenues = displayVenues.filter((v) => !v.sponsored);
@@ -480,24 +500,36 @@ export default function HomeScreen() {
                 onSubmitEditing={() => goBookSearch(courtQuery)}
               />
             </View>
-            <View style={styles.courtCard}>
-              {displayVenues.length > 0 ? (
-                displayVenues.slice(0, 3).map((v, i) => (
+            <View style={styles.courtList}>
+              {apiVenues.length > 0 ? (
+                apiVenues.slice(0, 2).map((v) => (
                   <Pressable
                     key={v.id}
                     onPress={() => openVenue(v.id)}
-                    style={({ pressed }) => [styles.courtRow, i > 0 && styles.courtRowDivider, pressed && { opacity: 0.9 }]}
+                    style={({ pressed }) => [styles.venueCard, pressed && { opacity: 0.92 }]}
                   >
-                    <Image source={{ uri: thumbUrl((v as any).imageUrl, 160) }} style={styles.courtThumb} resizeMode="cover" />
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <YUiText size={15} weight={900} color={YColors.ink} numberOfLines={1}>{v.name}</YUiText>
-                      <YUiText size={11.5} weight={600} color={YColors.ink2} numberOfLines={1} style={{ marginTop: 2 }}>
-                        {[(v as any).neighbourhood, (v as any).city].filter(Boolean).join(', ') || 'Tap to book a slot'}
-                      </YUiText>
+                    <Image source={{ uri: venuePhotoUrl(v) }} style={styles.venueCardImage} resizeMode="cover" />
+                    <View style={styles.venueCardBody}>
+                      <View style={styles.venueCardHead}>
+                        <View style={{ flex: 1 }}>
+                          <YDisplay size={18} color={YColors.accent} style={{ lineHeight: 20 }} numberOfLines={1}>
+                            {v.name}
+                          </YDisplay>
+                          <YUiText size={11.5} color={YColors.ink2} numberOfLines={1} style={{ marginTop: 3 }}>
+                            {v.city}{v.state ? `, ${v.state}` : ''}
+                          </YUiText>
+                        </View>
+                        {priceRange(v) ? (
+                          <YBadge color={YColors.accentDeep} bg="rgba(24,88,214,0.12)">{priceRange(v)}/hr</YBadge>
+                        ) : null}
+                      </View>
+                      <View style={styles.venueCardFoot}>
+                        <YMono size={9.5} color={YColors.ink3} style={{ letterSpacing: 0.8 }}>
+                          {(v.courts?.length ?? 0)} COURT{(v.courts?.length ?? 0) === 1 ? '' : 'S'} · {v.openTime}–{v.closeTime}
+                        </YMono>
+                        <YButton variant="primary" size="sm" onPress={() => openVenue(v.id)}>BOOK</YButton>
+                      </View>
                     </View>
-                    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-                      <Path d="M9 6l6 6-6 6" stroke={YColors.ink3} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                    </Svg>
                   </Pressable>
                 ))
               ) : (
@@ -834,6 +866,24 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: YColors.line2,
+  },
+  // Compact court cards (Book-tab layout, smaller) for the Home "Book" face.
+  courtList: { marginHorizontal: 16, marginTop: 14, gap: 12 },
+  venueCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: YColors.line2,
+    overflow: 'hidden',
+  },
+  venueCardImage: { width: '100%', height: 116, backgroundColor: YColors.bg3 },
+  venueCardBody: { padding: 12 },
+  venueCardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  venueCardFoot: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
   },
   courtCardHead: {
     flexDirection: 'row',
