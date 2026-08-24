@@ -215,7 +215,29 @@ export default function OwnerDashboardScreen({ route }: Props) {
             <ChannelMix mix={data.channelMix} />
           </View>
 
-          {/* ── Sponsored play (only when a brand campaign funded bookings) ── */}
+          {/* ── Sponsored play ─────────────────────────────────────────
+              Shown even with no campaign yet: a hidden section is a feature
+              the owner can never discover. The empty state says plainly that
+              nothing has been funded rather than showing a zero. */}
+          {!data.sponsored && (
+            <>
+              <SectionTitle>Sponsored play</SectionTitle>
+              <Pressable style={styles.card} onPress={() => venueId && (nav as any).navigate('SponsoredDetail', drillParams())}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                  <View style={styles.sponsorTagMuted}>
+                    <YUiText size={9.5} weight={800} color={YColors.ink3} style={{ letterSpacing: 0.8 }}>BRAND-FUNDED</YUiText>
+                  </View>
+                  <View style={{ flex: 1 }} />
+                  <YUiText size={11} weight={800} color={YColors.accent}>Learn more →</YUiText>
+                </View>
+                <YUiText size={13.5} weight={800} color={YColors.ink}>No sponsored play in this period</YUiText>
+                <YUiText size={12} color={YColors.ink3} style={{ marginTop: 5, lineHeight: 18 }}>
+                  When a brand funds sessions at your court, you'll see how many funded hours were booked, how many were actually played, and the new customers it brought you.
+                </YUiText>
+              </Pressable>
+            </>
+          )}
+
           {data.sponsored && (
             <>
               <SectionTitle>Sponsored play</SectionTitle>
@@ -371,6 +393,15 @@ export default function OwnerDashboardScreen({ route }: Props) {
               )}
               <FooterStat label="Total bookings" value={String(s.totalBookings)} />
             </View>
+            {/* No check-ins yet → say how to start, rather than hiding the
+                stats with no explanation. */}
+            {(data.cancellations?.checkInRate ?? 0) === 0 && (
+              <View style={styles.hintBox}>
+                <YUiText size={11.5} color={YColors.ink2} style={{ lineHeight: 17 }}>
+                  Check players in from the booking board to track attendance and player-hours here.
+                </YUiText>
+              </View>
+            )}
           </View>
         </ScrollView>
       )}
@@ -555,6 +586,8 @@ const styles = StyleSheet.create({
 
   sponsorCard: { borderColor: 'rgba(24,88,214,0.35)', backgroundColor: 'rgba(24,88,214,0.04)' },
   sponsorTag: { backgroundColor: 'rgba(24,88,214,0.12)', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 },
+  sponsorTagMuted: { backgroundColor: YColors.bg3, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 },
+  hintBox: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: YColors.line },
   funnelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 6 },
   funnelStep: { alignItems: 'center', flex: 1 },
   sponsorStatsRow: { flexDirection: 'row', gap: 10, marginTop: 16, borderTopWidth: 1, borderTopColor: YColors.line, paddingTop: 14 },
