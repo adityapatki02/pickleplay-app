@@ -108,13 +108,13 @@ export const YTournamentRow: React.FC<YTournamentRowProps> = ({
             <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(10,10,11,0.45)' }]} />
           </>
         ) : null}
-        <YDisplay size={28} italic={false} color={tournament.bannerUrl ? '#fff' : YColors.ink}>
+        <YDisplay size={28} italic={false} color="#fff">
           {day}
         </YDisplay>
         <YUiText
           size={10}
           weight={800}
-          color={tournament.bannerUrl ? 'rgba(255,255,255,0.85)' : YColors.ink2}
+          color="rgba(255,255,255,0.85)"
           style={{ letterSpacing: 1.4, marginTop: 4 }}
         >
           {month}
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   dateBlock: {
-    backgroundColor: YColors.bg3,
+    backgroundColor: YColors.accent,
     paddingVertical: 22,
     paddingHorizontal: 18,
     justifyContent: 'center',

@@ -285,9 +285,22 @@ export default function BookingDetailScreen() {
                 <YMono size={12} color={YColors.accent} style={{ marginTop: 4 }}>
                   {booking.invoiceNumber}
                 </YMono>
+              ) : booking.paymentStatus === 'paid' ? (
+                booking.razorpayPaymentId ? (
+                  // Paid through the app — invoice is being minted; this clears shortly.
+                  <YUiText size={12} color={YColors.ink3} style={{ marginTop: 4 }}>
+                    Processing…
+                  </YUiText>
+                ) : (
+                  // Paid at the venue (cash / manual) — no online transaction to invoice.
+                  <YUiText size={12} color={YColors.ink3} style={{ marginTop: 4, maxWidth: 240, lineHeight: 17 }}>
+                    Invoices can be generated only for payments made through the Yoiden app.
+                  </YUiText>
+                )
               ) : (
-                <YUiText size={12} color={YColors.ink3} style={{ marginTop: 4 }}>
-                  Processing…
+                // Awaiting payment.
+                <YUiText size={12} color={YColors.ink3} style={{ marginTop: 4, maxWidth: 240, lineHeight: 17 }}>
+                  Complete the payment for the invoice to be generated.
                 </YUiText>
               )}
             </View>

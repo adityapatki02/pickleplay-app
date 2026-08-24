@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Rect, Ellipse, Line } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { thumbUrl } from '../../utils/img';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useScrollToTop } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 
 import {
@@ -28,7 +28,6 @@ import {
   YMono,
   YUiText,
   YTopBar,
-  YAvatar,
   YBadge,
   YButton,
   YSectionHead,
@@ -45,6 +44,9 @@ import { venuesApi } from '../../api/venues.api';
 import { bookingsApi } from '../../api/bookings.api';
 import type { Tournament } from '../../types/tournament.types';
 import type { Venue as ApiVenue, Booking } from '../../types/booking.types';
+import VenueBookingBoard from '../../components/venue/VenueBookingBoard';
+import { getDuprMe, DuprMeResponse, getMyDuprAdminClubs, DuprAdminClub } from '../../api/dupr.api';
+import { DUPR_ENABLED } from '../../config/constants';
 import { type YoidenTabParamList } from '../../navigation/nav-types';
 import { FEATURED_LEAGUES, liveLeagues, type FeaturedLeague } from '../../config/leagues';
 
@@ -64,14 +66,12 @@ const SHOW_FEATURED_LEAGUES = false;
 
 // Helpers
 const unwrap = <T,>(res: any): T => (res?.data?.data ?? res?.data ?? res) as T;
-const initials = (name: string) =>
-  name
-    .split(' ')
-    .map((s) => s[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+// DUPR rating → compact display (e.g. 4.213 → "4.213", null → "NR").
+const formatDuprRating = (v: string | number | null | undefined): string => {
+  if (v === null || v === undefined || v === '') return 'NR';
+  const n = typeof v === 'number' ? v : parseFloat(v);
+  return Number.isFinite(n) ? n.toFixed(3).replace(/0+$/, '').replace(/\.$/, '') : String(v);
+};
 
 type Registration = {
   id: string;
@@ -99,6 +99,9 @@ export default function HomeScreen() {
   const [activeSport, setActiveSport] = useState<string | null>(null);
   // Fetched once on mount — null means not yet resolved, undefined means denied/unavailable
   const userCoords = useRef<{ lat: number; lng: number } | null>(null);
+  // Tapping the active bottom-tab scrolls this screen back to the top.
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
 
   // Featured-league slider geometry + paging
   const { width: winW } = useWindowDimensions();
@@ -110,14 +113,17 @@ export default function HomeScreen() {
 
   const loadVenues = useCallback(async (sport?: string | null) => {
     try {
-      // The chosen city (the label) drives which courts show: the backend
-      // geocodes the city name and matches venues by real distance (radius).
-      // Only fall back to device GPS when no city is set (brand-new user).
+      // Location, done the way pro apps (Playtomic/Uber) do it: the city label
+      // scopes WHICH courts show, and device GPS drives the ORDER — nearest
+      // first — plus the "X km away" on each card. We always send GPS when we
+      // have it (alongside the city) so the backend computes real distance;
+      // without a fix it can't, and far-away courts would rank as high as close
+      // ones. No GPS yet → the backend falls back to newest-first (unchanged).
       const hasCity = !!user?.city;
       const res = await venuesApi.list({
         city: hasCity ? user!.city : undefined,
-        lat: hasCity ? undefined : userCoords.current?.lat,
-        lng: hasCity ? undefined : userCoords.current?.lng,
+        lat: userCoords.current?.lat,
+        lng: userCoords.current?.lng,
         limit: 8,
         sport: sport || undefined,
       }) as any;
@@ -199,6 +205,22 @@ export default function HomeScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Re-fetch whenever Home regains focus (e.g. returning after making a booking
+  // in the Book tab) so the "Upcoming booking" card is fresh — without needing a
+  // full page reload. Skip the very first focus; the mount effect already loaded.
+  const didInitialFocus = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!didInitialFocus.current) {
+        didInitialFocus.current = true;
+        return;
+      }
+      fetchAll();
+    // fetchAll is stable (useCallback)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
+
   // Re-fetch venues whenever the sport chip OR the chosen city changes
   // (after the initial load) so switching city updates the courts live.
   useEffect(() => {
@@ -227,7 +249,19 @@ export default function HomeScreen() {
   // Dashboard mini-search: typing + submit hands off to the full Book / Events page.
   const [courtQuery, setCourtQuery] = useState('');
   const [eventQuery, setEventQuery] = useState('');
-  const [activeFace, setActiveFace] = useState<'book' | 'event'>('book');
+  const [activeFace, setActiveFace] = useState<'book' | 'event' | 'manage'>('book');
+  // Which owned venue the "My court" board is showing (defaults to the first).
+  const [manageVenueId, setManageVenueId] = useState<string | null>(null);
+  // The player's DUPR snapshot + club authority — powers the hero score chip.
+  const [duprMe, setDuprMe] = useState<DuprMeResponse | null>(null);
+  const [duprAdminClubs, setDuprAdminClubs] = useState<DuprAdminClub[]>([]);
+  useEffect(() => {
+    if (!DUPR_ENABLED) return;
+    getDuprMe().then(r => setDuprMe(unwrap<DuprMeResponse>(r))).catch(() => {});
+    getMyDuprAdminClubs()
+      .then(r => setDuprAdminClubs(Array.isArray((r as any)?.data?.clubs) ? (r as any).data.clubs : []))
+      .catch(() => {});
+  }, []);
   const goBookSearch = (q: string) =>
     (nav as any).navigate('BookTab', { screen: 'Book', params: q ? { q } : undefined });
   const goPlaySearch = (q: string) =>
@@ -335,6 +369,18 @@ export default function HomeScreen() {
     const max = Math.round(Math.max(...prices));
     return min === max ? `₹${min}` : `₹${min}–₹${max}`;
   };
+  // A SHORT location for the card — the neighbourhood/area, never the full
+  // street address. Falls back to city so there's always something to show.
+  const shortArea = (v: ApiVenue): string => (v.neighbourhood || v.city || '').trim();
+  // "How far from me?" — pro-app style. Only when the backend had our GPS and
+  // computed a real distance (distanceKm present & > 0).
+  const distanceLabel = (v: ApiVenue): string | null => {
+    const km = v.distanceKm;
+    if (km == null || km <= 0) return null;
+    if (km < 1) return `${Math.round(km * 1000)} m`;
+    if (km < 10) return `${km.toFixed(1)} km`;
+    return `${Math.round(km)} km`;
+  };
   const displayVenues: Venue[] = apiVenues.map(toDisplayVenue);
   const sponsoredVenues = displayVenues.filter((v) => v.sponsored);
   const normalVenues = displayVenues.filter((v) => !v.sponsored);
@@ -343,6 +389,7 @@ export default function HomeScreen() {
     // SafeAreaView gets accent bg so the status-bar notch region is blue too
     <SafeAreaView edges={['top']} style={styles.root}>
       <ScrollView
+        ref={scrollRef}
         style={{ backgroundColor: YColors.bg }}
         contentContainerStyle={{ paddingBottom: 140 }}
         showsVerticalScrollIndicator={false}
@@ -391,13 +438,41 @@ export default function HomeScreen() {
               </View>
             }
             action={
-              <Pressable onPress={goMe} hitSlop={4}>
-                <YAvatar
-                  initials={initials(fullName)}
-                  size={38}
-                  color="#fff"
-                  textColor={YColors.accentDeep}
-                />
+              <Pressable onPress={goMe} hitSlop={4} style={styles.duprChip}>
+                <YMono size={7.5} bold color="rgba(255,255,255,0.72)" style={{ letterSpacing: 1.3 }}>
+                  DUPR
+                </YMono>
+                {duprMe?.linked ? (
+                  <View style={styles.duprStatRow}>
+                    <View style={styles.duprStat}>
+                      <YDisplay size={15} color="#fff" style={{ lineHeight: 16 }}>
+                        {formatDuprRating(duprMe.snapshot?.ratings?.doubles)}
+                      </YDisplay>
+                      <YMono size={6.5} bold color="rgba(255,255,255,0.6)" style={{ letterSpacing: 0.6, marginTop: 1 }}>
+                        DOUBLES
+                      </YMono>
+                    </View>
+                    <View style={styles.duprDivider} />
+                    <View style={styles.duprStat}>
+                      <YDisplay size={15} color="#fff" style={{ lineHeight: 16 }}>
+                        {formatDuprRating(duprMe.snapshot?.ratings?.singles)}
+                      </YDisplay>
+                      <YMono size={6.5} bold color="rgba(255,255,255,0.6)" style={{ letterSpacing: 0.6, marginTop: 1 }}>
+                        SINGLES
+                      </YMono>
+                    </View>
+                  </View>
+                ) : null}
+                {duprMe?.linked && duprAdminClubs.length > 0 ? (
+                  <YMono size={7} bold color={YColors.brandLine} style={{ letterSpacing: 1, marginTop: 4 }}>
+                    {duprAdminClubs[0].role}
+                  </YMono>
+                ) : null}
+                {!duprMe?.linked && (
+                  <YUiText size={10.5} weight={800} color="#fff" style={{ marginTop: 2 }}>
+                    LINK →
+                  </YUiText>
+                )}
               </Pressable>
             }
           />
@@ -415,73 +490,137 @@ export default function HomeScreen() {
             };
             const venueName = b.venue?.name ?? 'Your booking';
             const courtName = b.court?.name ?? b.courtLabel ?? '';
+            // Free maps deep-link — opens turn-by-turn directions to the court in
+            // the user's maps app (no Directions API call, so no server cost).
+            const v = b.venue;
+            const canDirect = !!(v && ((v.lat != null && v.lng != null) || v.address));
+            const openDirections = (e?: any) => {
+              // Nested inside the card Pressable — on web the click bubbles, so
+              // stop it or the card would also navigate to My Bookings.
+              e?.stopPropagation?.();
+              if (!v) return;
+              const dest = v.lat != null && v.lng != null
+                ? `${v.lat},${v.lng}`
+                : [v.name, v.address, v.city].filter(Boolean).join(', ');
+              if (!dest) return;
+              Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`);
+            };
             return (
-              <Pressable
-                style={styles.upcomingCard}
-                onPress={() => nav.navigate('BookTab', { screen: 'MyBookings' })}
-              >
-                <View style={styles.upcomingCardInner}>
-                  <View style={{ flex: 1 }}>
-                    <YEyebrow color={YColors.accent} style={{ marginBottom: 4 }}>
-                      UPCOMING BOOKING
-                    </YEyebrow>
-                    <YDisplay size={15} color={YColors.ink} numberOfLines={1}>
-                      {venueName}
-                    </YDisplay>
-                    <YUiText size={12} color={YColors.ink2} style={{ marginTop: 3 }}>
-                      {dateLabel} · {to12(b.startTime)}–{to12(b.endTime)}{courtName ? ` · ${courtName}` : ''}
-                    </YUiText>
+              <>
+                <Pressable
+                  style={styles.upcomingCard}
+                  onPress={() => nav.navigate('BookTab', { screen: 'BookingDetail', params: { bookingId: b.id } })}
+                >
+                  <View style={styles.upcomingCardInner}>
+                    <View style={{ flex: 1 }}>
+                      <YEyebrow color={YColors.accent} style={{ marginBottom: 4 }}>
+                        UPCOMING BOOKING
+                      </YEyebrow>
+                      <YDisplay size={15} color={YColors.ink} numberOfLines={1}>
+                        {venueName}
+                      </YDisplay>
+                      <YUiText size={12} color={YColors.ink2} style={{ marginTop: 3 }}>
+                        {dateLabel} · {to12(b.startTime)}–{to12(b.endTime)}{courtName ? ` · ${courtName}` : ''}
+                      </YUiText>
+                    </View>
+                    <View style={styles.upcomingActions}>
+                      {canDirect && (
+                        <Pressable onPress={openDirections} hitSlop={10} style={styles.dirBtn}>
+                          {/* Material "directions" glyph — a signpost turn arrow, reads as navigation. */}
+                          <Svg width={30} height={30} viewBox="0 0 24 24">
+                            <Path d="M21.71 11.29l-9-9a.996.996 0 00-1.41 0l-9 9a.996.996 0 000 1.41l9 9c.39.39 1.02.39 1.41 0l9-9a.996.996 0 000-1.41zM14 14.5V12h-4v3H8v-4c0-.55.45-1 1-1h5V7.5l3.5 3.5-3.5 3.5z" fill={YColors.ink} />
+                          </Svg>
+                        </Pressable>
+                      )}
+                      <View style={styles.upcomingArrow}>
+                        <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                          <Path d="M9 18l6-6-6-6" stroke={YColors.ink3} strokeWidth={2} strokeLinecap="round" />
+                        </Svg>
+                      </View>
+                    </View>
                   </View>
-                  <View style={styles.upcomingArrow}>
-                    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-                      <Path d="M9 18l6-6-6-6" stroke={YColors.ink3} strokeWidth={2} strokeLinecap="round" />
-                    </Svg>
-                  </View>
-                </View>
-              </Pressable>
+                </Pressable>
+                <Pressable
+                  onPress={() => nav.navigate('BookTab', { screen: 'MyBookings' })}
+                  hitSlop={8}
+                  style={styles.pastBookingsLink}
+                >
+                  <YUiText size={11.5} weight={800} color="#fff" style={{ letterSpacing: 0.3 }}>
+                    Past bookings →
+                  </YUiText>
+                </Pressable>
+              </>
             );
           })()}
 
         </View>
 
-        {/* ── Book / Event toggle — the two tiles pick which interface shows below ── */}
-        <View style={styles.shortcutRow}>
-          {([
-            {
-              key: 'book' as const, label: 'Book a court',
-              icon: (c: string) => (
-                <Svg width={44} height={32} viewBox="0 0 30 22" fill="none">
-                  <Rect x={2} y={2} width={26} height={18} rx={3.5} stroke={c} strokeWidth={1.9} />
-                  <Path d="M9 2v18M21 2v18M9 11h12" stroke={c} strokeWidth={1.9} strokeLinecap="round" />
-                </Svg>
-              ),
-            },
-            {
-              key: 'event' as const, label: 'Join an event',
-              icon: (c: string) => (
-                <Svg width={30} height={30} viewBox="0 0 24 24" fill="none">
-                  <Path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 01-10 0V4ZM17 5h3v2a3 3 0 01-3 3M7 5H4v2a3 3 0 003 3" stroke={c} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-              ),
-            },
-          ]).map((f) => {
-            const active = activeFace === f.key;
-            // Active tile is lime-filled — dark ink icon + label read best on it.
-            const c = active ? YColors.ink : YColors.accent;
-            return (
-              <Pressable
-                key={f.key}
-                onPress={() => setActiveFace(f.key)}
-                style={[styles.shortcutTile, active && styles.shortcutTilePrimary]}
-              >
-                {f.icon(c)}
-                <YUiText size={13.5} weight={active ? 800 : 600} color={YColors.ink} style={styles.shortcutLabel}>
-                  {f.label}
-                </YUiText>
-              </Pressable>
-            );
-          })}
-        </View>
+        {/* ── Book / Event toggle + owner "Manage" nav. The two toggle tiles pick
+             which interface shows below; the third (owners only) jumps to the
+             venue dashboard. Owner → 3-up, narrower tiles + slightly smaller
+             labels; non-owner → the original 2-up. ── */}
+        {(() => {
+          const isOwner = myVenues.length > 0;
+          // Narrower tiles when three sit in the row — trim label + icon a touch.
+          const labelSize = isOwner ? 12 : 13.5;
+          return (
+            <View style={styles.shortcutRow}>
+              {([
+                {
+                  key: 'book' as const, label: 'Book a court',
+                  icon: (c: string) => (
+                    <Svg width={isOwner ? 38 : 44} height={isOwner ? 28 : 32} viewBox="0 0 30 22" fill="none">
+                      <Rect x={2} y={2} width={26} height={18} rx={3.5} stroke={c} strokeWidth={1.9} />
+                      <Path d="M9 2v18M21 2v18M9 11h12" stroke={c} strokeWidth={1.9} strokeLinecap="round" />
+                    </Svg>
+                  ),
+                },
+                {
+                  key: 'event' as const, label: 'Join an event',
+                  icon: (c: string) => (
+                    <Svg width={isOwner ? 26 : 30} height={isOwner ? 26 : 30} viewBox="0 0 24 24" fill="none">
+                      <Path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 01-10 0V4ZM17 5h3v2a3 3 0 01-3 3M7 5H4v2a3 3 0 003 3" stroke={c} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
+                  ),
+                },
+              ]).map((f) => {
+                const active = activeFace === f.key;
+                // Active tile is lime-filled — dark ink icon + label read best on it.
+                const c = active ? YColors.ink : YColors.accent;
+                return (
+                  <Pressable
+                    key={f.key}
+                    onPress={() => setActiveFace(f.key)}
+                    style={[styles.shortcutTile, active && styles.shortcutTilePrimary]}
+                  >
+                    {f.icon(c)}
+                    <YUiText size={labelSize} weight={active ? 800 : 600} color={YColors.ink} style={styles.shortcutLabel}>
+                      {f.label}
+                    </YUiText>
+                  </Pressable>
+                );
+              })}
+              {isOwner && (() => {
+                const active = activeFace === 'manage';
+                const c = active ? YColors.ink : YColors.accent;
+                return (
+                  <Pressable
+                    key="manage"
+                    onPress={() => setActiveFace('manage')}
+                    style={[styles.shortcutTile, active && styles.shortcutTilePrimary]}
+                  >
+                    <Svg width={26} height={26} viewBox="0 0 24 24" fill="none">
+                      <Path d="M3 21h18M5 21V8l7-4 7 4v13M9 12h2M13 12h2M9 16h2M13 16h2" stroke={c} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
+                    <YUiText size={labelSize} weight={active ? 800 : 600} color={YColors.ink} style={styles.shortcutLabel}>
+                      My court
+                    </YUiText>
+                  </Pressable>
+                );
+              })()}
+            </View>
+          );
+        })()}
 
         {/* ── The selected interface — swaps when you tap a tile ── */}
         {activeFace === 'book' ? (
@@ -500,6 +639,9 @@ export default function HomeScreen() {
                 onSubmitEditing={() => goBookSearch(courtQuery)}
               />
             </View>
+            <YEyebrow color={YColors.ink3} style={{ marginTop: 18, marginBottom: 10 }}>
+              NEAREST TO ME
+            </YEyebrow>
             <View style={styles.courtList}>
               {apiVenues.length > 0 ? (
                 apiVenues.slice(0, 2).map((v) => (
@@ -515,9 +657,21 @@ export default function HomeScreen() {
                           <YDisplay size={18} color={YColors.accent} style={{ lineHeight: 20 }} numberOfLines={1}>
                             {v.name}
                           </YDisplay>
-                          <YUiText size={11.5} color={YColors.ink2} numberOfLines={1} style={{ marginTop: 3 }}>
-                            {v.city}{v.state ? `, ${v.state}` : ''}
-                          </YUiText>
+                          <View style={styles.venueCardLoc}>
+                            <Svg width={11} height={11} viewBox="0 0 24 24" fill="none">
+                              <Path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11z" stroke={YColors.ink3} strokeWidth={2} strokeLinejoin="round" />
+                              <Path d="M12 12.5a2 2 0 100-4 2 2 0 000 4z" fill={YColors.ink3} />
+                            </Svg>
+                            <YUiText size={11.5} color={YColors.ink2} numberOfLines={1} style={{ flexShrink: 1 }}>
+                              {shortArea(v)}
+                            </YUiText>
+                            {distanceLabel(v) ? (
+                              <>
+                                <YUiText size={11.5} color={YColors.ink3}>·</YUiText>
+                                <YUiText size={11.5} weight={800} color={YColors.accent}>{distanceLabel(v)} away</YUiText>
+                              </>
+                            ) : null}
+                          </View>
                         </View>
                         {priceRange(v) ? (
                           <YBadge color={YColors.accentDeep} bg="rgba(24,88,214,0.12)">{priceRange(v)}/hr</YBadge>
@@ -541,6 +695,47 @@ export default function HomeScreen() {
             <Pressable onPress={goBook} hitSlop={8} style={styles.seeAll}>
               <YUiText size={11.5} weight={800} color={YColors.accent}>See all courts →</YUiText>
             </Pressable>
+          </View>
+        ) : activeFace === 'manage' ? (
+          <View style={styles.faceBody}>
+            {(() => {
+              const manageVenue = myVenues.find(v => v.id === manageVenueId) ?? myVenues[0] ?? null;
+              return (
+                <>
+                  {/* Venue switcher — only when the owner has more than one court */}
+                  {myVenues.length > 1 && (
+                    <View style={styles.manageVenueRow}>
+                      {myVenues.map(v => {
+                        const on = manageVenue?.id === v.id;
+                        return (
+                          <Pressable
+                            key={v.id}
+                            onPress={() => setManageVenueId(v.id)}
+                            style={[styles.manageVenueChip, on && styles.manageVenueChipOn]}
+                          >
+                            <YUiText size={12.5} weight={on ? 800 : 600} color={on ? '#fff' : YColors.ink2} numberOfLines={1}>
+                              {v.name}
+                            </YUiText>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  )}
+                  {manageVenue ? (
+                    <VenueBookingBoard venue={manageVenue} />
+                  ) : (
+                    <View style={{ paddingVertical: 14, alignItems: 'center' }}>
+                      <YUiText size={12} color={YColors.ink2}>No court is linked to your account yet.</YUiText>
+                    </View>
+                  )}
+                  {manageVenue ? (
+                    <Pressable onPress={() => goVenueAdmin(manageVenue.id)} hitSlop={8} style={styles.seeAll}>
+                      <YUiText size={11.5} weight={800} color={YColors.accent}>Open full dashboard →</YUiText>
+                    </Pressable>
+                  ) : null}
+                </>
+              );
+            })()}
           </View>
         ) : (
           <View style={styles.faceBody}>
@@ -580,38 +775,9 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Venue admin card — only for venue owners */}
-        {myVenues.length > 0 && (
-          <Pressable
-            style={styles.adminCard}
-            onPress={() => goVenueAdmin(myVenues[0].id)}
-          >
-            <View style={styles.adminIconCircle}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M3 21h18M5 21V8l7-4 7 4v13M9 12h2M13 12h2M9 16h2M13 16h2"
-                  stroke="#fff"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                />
-              </Svg>
-            </View>
-            <YDisplay size={18} color="#fff" style={{ flex: 1, marginHorizontal: 12 }}>
-              VENUE ADMIN
-            </YDisplay>
-            <View style={styles.adminIconCircle}>
-              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M7 17L17 7M17 7H9M17 7v8"
-                  stroke="#fff"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
-            </View>
-          </Pressable>
-        )}
+        {/* Venue admin now lives in the shortcut row above ("Manage my court",
+            owners only) — the standalone banner was removed to avoid two entry
+            points to the same dashboard. */}
 
         {/* FEATURED LEAGUES — horizontal slider of live/featured league banners.
             Swipes between many when more go live, with a "See all live leagues"
@@ -796,6 +962,22 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 2,
   },
+  // Compact DUPR-score chip in the hero's top-right (replaces the avatar).
+  duprChip: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
+    minWidth: 54,
+  },
+  // Two mini stats (doubles | singles) inside the DUPR chip.
+  duprStatRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
+  duprStat: { alignItems: 'center', minWidth: 30 },
+  duprDivider: { width: 1, height: 20, backgroundColor: 'rgba(255,255,255,0.25)' },
   // Bare tappable location row — sits below the name, no pill
   locTag: {
     flexDirection: 'row',
@@ -835,6 +1017,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
+  },
+  upcomingActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dirBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
+  },
+  pastBookingsLink: {
+    alignSelf: 'flex-end',
+    marginRight: 16,
+    marginTop: 8,
+    marginBottom: 2,
+    paddingVertical: 2,
   },
   upcomingArrow: {
     width: 28,
@@ -879,6 +1079,7 @@ const styles = StyleSheet.create({
   venueCardImage: { width: '100%', height: 116, backgroundColor: YColors.bg3 },
   venueCardBody: { padding: 12 },
   venueCardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  venueCardLoc: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
   venueCardFoot: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1101,6 +1302,12 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     marginTop: 10,
   },
+  manageVenueRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 14 },
+  manageVenueChip: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
+    borderWidth: 1.5, borderColor: YColors.line2, backgroundColor: YColors.bg,
+  },
+  manageVenueChipOn: { backgroundColor: YColors.accent, borderColor: YColors.accent },
   promo: {
     marginHorizontal: 16,
     marginTop: 22,
@@ -1160,24 +1367,6 @@ const styles = StyleSheet.create({
     marginTop: 18,
     marginBottom: -6,
     marginLeft: 20,
-  },
-  adminCard: {
-    marginTop: 14,
-    marginHorizontal: 16,
-    backgroundColor: YColors.accent,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  adminIconCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   bookCardWrap: {
     marginTop: 14,

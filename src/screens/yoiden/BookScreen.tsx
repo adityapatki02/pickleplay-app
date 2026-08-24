@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import * as Location from 'expo-location';
 import {
   View,
   ScrollView,
@@ -9,7 +10,7 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import {
@@ -24,6 +25,7 @@ import {
   YSectionHead,
 } from '../../components/yoiden';
 import { venuesApi } from '../../api/venues.api';
+import { useAuthStore } from '../../store/authStore';
 import { resizeUrl } from '../../utils/img';
 import type { Venue } from '../../types/booking.types';
 import type { BookStackParamList } from '../../navigation/YoidenTabNavigator';
@@ -55,17 +57,37 @@ const venuePhoto = (v: Venue): string | undefined => {
   return thumb ?? resizeUrl(p.url, { w: 800, h: 300 });
 };
 
+// "1.2 km away" / "600 m away" from the backend-computed distanceKm.
+const distanceLabel = (v: Venue): string | null => {
+  const km = v.distanceKm;
+  if (km == null || km <= 0) return null;
+  if (km < 1) return `${Math.round(km * 1000)} m`;
+  if (km < 10) return `${km.toFixed(1)} km`;
+  return `${Math.round(km)} km`;
+};
+
 export default function BookScreen() {
   const nav = useNavigation<Nav>();
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
+  const user = useAuthStore((s) => s.user);
+  const userCoords = useRef<{ lat: number; lng: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  // Sort by proximity when we have GPS; also scope to the user's city. Passing
+  // lat/lng makes the backend compute distanceKm and sort nearest-first.
   const fetchVenues = useCallback(async () => {
     try {
       setError(null);
-      const res = await venuesApi.list({ limit: 50 });
+      const res = await venuesApi.list({
+        limit: 50,
+        city: user?.city || undefined,
+        lat: userCoords.current?.lat,
+        lng: userCoords.current?.lng,
+      });
       const data = (res.data as any)?.data ?? [];
       setVenues(Array.isArray(data) ? data : []);
     } catch (e: any) {
@@ -75,11 +97,25 @@ export default function BookScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [user?.city]);
 
+  // Ask for location once, capture coords, then load — so the first list is
+  // already distance-sorted. Falls back to city-only if permission is denied.
   useEffect(() => {
-    fetchVenues();
-  }, [fetchVenues]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted' && !cancelled) {
+          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          if (!cancelled) userCoords.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        }
+      } catch { /* denied / unavailable → city-only sort */ }
+      if (!cancelled) fetchVenues();
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -91,6 +127,7 @@ export default function BookScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={{ paddingBottom: 140 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -151,10 +188,17 @@ export default function BookScreen() {
                       <YDisplay size={22} color={YColors.accent} style={{ lineHeight: 24 }}>
                         {v.name}
                       </YDisplay>
-                      <YUiText size={12} color={YColors.ink2} style={{ marginTop: 4 }}>
-                        {v.city}
-                        {v.state ? `, ${v.state}` : ''}
-                      </YUiText>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                        <YUiText size={12} color={YColors.ink2} numberOfLines={1} style={{ flexShrink: 1 }}>
+                          {v.neighbourhood || v.city}
+                        </YUiText>
+                        {distanceLabel(v) ? (
+                          <>
+                            <YUiText size={12} color={YColors.ink3}>·</YUiText>
+                            <YUiText size={12} weight={800} color={YColors.accent}>{distanceLabel(v)} away</YUiText>
+                          </>
+                        ) : null}
+                      </View>
                     </View>
                     {priceRange(v) ? (
                       <YBadge color={YColors.accentDeep} bg="rgba(24,88,214,0.12)">

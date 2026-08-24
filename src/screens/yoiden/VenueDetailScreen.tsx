@@ -258,7 +258,22 @@ export default function VenueDetailScreen() {
     setSelNote(null);
   }, [date]);
 
-  const timeline = courts[0]?.chunks ?? [];
+  const allChunks = courts[0]?.chunks ?? [];
+  // When booking for TODAY, hide slots whose start time has already passed —
+  // you can't book a slot in the past (or one already in progress).
+  const isToday = date === isoForOffset(0);
+  const nowMins = (() => {
+    const n = new Date();
+    return n.getHours() * 60 + n.getMinutes();
+  })();
+  const startMins = (hhmm: string) => {
+    const [h, m] = hhmm.split(':').map(Number);
+    return h * 60 + m;
+  };
+  const timeline = isToday
+    ? allChunks.filter((ch) => startMins(ch.startTime) > nowMins)
+    : allChunks;
+  const allSlotsPast = isToday && allChunks.length > 0 && timeline.length === 0;
   const courtById = useMemo(() => new Map(courts.map((c) => [c.court.id, c])), [courts]);
   const freeAt = (courtId: string, start: string) =>
     !!courtById.get(courtId)?.chunks.find((ch) => ch.startTime === start)?.available;
@@ -689,6 +704,12 @@ export default function VenueDetailScreen() {
           <View style={styles.center}>
             <YUiText size={13} color={YColors.ink2}>
               {error ?? 'No courts open on this date.'}
+            </YUiText>
+          </View>
+        ) : allSlotsPast ? (
+          <View style={styles.center}>
+            <YUiText size={13} color={YColors.ink2} style={{ textAlign: 'center' }}>
+              No more slots today. Tap “Next” to book for tomorrow.
             </YUiText>
           </View>
         ) : (

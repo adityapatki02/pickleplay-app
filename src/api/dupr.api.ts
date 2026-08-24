@@ -9,13 +9,18 @@ export type DuprLinkResponse = {
 export type DuprRatings = {
   singles?: string | number | null;
   doubles?: string | number | null;
-  singlesReliability?: number | null;
-  doublesReliability?: number | null;
+  // DUPR's normalized reliability flag (from isSinglesReliable/isDoublesReliable).
+  singlesReliable?: boolean | null;
+  doublesReliable?: boolean | null;
 };
+
+export type DuprRecord = { win: number; loss: number };
 
 export type DuprSnapshot = {
   fullName?: string;
   ratings?: DuprRatings;
+  // Win-loss records DUPR returns per format.
+  records?: { singles?: DuprRecord | null; doubles?: DuprRecord | null };
   [key: string]: any;
 };
 

@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Pressable,
   TextInput,
+  Modal,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,6 +25,7 @@ import {
   YWordmark,
 } from '../../components/yoiden';
 import { tournamentsApi } from '../../api/tournaments.api';
+import { authApi } from '../../api/auth.api';
 import { openRazorpay } from '../../utils/razorpay';
 import { matchesApi } from '../../api/matches.api';
 import type { Tournament, TournamentCategory } from '../../types/tournament.types';
@@ -119,6 +121,7 @@ export default function TournamentPublicScreen() {
 
   const [genderFilter, setGenderFilter] = useState<string>('all');
   const [formatFilter, setFormatFilter] = useState<string>('all');
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const [playersCategoryId, setPlayersCategoryId] = useState<string | null>(null);
   const [entrants, setEntrants] = useState<EntrantsData | null>(null);
@@ -400,6 +403,24 @@ export default function TournamentPublicScreen() {
           ) : null}
         </View>
       </ScrollView>
+
+      {/* Sticky BOOK NOW → opens the multi-step registration wizard */}
+      {registrationOpen ? (
+        <View style={styles.bookBar}>
+          <Pressable style={styles.bookNow} onPress={() => setWizardOpen(true)}>
+            <YUiText size={14} weight={900} color="#fff" style={{ letterSpacing: 1 }}>
+              BOOK NOW
+            </YUiText>
+          </Pressable>
+        </View>
+      ) : null}
+
+      <RegistrationWizard
+        visible={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        tournament={t}
+        onRegistered={onRegistered}
+      />
     </SafeAreaView>
   );
 }
@@ -555,72 +576,99 @@ function PublicCategoryCard({
           )}
         </View>
       </View>
-      {registrationOpen ? (
-        <GuestRegisterBlock
-          slug={slug}
-          category={c}
-          full={full}
-          onRegistered={onRegistered}
-        />
-      ) : null}
     </View>
   );
 }
 
 /**
- * Guest registration straight from a shared event link — the person opening the
- * link has no account and, for a private event, no way to find it in the app.
- * Collapsed to a button until tapped so the category list stays scannable.
+ * Multi-step registration wizard (KheloMore-style). Opened by the sticky
+ * BOOK NOW bar. Steps: phone → OTP (auto-creates a Yoiden account, no PIN) →
+ * pick a category → player details → pay/confirm. Replaces the old inline
+ * per-card guest form so registration is one guided flow for a cold visitor.
  */
-function GuestRegisterBlock({
-  slug,
-  category,
-  full,
+function RegistrationWizard({
+  visible,
+  onClose,
+  tournament,
   onRegistered,
 }: {
-  slug?: string;
-  category: TournamentCategory;
-  full: boolean;
+  visible: boolean;
+  onClose: () => void;
+  tournament: Tournament;
   onRegistered: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState('');
+  const cats = tournament.categories ?? [];
+  type Step = 'phone' | 'otp' | 'category' | 'details' | 'done';
+  const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [cat, setCat] = useState<TournamentCategory | null>(null);
+  const [name, setName] = useState('');
   const [partnerName, setPartnerName] = useState('');
   const [partnerPhone, setPartnerPhone] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [done, setDone] = useState<{ status?: string; waitlistPosition?: number | null } | null>(null);
+  const [result, setResult] = useState<{ status?: string; waitlistPosition?: number | null } | null>(null);
 
-  const isDoubles = category.format === 'doubles';
-  const isPaid = Number(category.entryFee) > 0;
-  const canSubmit = name.trim().length >= 2 && phone.replace(/\D/g, '').length >= 8 && !busy;
+  const reset = () => {
+    setStep('phone'); setPhone(''); setOtp(''); setCat(null); setName('');
+    setPartnerName(''); setPartnerPhone(''); setBusy(false); setErr(null); setResult(null);
+  };
+  const close = () => { reset(); onClose(); };
 
-  const submit = async () => {
-    if (!slug || !canSubmit) return;
-    setBusy(true);
-    setErr(null);
+  const phoneOk = phone.replace(/\D/g, '').length >= 10;
+  const otpOk = otp.replace(/\D/g, '').length >= 4;
+  const isDoubles = cat?.format === 'doubles';
+  const isPaid = cat ? Number(cat.entryFee) > 0 : false;
+  const detailsOk = name.trim().length >= 2;
+
+  // Step 1 → send the OTP.
+  const sendOtp = async () => {
+    if (!phoneOk || busy) return;
+    setBusy(true); setErr(null);
     try {
-      const res = await tournamentsApi.guestRegister(slug, {
+      await authApi.sendPhoneOtp({ phone: phone.trim() });
+      setStep('otp');
+    } catch (e: any) {
+      setErr(e?.response?.data?.message || 'Could not send the code. Please try again.');
+    } finally { setBusy(false); }
+  };
+
+  // Step 2 → verify OTP, create/return the Yoiden account (no PIN), advance.
+  const verifyOtp = async () => {
+    if (!otpOk || busy) return;
+    setBusy(true); setErr(null);
+    try {
+      const vres = await authApi.verifyPhoneOtp({ phone: phone.trim(), otp: otp.trim() });
+      const verificationToken = vres.data?.data?.verificationToken;
+      const cres = await authApi.phoneOtpContinue({ phone: phone.trim(), verificationToken });
+      const existingName = cres.data?.data?.user?.fullName;
+      if (existingName && !name.trim()) setName(existingName);
+      setStep('category');
+    } catch (e: any) {
+      setErr(e?.response?.data?.message || 'That code didn’t work. Check it and try again.');
+    } finally { setBusy(false); }
+  };
+
+  // Final → register (+ payment for paid categories).
+  const submit = async () => {
+    if (!cat || !tournament.slug || !detailsOk || busy) return;
+    setBusy(true); setErr(null);
+    try {
+      const res = await tournamentsApi.guestRegister(tournament.slug, {
         name: name.trim(),
         phone: phone.trim(),
-        categoryId: category.id,
+        categoryId: cat.id,
         partnerName: partnerName.trim() || undefined,
         partnerPhone: partnerPhone.trim() || undefined,
       });
       const data = res.data?.data;
       if (data?.free) {
-        setDone({ status: data.status, waitlistPosition: data.waitlistPosition });
-        onRegistered();
-        return;
+        setResult({ status: data.status, waitlistPosition: data.waitlistPosition });
+        setStep('done'); onRegistered(); return;
       }
-
-      // Paid category — the backend already created the Razorpay order (with the
-      // organizer's Route split). Open checkout; the payment webhook is what
-      // actually flips the registration to confirmed server-side.
       if (!data?.orderId || !data?.key) {
-        setErr('Could not start payment. Please try again.');
-        return;
+        setErr('Could not start payment. Please try again.'); return;
       }
       await openRazorpay({
         key: data.key,
@@ -628,122 +676,262 @@ function GuestRegisterBlock({
         currency: data.currency ?? 'INR',
         order_id: data.orderId,
         name: data.eventName ?? 'Yoiden',
-        description: data.categoryName ?? category.name,
+        description: data.categoryName ?? cat.name,
         prefill: { name: name.trim(), contact: phone.trim() },
         theme: { color: YColors.accent },
       });
-      setDone({ status: 'paid' });
-      onRegistered();
+      setResult({ status: 'paid' });
+      setStep('done'); onRegistered();
     } catch (e: any) {
-      // Razorpay rejects with { description } when the sheet is dismissed.
-      const msg =
-        e?.response?.data?.message ||
-        e?.description ||
-        e?.message ||
-        'Could not register. Please try again.';
+      const msg = e?.response?.data?.message || e?.description || e?.message || 'Could not register. Please try again.';
       setErr(
         msg === 'Payment cancelled'
           ? 'Payment cancelled — your spot is held for a few minutes if you want to retry.'
           : msg,
       );
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
 
-  if (done) {
-    const waitlisted = done.status === 'waitlisted';
-    const pendingPartner = done.status === 'pending_partner';
-    return (
-      <View style={[styles.catNote, { backgroundColor: YColors.lime }]}>
-        <YUiText size={11} weight={900} color="#000">
-          {waitlisted
-            ? `You're on the waitlist${done.waitlistPosition ? ` — position ${done.waitlistPosition}` : ''}.`
-            : pendingPartner
-                ? "You're in — add your partner at the venue to complete the team."
-                : done.status === 'paid'
-                  ? "Payment received — you're registered!"
-                  : "You're registered!"}
-        </YUiText>
-        <YUiText size={10} color="rgba(0,0,0,0.65)" style={{ marginTop: 3 }}>
-          We'll use your phone number to check you in at the venue.
-        </YUiText>
-      </View>
-    );
-  }
-
-  if (!open) {
-    return (
-      <Pressable onPress={() => setOpen(true)} style={styles.regBtn}>
-        <YUiText size={12} weight={900} color="#000" style={{ letterSpacing: 0.6 }}>
-          {full ? 'JOIN WAITLIST' : isPaid ? `REGISTER · ₹${category.entryFee}` : 'REGISTER'}
-        </YUiText>
-      </Pressable>
-    );
-  }
+  const titles: Record<Step, string> = {
+    phone: 'Enter your mobile',
+    otp: 'Verify your number',
+    category: 'Select a category',
+    details: 'Your details',
+    done: 'Registration',
+  };
+  const stepIndex: Record<Step, number> = { phone: 0, otp: 1, category: 2, details: 3, done: 4 };
+  const back = () => {
+    setErr(null);
+    if (step === 'otp') setStep('phone');
+    else if (step === 'category') setStep('otp');
+    else if (step === 'details') setStep('category');
+  };
 
   return (
-    <View style={styles.regForm}>
-      <TextInput
-        style={styles.regInput}
-        placeholder="Your name"
-        placeholderTextColor={YColors.ink3}
-        value={name}
-        onChangeText={setName}
-        autoCapitalize="words"
-      />
-      <TextInput
-        style={styles.regInput}
-        placeholder="Phone number"
-        placeholderTextColor={YColors.ink3}
-        value={phone}
-        onChangeText={setPhone}
-        keyboardType="phone-pad"
-      />
-      {isDoubles ? (
-        <>
-          <TextInput
-            style={styles.regInput}
-            placeholder="Partner name (optional)"
-            placeholderTextColor={YColors.ink3}
-            value={partnerName}
-            onChangeText={setPartnerName}
-            autoCapitalize="words"
-          />
-          {partnerName.trim() ? (
-            <TextInput
-              style={styles.regInput}
-              placeholder="Partner phone (optional)"
-              placeholderTextColor={YColors.ink3}
-              value={partnerPhone}
-              onChangeText={setPartnerPhone}
-              keyboardType="phone-pad"
-            />
-          ) : null}
-        </>
-      ) : null}
-      {err ? (
-        <YUiText size={10.5} color={YColors.live} style={{ marginBottom: 8 }}>
-          {err}
-        </YUiText>
-      ) : null}
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Pressable
-          onPress={submit}
-          disabled={!canSubmit}
-          style={[styles.regBtn, { flex: 1 }, !canSubmit && { opacity: 0.5 }]}
-        >
-          <YUiText size={12} weight={900} color="#000" style={{ letterSpacing: 0.6 }}>
-            {busy ? (isPaid ? 'OPENING PAYMENT…' : 'SUBMITTING…') : full ? 'JOIN WAITLIST' : isPaid ? `PAY ₹${category.entryFee}` : 'CONFIRM'}
-          </YUiText>
-        </Pressable>
-        <Pressable onPress={() => setOpen(false)} style={[styles.regBtn, styles.regCancel]}>
-          <YUiText size={12} weight={900} color={YColors.ink2} style={{ letterSpacing: 0.6 }}>
-            CANCEL
-          </YUiText>
-        </Pressable>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
+      <View style={styles.wizOverlay}>
+        <View style={styles.wizSheet}>
+          {/* Header */}
+          <View style={styles.wizHead}>
+            {step !== 'phone' && step !== 'done' ? (
+              <Pressable onPress={back} hitSlop={10}>
+                <YUiText size={20} color={YColors.ink2}>‹</YUiText>
+              </Pressable>
+            ) : (
+              <View style={{ width: 20 }} />
+            )}
+            <YUiText size={13} weight={900} color={YColors.ink} style={{ letterSpacing: 0.5 }}>
+              {titles[step]}
+            </YUiText>
+            <Pressable onPress={close} hitSlop={10}>
+              <YUiText size={16} color={YColors.ink2}>✕</YUiText>
+            </Pressable>
+          </View>
+
+          {/* Progress rail */}
+          <View style={styles.wizRail}>
+            {[0, 1, 2, 3].map((i) => (
+              <View
+                key={i}
+                style={[styles.wizRailSeg, i <= stepIndex[step] && { backgroundColor: YColors.accent }]}
+              />
+            ))}
+          </View>
+
+          {/* Event strip */}
+          <View style={styles.wizEvent}>
+            <YUiText size={12} weight={800} color={YColors.ink} numberOfLines={1}>
+              {tournament.name}
+            </YUiText>
+            {tournament.venueName ? (
+              <YMono size={9.5} color={YColors.ink3} style={{ marginTop: 2, letterSpacing: 0.6 }}>
+                {tournament.venueName.toUpperCase()}
+              </YMono>
+            ) : null}
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: 18 }} keyboardShouldPersistTaps="handled">
+            {step === 'phone' ? (
+              <>
+                <YUiText size={12} color={YColors.ink2} style={{ marginBottom: 12 }}>
+                  Enter your 10-digit mobile number. We’ll text you a one-time code and set up your Yoiden account automatically — no password needed.
+                </YUiText>
+                <TextInput
+                  style={styles.regInput}
+                  placeholder="+91  Mobile number"
+                  placeholderTextColor={YColors.ink3}
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                  autoFocus
+                />
+              </>
+            ) : null}
+
+            {step === 'otp' ? (
+              <>
+                <YUiText size={12} color={YColors.ink2} style={{ marginBottom: 12 }}>
+                  Enter the code sent to {phone.trim()}.
+                </YUiText>
+                <TextInput
+                  style={styles.regInput}
+                  placeholder="6-digit code"
+                  placeholderTextColor={YColors.ink3}
+                  value={otp}
+                  onChangeText={setOtp}
+                  keyboardType="number-pad"
+                  maxLength={8}
+                  autoFocus
+                />
+                <Pressable onPress={sendOtp} disabled={busy} hitSlop={6} style={{ marginTop: 4 }}>
+                  <YUiText size={10.5} weight={700} color={YColors.accent}>Resend code</YUiText>
+                </Pressable>
+              </>
+            ) : null}
+
+            {step === 'category' ? (
+              <View style={{ gap: 10 }}>
+                {cats.length === 0 ? (
+                  <YUiText size={12} color={YColors.ink3}>Categories will be announced soon.</YUiText>
+                ) : (
+                  cats.map((c) => {
+                    const reg = c.registeredTeams ?? 0;
+                    const spots = Math.max(0, c.maxTeams - reg);
+                    const cFull = spots === 0;
+                    const on = cat?.id === c.id;
+                    const filling = !cFull && spots <= 4;
+                    return (
+                      <Pressable
+                        key={c.id}
+                        onPress={() => setCat(c)}
+                        style={[styles.wizCat, on && styles.wizCatOn]}
+                      >
+                        <View style={{ flex: 1, paddingRight: 10 }}>
+                          <YUiText size={12.5} weight={900} color={YColors.ink}>{c.name}</YUiText>
+                          <YMono size={9.5} color={YColors.ink3} style={{ marginTop: 3, letterSpacing: 0.5 }}>
+                            {c.format.toUpperCase()} · {c.gender.toUpperCase()}
+                          </YMono>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <YMono size={12} bold color={YColors.ink}>
+                            {Number(c.entryFee) === 0 ? 'FREE' : `₹${c.entryFee}`}
+                          </YMono>
+                          <YUiText
+                            size={9}
+                            weight={800}
+                            color={cFull ? YColors.live : filling ? YColors.accent : YColors.ink3}
+                            style={{ marginTop: 4, letterSpacing: 0.4 }}
+                          >
+                            {cFull ? 'SOLD OUT' : filling ? 'FILLING FAST' : `${spots} LEFT`}
+                          </YUiText>
+                        </View>
+                        <View style={[styles.wizRadio, on && styles.wizRadioOn]}>
+                          {on ? <View style={styles.wizRadioDot} /> : null}
+                        </View>
+                      </Pressable>
+                    );
+                  })
+                )}
+              </View>
+            ) : null}
+
+            {step === 'details' ? (
+              <>
+                <TextInput
+                  style={styles.regInput}
+                  placeholder="Your name"
+                  placeholderTextColor={YColors.ink3}
+                  value={name}
+                  onChangeText={setName}
+                  autoCapitalize="words"
+                  autoFocus
+                />
+                {isDoubles ? (
+                  <>
+                    <TextInput
+                      style={styles.regInput}
+                      placeholder="Partner name (optional)"
+                      placeholderTextColor={YColors.ink3}
+                      value={partnerName}
+                      onChangeText={setPartnerName}
+                      autoCapitalize="words"
+                    />
+                    {partnerName.trim() ? (
+                      <TextInput
+                        style={styles.regInput}
+                        placeholder="Partner phone (optional)"
+                        placeholderTextColor={YColors.ink3}
+                        value={partnerPhone}
+                        onChangeText={setPartnerPhone}
+                        keyboardType="phone-pad"
+                      />
+                    ) : null}
+                  </>
+                ) : null}
+                {cat ? (
+                  <View style={styles.wizSummary}>
+                    <YUiText size={11.5} weight={800} color={YColors.ink}>{cat.name}</YUiText>
+                    <YMono size={12} bold color={YColors.ink}>
+                      {Number(cat.entryFee) === 0 ? 'FREE' : `₹${cat.entryFee}`}
+                    </YMono>
+                  </View>
+                ) : null}
+              </>
+            ) : null}
+
+            {step === 'done' ? (
+              <View style={[styles.catNote, { backgroundColor: YColors.lime, marginTop: 4 }]}>
+                <YUiText size={12} weight={900} color="#000">
+                  {result?.status === 'waitlisted'
+                    ? `You’re on the waitlist${result?.waitlistPosition ? ` — position ${result.waitlistPosition}` : ''}.`
+                    : result?.status === 'pending_partner'
+                      ? 'You’re in — add your partner at the venue to complete the team.'
+                      : result?.status === 'paid'
+                        ? 'Payment received — you’re registered!'
+                        : 'You’re registered!'}
+                </YUiText>
+                <YUiText size={10} color="rgba(0,0,0,0.7)" style={{ marginTop: 4 }}>
+                  A confirmation has been sent to {phone.trim()}. Download the Yoiden app to manage your booking and see the draw.
+                </YUiText>
+              </View>
+            ) : null}
+
+            {err ? <YUiText size={10.5} color={YColors.live} style={{ marginTop: 10 }}>{err}</YUiText> : null}
+          </ScrollView>
+
+          {/* Footer action */}
+          <View style={styles.wizFoot}>
+            {step === 'phone' ? (
+              <Pressable style={[styles.wizBtn, (!phoneOk || busy) && styles.wizBtnOff]} disabled={!phoneOk || busy} onPress={sendOtp}>
+                <YUiText size={13} weight={900} color="#fff" style={{ letterSpacing: 0.8 }}>{busy ? 'SENDING…' : 'GET OTP'}</YUiText>
+              </Pressable>
+            ) : null}
+            {step === 'otp' ? (
+              <Pressable style={[styles.wizBtn, (!otpOk || busy) && styles.wizBtnOff]} disabled={!otpOk || busy} onPress={verifyOtp}>
+                <YUiText size={13} weight={900} color="#fff" style={{ letterSpacing: 0.8 }}>{busy ? 'VERIFYING…' : 'VERIFY & CONTINUE'}</YUiText>
+              </Pressable>
+            ) : null}
+            {step === 'category' ? (
+              <Pressable style={[styles.wizBtn, !cat && styles.wizBtnOff]} disabled={!cat} onPress={() => { setErr(null); setStep('details'); }}>
+                <YUiText size={13} weight={900} color="#fff" style={{ letterSpacing: 0.8 }}>PROCEED</YUiText>
+              </Pressable>
+            ) : null}
+            {step === 'details' ? (
+              <Pressable style={[styles.wizBtn, (!detailsOk || busy) && styles.wizBtnOff]} disabled={!detailsOk || busy} onPress={submit}>
+                <YUiText size={13} weight={900} color="#fff" style={{ letterSpacing: 0.8 }}>
+                  {busy ? (isPaid ? 'OPENING PAYMENT…' : 'REGISTERING…') : isPaid ? `PAY ₹${cat?.entryFee}` : 'CONFIRM REGISTRATION'}
+                </YUiText>
+              </Pressable>
+            ) : null}
+            {step === 'done' ? (
+              <Pressable style={styles.wizBtn} onPress={close}>
+                <YUiText size={13} weight={900} color="#fff" style={{ letterSpacing: 0.8 }}>DONE</YUiText>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
       </View>
-    </View>
+    </Modal>
   );
 }
 
@@ -910,7 +1098,107 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: YColors.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: YColors.bg },
   centerBox: { paddingVertical: 40, alignItems: 'center' },
-  scrollContent: { paddingBottom: 60, alignItems: 'center' },
+  scrollContent: { paddingBottom: 120, alignItems: 'center' },
+
+  // Sticky BOOK NOW bar + multi-step registration wizard
+  bookBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 20,
+    backgroundColor: YColors.bg,
+    borderTopWidth: 1,
+    borderTopColor: YColors.line,
+  },
+  bookNow: {
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: YColors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
+  },
+  wizOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  wizSheet: {
+    backgroundColor: YColors.bg,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '92%',
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
+    overflow: 'hidden',
+  },
+  wizHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
+  },
+  wizRail: { flexDirection: 'row', gap: 6, paddingHorizontal: 16, marginBottom: 12 },
+  wizRailSeg: { flex: 1, height: 3, borderRadius: 2, backgroundColor: YColors.line2 },
+  wizEvent: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    backgroundColor: YColors.bg3,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: YColors.line,
+  },
+  wizFoot: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 20,
+    borderTopWidth: 1,
+    borderTopColor: YColors.line,
+  },
+  wizBtn: {
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: YColors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wizBtnOff: { opacity: 0.45 },
+  wizCat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: YColors.line,
+    backgroundColor: YColors.bg2,
+  },
+  wizCatOn: { borderColor: YColors.accent, backgroundColor: 'rgba(24,88,214,0.06)' },
+  wizRadio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: YColors.line2,
+    marginLeft: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wizRadioOn: { borderColor: YColors.accent },
+  wizRadioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: YColors.accent },
+  wizSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: YColors.bg3,
+  },
   page: { width: '100%' },
   pageWide: { maxWidth: CONTENT_MAX_WIDTH, paddingTop: 16 },
   platformBar: {

@@ -64,6 +64,7 @@ export type MeStackParamList = DetailAndManageRoutes & {
   DuesDetail: { venueId: string };
   CustomersDetail: { venueId: string; month?: string; days?: number; daypart?: string };
   RevenueDetail: { venueId: string; month?: string; days?: number; daypart?: string };
+  SponsoredDetail: { venueId: string; month?: string; days?: number; daypart?: string };
 };
 
 export type YoidenTabParamList = {

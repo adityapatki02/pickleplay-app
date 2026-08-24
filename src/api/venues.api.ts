@@ -55,6 +55,13 @@ export const venuesApi = {
   markNoShow: (venueId: string, bookingId: string, noShow = true) =>
     apiClient.patch<{ success: boolean }>(`/venues/${venueId}/bookings/${bookingId}/no-show`, { noShow }),
 
+  // Check a player in (or undo) — marks the slot as *played* + optional head-count.
+  checkInBooking: (venueId: string, bookingId: string, opts?: { checkedIn?: boolean; playersCount?: number }) =>
+    apiClient.patch<{ success: boolean }>(`/venues/${venueId}/bookings/${bookingId}/check-in`, {
+      checkedIn: opts?.checkedIn ?? true,
+      ...(opts?.playersCount != null ? { playersCount: opts.playersCount } : {}),
+    }),
+
   rescheduleBooking: (venueId: string, bookingId: string, date: string, startTime: string, endTime: string, courtId?: string) =>
     apiClient.patch<{ success: boolean }>(`/venues/${venueId}/bookings/${bookingId}/reschedule`, {
       date, startTime, endTime, courtId,

@@ -43,6 +43,7 @@ import HeatmapDetailScreen from '../screens/yoiden/HeatmapDetailScreen';
 import DuesDetailScreen from '../screens/yoiden/DuesDetailScreen';
 import CustomersDetailScreen from '../screens/yoiden/CustomersDetailScreen';
 import RevenueDetailScreen from '../screens/yoiden/RevenueDetailScreen';
+import SponsoredDetailScreen from '../screens/yoiden/SponsoredDetailScreen';
 
 // Court booking screens
 import BookScreen from '../screens/yoiden/BookScreen';
@@ -163,6 +164,7 @@ const MeStackNavigator = () => (
     <MeStack.Screen name="DuesDetail" component={DuesDetailScreen} />
     <MeStack.Screen name="CustomersDetail" component={CustomersDetailScreen} />
     <MeStack.Screen name="RevenueDetail" component={RevenueDetailScreen} />
+    <MeStack.Screen name="SponsoredDetail" component={SponsoredDetailScreen} />
     {registerDetailAndManageScreens(MeStack)}
   </MeStack.Navigator>
 );

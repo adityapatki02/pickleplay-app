@@ -46,6 +46,42 @@ const statusColor = (s: string): { bg: string; fg: string } => {
   }
 };
 
+// The payment chip. Design principle: a SOLID, channel-tagged "PAID" chip only
+// when money actually changed hands. Everything else — abandoned online
+// checkouts, awaited payments, failures — gets a distinct MUTED chip that states
+// the fact, never phrased as an action (there's no pay button on this list).
+const paymentBadge = (
+  b: { paymentStatus: string; channel?: string; status?: string; razorpayPaymentId?: string | null },
+): { label: string; bg: string; fg: string } => {
+  // A cancelled booking that never paid: neutral, no "pending"/"due" wording.
+  if (b.status === 'cancelled' && b.paymentStatus !== 'paid') {
+    return { label: 'NOT PAID', bg: YColors.bg3, fg: YColors.ink3 };
+  }
+  const online = b.channel === 'online';
+  switch (b.paymentStatus) {
+    case 'paid':
+      // APP vs AT VENUE keys off an ACTUAL Razorpay payment — not the booking's
+      // channel. An owner marking a booking paid (cash) has no razorpay id, so it
+      // correctly reads "AT VENUE" even if it was created via the online flow.
+      return b.razorpayPaymentId
+        ? { label: 'PAID · APP', bg: '#0b7a37', fg: '#fff' }
+        : { label: 'PAID · AT VENUE', bg: YColors.accent, fg: '#fff' };
+    case 'refunded':
+      return { label: 'REFUNDED', bg: YColors.bg3, fg: YColors.ink2 };
+    case 'failed':
+      return { label: 'PAYMENT FAILED', bg: '#fee2e2', fg: '#dc2626' };
+    case 'pending':
+      // Online: checkout started but never completed. Venue: due when you arrive.
+      return online
+        ? { label: 'PAYMENT INCOMPLETE', bg: 'rgba(180,83,9,0.12)', fg: '#b45309' }
+        : { label: 'DUE AT VENUE', bg: 'rgba(180,83,9,0.12)', fg: '#b45309' };
+    default: // unpaid
+      return online
+        ? { label: 'NOT PAID', bg: YColors.bg3, fg: YColors.ink3 }
+        : { label: 'DUE AT VENUE', bg: 'rgba(180,83,9,0.12)', fg: '#b45309' };
+  }
+};
+
 
 export default function MyBookingsScreen() {
   const nav = useNavigation<Nav>();
@@ -155,19 +191,23 @@ export default function MyBookingsScreen() {
                   </View>
 
                   <View style={styles.cardFoot}>
-                    <YMono size={11} color={YColors.ink2} style={{ letterSpacing: 0.5 }}>
-                      {b.startTime}–{b.endTime} · ₹{Number(b.amount)} ·{' '}
-                      {b.channel === 'online' ? 'ONLINE' : 'AT VENUE'} ·{' '}
-                      {b.paymentStatus.toUpperCase()}
+                    <YMono size={11} color={YColors.ink2} style={{ letterSpacing: 0.5, flexShrink: 1 }}>
+                      {b.startTime}–{b.endTime} · ₹{Number(b.amount)}
                     </YMono>
-                    <Pressable
-                      hitSlop={12}
-                      onPress={(e) => { e.stopPropagation?.(); nav.navigate('BookingDetail', { bookingId: b.id }); }}
-                    >
-                      <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-                        <Path d="M9 18l6-6-6-6" stroke={YColors.accent} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-                      </Svg>
-                    </Pressable>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      {(() => {
+                        const pb = paymentBadge(b);
+                        return <YBadge color={pb.fg} bg={pb.bg}>{pb.label}</YBadge>;
+                      })()}
+                      <Pressable
+                        hitSlop={12}
+                        onPress={(e) => { e.stopPropagation?.(); nav.navigate('BookingDetail', { bookingId: b.id }); }}
+                      >
+                        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                          <Path d="M9 18l6-6-6-6" stroke={YColors.accent} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                        </Svg>
+                      </Pressable>
+                    </View>
                   </View>
                 </Pressable>
               );

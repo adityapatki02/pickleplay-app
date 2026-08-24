@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useScrollToTop } from '@react-navigation/native';
 
 import {
   YColors,
@@ -75,6 +75,8 @@ const Section: React.FC<{
 // The "Events" tab — leagues (top) + tournaments (bottom). Courts live under Book.
 export default function PlayScreen() {
   const nav = useNavigation<any>();
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
   const user = useAuthStore((s) => s.user);
   const city = user?.city;
 
@@ -129,6 +131,7 @@ export default function PlayScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={{ paddingBottom: 140 }}
         showsVerticalScrollIndicator={false}
         refreshControl={

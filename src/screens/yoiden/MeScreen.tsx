@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 
 import {
@@ -39,6 +39,7 @@ import {
   acceptDuprInvite,
   declineDuprInvite,
   DuprInvite,
+  DuprAdminClub,
 } from '../../api/dupr.api';
 import { chooseAction } from '../../utils/notify';
 import { presentDuprSso } from '../../utils/dupr-host-bridge';
@@ -82,8 +83,19 @@ const formatDuprReliability = (v: number | boolean | null | undefined): string |
   return null;
 };
 
+// Win-loss record DUPR returns per format → "12W · 6L" (null when no matches).
+const formatRecord = (r?: { win?: number; loss?: number } | null): string | null => {
+  if (!r) return null;
+  const w = Number(r.win) || 0;
+  const l = Number(r.loss) || 0;
+  if (w + l === 0) return null;
+  return `${w}W · ${l}L`;
+};
+
 export default function MeScreen() {
   const nav = useNavigation<Nav>();
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
 
@@ -99,15 +111,18 @@ export default function MeScreen() {
   const [duprMe, setDuprMe] = useState<DuprMeResponse | null>(null);
   const [duprBusy, setDuprBusy] = useState(false);
   const [duprInvites, setDuprInvites] = useState<DuprInvite[]>([]);
+  // DUPR clubs where this account is a DIRECTOR/ORGANIZER (drives the role badge).
+  const [duprAdminClubs, setDuprAdminClubs] = useState<DuprAdminClub[]>([]);
 
   const fetchAll = useCallback(async () => {
     try {
-      const [regsRes, hostedRes, venueRes, duprRes, invitesRes] = await Promise.allSettled([
+      const [regsRes, hostedRes, venueRes, duprRes, invitesRes, adminRes] = await Promise.allSettled([
         registrationsApi.getMyRegistrations(),
         tournamentsApi.getMyTournaments(),
         venuesApi.getMyVenues(),
         DUPR_ENABLED ? getDuprMe() : Promise.resolve(null),
         DUPR_ENABLED ? getMyDuprInvites() : Promise.resolve(null),
+        DUPR_ENABLED ? getMyDuprAdminClubs() : Promise.resolve(null),
       ]);
       if (regsRes.status === 'fulfilled') {
         const data = unwrap<Registration[]>(regsRes.value);
@@ -128,6 +143,10 @@ export default function MeScreen() {
       if (invitesRes.status === 'fulfilled' && invitesRes.value) {
         const data = unwrap<DuprInvite[]>(invitesRes.value);
         setDuprInvites(Array.isArray(data) ? data : []);
+      }
+      if (adminRes.status === 'fulfilled' && adminRes.value) {
+        const body = (adminRes.value as any)?.data;
+        setDuprAdminClubs(Array.isArray(body?.clubs) ? body.clubs : []);
       }
     } finally {
       setLoading(false);
@@ -277,6 +296,7 @@ export default function MeScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={{ paddingBottom: 140 }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={YColors.ink2} />}
@@ -370,13 +390,34 @@ export default function MeScreen() {
                 <YBadge color={YColors.accent}>ID {duprMe.duprId}</YBadge>
               </View>
 
+              {/* Club authority — shown when DUPR reports this account as a
+                  DIRECTOR/ORGANIZER of a club (can run DUPR-rated events). */}
+              {duprAdminClubs.length > 0 && (
+                <View style={styles.duprRoleRow}>
+                  <View style={styles.duprRoleBadge}>
+                    <YUiText size={10} weight={900} color={YColors.ink} style={{ letterSpacing: 0.8 }}>
+                      {duprAdminClubs[0].role}
+                    </YUiText>
+                  </View>
+                  <YUiText size={12} weight={700} color={YColors.ink2} numberOfLines={1} style={{ flex: 1 }}>
+                    {duprAdminClubs[0].clubName.trim()}
+                    {duprAdminClubs.length > 1 ? `  +${duprAdminClubs.length - 1}` : ''}
+                  </YUiText>
+                </View>
+              )}
+
               <View style={styles.duprRatingsRow}>
                 <View style={{ flex: 1, alignItems: 'center' }}>
                   <YDisplay size={26}>{formatDuprRating(duprMe.snapshot?.ratings?.doubles)}</YDisplay>
                   <YEyebrow color={YColors.ink3} style={{ marginTop: 2 }}>DOUBLES</YEyebrow>
-                  {formatDuprReliability(duprMe.snapshot?.ratings?.doublesReliability) ? (
+                  {formatDuprReliability(duprMe.snapshot?.ratings?.doublesReliable) ? (
                     <YUiText size={10} color={YColors.ink3} style={{ marginTop: 2 }}>
-                      {formatDuprReliability(duprMe.snapshot?.ratings?.doublesReliability)}
+                      {formatDuprReliability(duprMe.snapshot?.ratings?.doublesReliable)}
+                    </YUiText>
+                  ) : null}
+                  {formatRecord(duprMe.snapshot?.records?.doubles) ? (
+                    <YUiText size={10} weight={800} color={YColors.ink2} style={{ marginTop: 2, letterSpacing: 0.4 }}>
+                      {formatRecord(duprMe.snapshot?.records?.doubles)}
                     </YUiText>
                   ) : null}
                 </View>
@@ -384,9 +425,14 @@ export default function MeScreen() {
                 <View style={{ flex: 1, alignItems: 'center' }}>
                   <YDisplay size={26}>{formatDuprRating(duprMe.snapshot?.ratings?.singles)}</YDisplay>
                   <YEyebrow color={YColors.ink3} style={{ marginTop: 2 }}>SINGLES</YEyebrow>
-                  {formatDuprReliability(duprMe.snapshot?.ratings?.singlesReliability) ? (
+                  {formatDuprReliability(duprMe.snapshot?.ratings?.singlesReliable) ? (
                     <YUiText size={10} color={YColors.ink3} style={{ marginTop: 2 }}>
-                      {formatDuprReliability(duprMe.snapshot?.ratings?.singlesReliability)}
+                      {formatDuprReliability(duprMe.snapshot?.ratings?.singlesReliable)}
+                    </YUiText>
+                  ) : null}
+                  {formatRecord(duprMe.snapshot?.records?.singles) ? (
+                    <YUiText size={10} weight={800} color={YColors.ink2} style={{ marginTop: 2, letterSpacing: 0.4 }}>
+                      {formatRecord(duprMe.snapshot?.records?.singles)}
                     </YUiText>
                   ) : null}
                 </View>
@@ -776,6 +822,19 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 6,
+  },
+  duprRoleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    alignSelf: 'stretch',
+  },
+  duprRoleBadge: {
+    backgroundColor: YColors.brandLine,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
   duprRatingsRow: {
     marginTop: 20,

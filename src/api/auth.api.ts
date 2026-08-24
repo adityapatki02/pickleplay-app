@@ -43,6 +43,11 @@ export const authApi = {
   verifyPhoneOtp: (data: { phone: string; otp: string }) =>
     apiClient.post<ApiResponse<{ verificationToken: string }>>('/auth/phone/verify-otp', data),
 
+  // OTP-only account: phone proven by OTP → create-or-login with NO PIN. Used by
+  // the public registration form so every registrant gets a Yoiden account.
+  phoneOtpContinue: (data: { phone: string; name?: string; verificationToken?: string; accessToken?: string }) =>
+    apiClient.post<ApiResponse<{ user: User; accessToken: string; isNewUser: boolean }>>('/auth/phone/continue', data),
+
   verifyOtp: (data: VerifyOtpRequest) =>
     apiClient.post<ApiResponse<VerifyOtpResponse>>('/auth/verify-otp', data),
 

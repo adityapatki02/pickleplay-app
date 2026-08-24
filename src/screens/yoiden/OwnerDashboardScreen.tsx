@@ -215,6 +215,52 @@ export default function OwnerDashboardScreen({ route }: Props) {
             <ChannelMix mix={data.channelMix} />
           </View>
 
+          {/* ── Sponsored play (only when a brand campaign funded bookings) ── */}
+          {data.sponsored && (
+            <>
+              <SectionTitle>Sponsored play</SectionTitle>
+              <Pressable style={[styles.card, styles.sponsorCard]} onPress={() => venueId && (nav as any).navigate('SponsoredDetail', drillParams())}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+                  <View style={styles.sponsorTag}>
+                    <YUiText size={9.5} weight={800} color={YColors.accent} style={{ letterSpacing: 0.8 }}>BRAND-FUNDED</YUiText>
+                  </View>
+                  <View style={{ flex: 1 }} />
+                  <YUiText size={11} weight={800} color={YColors.accent}>View →</YUiText>
+                </View>
+
+                {/* Funnel: booked-with-credit → actually played */}
+                <View style={styles.funnelRow}>
+                  <View style={styles.funnelStep}>
+                    <YDisplay size={26} color={YColors.ink}>{data.sponsored.creditsRedeemed}</YDisplay>
+                    <YUiText size={11} weight={700} color={YColors.ink2}>Booked</YUiText>
+                    <YUiText size={10} color={YColors.ink3}>with credit</YUiText>
+                  </View>
+                  <YUiText size={18} color={YColors.ink3} style={{ marginHorizontal: 4 }}>→</YUiText>
+                  <View style={styles.funnelStep}>
+                    <YDisplay size={26} color={YColors.accent}>{data.sponsored.played}</YDisplay>
+                    <YUiText size={11} weight={700} color={YColors.ink2}>Played</YUiText>
+                    <YUiText size={10} color={YColors.accent} weight={700}>{data.sponsored.utilisationPct}% used</YUiText>
+                  </View>
+                </View>
+
+                <View style={styles.sponsorStatsRow}>
+                  <View style={styles.sponsorStat}>
+                    <YDisplay size={19} color={YColors.ink}>{data.sponsored.playedCourtHours || data.sponsored.fundedCourtHours}</YDisplay>
+                    <YUiText size={10.5} color={YColors.ink3}>funded court-hrs</YUiText>
+                  </View>
+                  <View style={styles.sponsorStat}>
+                    <YDisplay size={19} color={YColors.ink}>{money(data.sponsored.fundedRevenue)}</YDisplay>
+                    <YUiText size={10.5} color={YColors.ink3}>sponsor revenue</YUiText>
+                  </View>
+                  <View style={styles.sponsorStat}>
+                    <YDisplay size={19} color={YColors.ink}>{data.sponsored.newToVenue}</YDisplay>
+                    <YUiText size={10.5} color={YColors.ink3}>new to venue</YUiText>
+                  </View>
+                </View>
+              </Pressable>
+            </>
+          )}
+
           {/* ── Demand heatmap ───────────────────────── */}
           <SectionTitle>Demand heatmap {data.peak?.hour != null ? `· peak ${data.peak.day} ${data.peak.hour}:00` : ''}</SectionTitle>
           <Pressable style={styles.card} onPress={() => venueId && (nav as any).navigate('HeatmapDetail', { venueId })}>
@@ -317,6 +363,12 @@ export default function OwnerDashboardScreen({ route }: Props) {
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 18 }}>
               <FooterStat label="Cancel rate" value={`${data.cancellations?.ratePct ?? 0}%`} />
               <FooterStat label="No-shows" value={String(data.cancellations?.noShow ?? 0)} />
+              {(data.cancellations?.checkInRate ?? 0) > 0 && (
+                <FooterStat label="Check-in rate" value={`${data.cancellations.checkInRate}%`} />
+              )}
+              {(data.cancellations?.playerHours ?? 0) > 0 && (
+                <FooterStat label="Player-hours" value={String(data.cancellations.playerHours)} />
+              )}
               <FooterStat label="Total bookings" value={String(s.totalBookings)} />
             </View>
           </View>
@@ -500,6 +552,13 @@ const styles = StyleSheet.create({
   courtRow: {},
   trackBg: { height: 8, borderRadius: 999, backgroundColor: YColors.bg3, overflow: 'hidden' },
   trackFill: { height: 8, borderRadius: 999, backgroundColor: YColors.accent },
+
+  sponsorCard: { borderColor: 'rgba(24,88,214,0.35)', backgroundColor: 'rgba(24,88,214,0.04)' },
+  sponsorTag: { backgroundColor: 'rgba(24,88,214,0.12)', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 },
+  funnelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 6 },
+  funnelStep: { alignItems: 'center', flex: 1 },
+  sponsorStatsRow: { flexDirection: 'row', gap: 10, marginTop: 16, borderTopWidth: 1, borderTopColor: YColors.line, paddingTop: 14 },
+  sponsorStat: { flex: 1, alignItems: 'center' },
 
   miniStat: { flex: 1, borderRadius: 12, padding: 14 },
   subhead: { letterSpacing: 0.8, marginBottom: 8 },
