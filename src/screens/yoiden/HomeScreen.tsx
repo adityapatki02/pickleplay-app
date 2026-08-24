@@ -237,6 +237,11 @@ export default function HomeScreen() {
 
   const goVenueAdmin = (venueId: string) =>
     nav.navigate('MeTab', { screen: 'VenueAdmin', params: { venueId } });
+  // Straight to the analytics dashboard — VenueAdmin is the slot board, which
+  // the Home "My court" face already shows inline, so routing through it just
+  // made the owner tap "View full dashboard" a second time.
+  const goOwnerDashboard = (venueId: string) =>
+    nav.navigate('MeTab', { screen: 'OwnerDashboard', params: { venueId } });
   const goHost = () => nav.navigate('PlayTab', { screen: 'CreateTournament' });
   const goPlay = () => nav.navigate('PlayTab', { screen: 'Play' });
   const goBook = () => nav.navigate('BookTab', { screen: 'Book' });
@@ -722,7 +727,10 @@ export default function HomeScreen() {
                     </View>
                   )}
                   {manageVenue ? (
-                    <VenueBookingBoard venue={manageVenue} />
+                    <VenueBookingBoard
+                      venue={manageVenue}
+                      onOpenDashboard={() => goOwnerDashboard(manageVenue.id)}
+                    />
                   ) : (
                     <View style={{ paddingVertical: 14, alignItems: 'center' }}>
                       <YUiText size={12} color={YColors.ink2}>No court is linked to your account yet.</YUiText>
@@ -730,7 +738,7 @@ export default function HomeScreen() {
                   )}
                   {manageVenue ? (
                     <Pressable onPress={() => goVenueAdmin(manageVenue.id)} hitSlop={8} style={styles.seeAll}>
-                      <YUiText size={11.5} weight={800} color={YColors.accent}>Open full dashboard →</YUiText>
+                      <YUiText size={11.5} weight={800} color={YColors.accent}>Venue admin →</YUiText>
                     </Pressable>
                   ) : null}
                 </>

@@ -83,6 +83,12 @@ interface Props {
   venue: Venue;
   /** Show the blue daily-cashflow card above the grid (default true). */
   showCashflow?: boolean;
+  /**
+   * When set, the cashflow card becomes the entry point to the full analytics
+   * dashboard. Put here (rather than below the grid) so it's reachable without
+   * scrolling past a whole day of slots.
+   */
+  onOpenDashboard?: () => void;
 }
 
 /**
@@ -92,7 +98,7 @@ interface Props {
  * so it can be embedded both there and inline on the Home "My court" view — one
  * implementation, identical behaviour in both places.
  */
-export default function VenueBookingBoard({ venue, showCashflow = true }: Props) {
+export default function VenueBookingBoard({ venue, showCashflow = true, onOpenDashboard }: Props) {
   const { height: windowHeight } = useWindowDimensions();
   const gridBodyH = gridBodyHeight(windowHeight);
   const [selectedSport, setSelectedSport] = useState<string | null>(null);
@@ -297,26 +303,49 @@ export default function VenueBookingBoard({ venue, showCashflow = true }: Props)
   return (
     <View>
       {/* Daily cashflow — collective across all courts for the selected date */}
-      {showCashflow && (
-        <View style={styles.cashflowCard}>
-          <View style={styles.cashflowTopRow}>
-            <YUiText size={11} weight={800} color="rgba(255,255,255,0.65)" style={{ letterSpacing: 1 }}>DAILY CASHFLOW</YUiText>
-            <YUiText size={11} weight={700} color="rgba(255,255,255,0.65)">{formatDate(new Date(selectedDate))}</YUiText>
-          </View>
-          <YDisplay size={36} color="#fff" style={{ marginTop: 4 }}>{money(totalRevenue)}</YDisplay>
-          <View style={styles.cashflowMetaRow}>
-            <View style={[styles.cashflowChip, { backgroundColor: 'rgba(22,163,74,0.22)' }]}>
-              <YUiText size={11} weight={800} color="#4ade80">{money(paidRevenue)} collected</YUiText>
+      {showCashflow && (() => {
+        const Card: any = onOpenDashboard ? Pressable : View;
+        return (
+          <Card
+            style={styles.cashflowCard}
+            onPress={onOpenDashboard}
+            accessibilityRole={onOpenDashboard ? 'button' : undefined}
+            accessibilityLabel={onOpenDashboard ? "Today's cashflow — open the full dashboard" : undefined}
+          >
+            <View style={styles.cashflowTopRow}>
+              <YUiText size={11} weight={800} color="rgba(255,255,255,0.65)" style={{ letterSpacing: 1 }}>DAILY CASHFLOW</YUiText>
+              <YUiText size={11} weight={700} color="rgba(255,255,255,0.65)">{formatDate(new Date(selectedDate))}</YUiText>
             </View>
-            {pendingRevenue > 0 && (
-              <View style={[styles.cashflowChip, { backgroundColor: 'rgba(180,83,9,0.26)' }]}>
-                <YUiText size={11} weight={800} color="#fbbf24">{money(pendingRevenue)} pending</YUiText>
+            <YDisplay size={36} color="#fff" style={{ marginTop: 4 }}>{money(totalRevenue)}</YDisplay>
+            <View style={styles.cashflowMetaRow}>
+              <View style={[styles.cashflowChip, { backgroundColor: 'rgba(22,163,74,0.22)' }]}>
+                <YUiText size={11} weight={800} color="#4ade80">{money(paidRevenue)} collected</YUiText>
+              </View>
+              {pendingRevenue > 0 && (
+                <View style={[styles.cashflowChip, { backgroundColor: 'rgba(180,83,9,0.26)' }]}>
+                  <YUiText size={11} weight={800} color="#fbbf24">{money(pendingRevenue)} pending</YUiText>
+                </View>
+              )}
+              <YUiText size={11} color="rgba(255,255,255,0.6)">{dateBookings.length} booking{dateBookings.length === 1 ? '' : 's'}</YUiText>
+            </View>
+
+            {/* Dashboard entry lives on the money card so revenue, demand and
+                customers are one tap away — no scrolling past the slot grid. */}
+            {onOpenDashboard && (
+              <View style={styles.cashflowDashRow}>
+                <YUiText size={11.5} weight={800} color="#fff">
+                  Revenue · demand · customers
+                </YUiText>
+                <View style={styles.cashflowDashBtn}>
+                  <YUiText size={11} weight={900} color={YColors.accent} style={{ letterSpacing: 0.6 }}>
+                    DASHBOARD →
+                  </YUiText>
+                </View>
               </View>
             )}
-            <YUiText size={11} color="rgba(255,255,255,0.6)">{dateBookings.length} booking{dateBookings.length === 1 ? '' : 's'}</YUiText>
-          </View>
-        </View>
-      )}
+          </Card>
+        );
+      })()}
 
       {/* Sport switcher — chips, only when the venue offers more than one sport */}
       {sports.length > 1 && (
@@ -625,6 +654,14 @@ const styles = StyleSheet.create({
   cashflowTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cashflowMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' },
   cashflowChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
+  cashflowDashRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: 16, paddingTop: 14,
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.22)',
+  },
+  cashflowDashBtn: {
+    backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
+  },
 
   // Sport chips
   sportChipRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 4 },
