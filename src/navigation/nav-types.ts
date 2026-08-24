@@ -54,6 +54,7 @@ export type BookStackParamList = {
     total: number;
   };
   BookingDetail: { bookingId: string };
+  LogMatch: { bookingId?: string; venueId?: string; venueName?: string; matchId?: string };
 };
 
 export type MeStackParamList = DetailAndManageRoutes & {

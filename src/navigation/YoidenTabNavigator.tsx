@@ -51,6 +51,7 @@ import VenueDetailScreen from '../screens/yoiden/VenueDetailScreen';
 import MyBookingsScreen from '../screens/yoiden/MyBookingsScreen';
 import BookingSuccessScreen from '../screens/yoiden/BookingSuccessScreen';
 import BookingDetailScreen from '../screens/yoiden/BookingDetailScreen';
+import LogMatchScreen from '../screens/yoiden/LogMatchScreen';
 
 // Support (DUPR go-live requirement — match disputes + general help)
 import SupportScreen from '../screens/yoiden/SupportScreen';
@@ -151,6 +152,7 @@ const BookStackNavigator = () => (
     <BookStack.Screen name="MyBookings" component={MyBookingsScreen} />
     <BookStack.Screen name="BookingSuccess" component={BookingSuccessScreen} options={{ gestureEnabled: false }} />
     <BookStack.Screen name="BookingDetail" component={BookingDetailScreen} />
+    <BookStack.Screen name="LogMatch" component={LogMatchScreen} />
   </BookStack.Navigator>
 );
 

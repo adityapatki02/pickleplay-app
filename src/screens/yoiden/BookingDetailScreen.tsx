@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -20,6 +20,7 @@ import { YColors, YDisplay, YEyebrow, YUiText, YMono } from '../../components/yo
 import { notify, confirmAction } from '../../utils/notify';
 import { REFUND_URL } from '../../config/constants';
 import { bookingsApi } from '../../api/bookings.api';
+import { casualMatchesApi, type CasualMatch } from '../../api/casualMatches.api';
 import { useAuthStore } from '../../store/authStore';
 import type { Booking } from '../../types/booking.types';
 import type { BookStackParamList } from '../../navigation/YoidenTabNavigator';
@@ -92,6 +93,7 @@ export default function BookingDetailScreen() {
   const [cancelling, setCancelling] = useState(false);
   const [showModify, setShowModify] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [match, setMatch] = useState<CasualMatch | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -106,6 +108,17 @@ export default function BookingDetailScreen() {
   }, [bookingId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Any result already logged against this booking. Refetched on focus so it
+  // updates after coming back from the log-result screen.
+  const loadMatch = useCallback(async () => {
+    try {
+      const res: any = await casualMatchesApi.byBooking(bookingId);
+      setMatch(res?.data?.data ?? null);
+    } catch { setMatch(null); }
+  }, [bookingId]);
+
+  useFocusEffect(useCallback(() => { loadMatch(); }, [loadMatch]));
 
   const doCancel = () => {
     if (!booking) return;
@@ -275,6 +288,91 @@ export default function BookingDetailScreen() {
             </Pressable>
           </View>
         </View>
+
+        {/* Match result — the reason to come back to a finished booking */}
+        {(() => {
+          const slotPassed =
+            new Date(`${booking.bookingDate}T${booking.endTime || '23:59'}:00`) < new Date();
+          const cancelled = booking.status === 'cancelled';
+          if (cancelled || (!slotPassed && !match)) return null;
+
+          const nameOf = (p: any) =>
+            p.user?.displayName || p.user?.fullName || p.guestName || 'Player';
+          const sideNames = (s: 'a' | 'b') =>
+            (match?.players ?? []).filter(p => p.side === s).map(nameOf).join(' & ') || '—';
+          const goLog = () =>
+            nav.navigate('LogMatch' as any, {
+              bookingId,
+              venueId: booking.venueId,
+              venueName,
+            });
+
+          if (!match) {
+            return (
+              <Pressable style={[styles.section, styles.resultPrompt]} onPress={goLog}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <YUiText size={13.5} weight={800} color={YColors.ink}>How did it go?</YUiText>
+                  <YUiText size={11.5} color={YColors.ink2} style={{ marginTop: 3, lineHeight: 17 }}>
+                    Add the score and it goes on your match history — and your partners'.
+                  </YUiText>
+                </View>
+                <View style={styles.resultCta}>
+                  <YUiText size={11.5} weight={900} color="#fff">ADD RESULT</YUiText>
+                </View>
+              </Pressable>
+            );
+          }
+
+          // byBooking doesn't stamp mySide (only /mine does), so work it out
+          // from the roster — by account, falling back to phone.
+          const myKey = (user?.phone || '').replace(/\D/g, '').slice(-10);
+          const mySide =
+            match.mySide ??
+            match.players?.find(
+              p =>
+                (user?.id && p.userId === user.id) ||
+                (!!myKey && (p.guestPhone || '').replace(/\D/g, '').slice(-10) === myKey),
+            )?.side ??
+            null;
+          const won = mySide && match.winnerSide === mySide;
+          return (
+            <View style={styles.section}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                <YEyebrow color={YColors.ink2}>RESULT</YEyebrow>
+                <View style={{ flex: 1 }} />
+                <Pressable hitSlop={8} onPress={goLog}>
+                  <YUiText size={11.5} weight={800} color={YColors.accent}>Edit</YUiText>
+                </Pressable>
+              </View>
+              {(['a', 'b'] as const).map(s => {
+                const winner = match.winnerSide === s;
+                return (
+                  <View key={s} style={styles.resultRow}>
+                    <YUiText
+                      size={13}
+                      weight={winner ? 800 : 600}
+                      color={winner ? YColors.ink : YColors.ink2}
+                      style={{ flex: 1 }}
+                      numberOfLines={1}
+                    >
+                      {sideNames(s)}
+                    </YUiText>
+                    <YMono size={13} bold color={winner ? YColors.accent : YColors.ink3}>
+                      {(match.scores ?? []).map(g => (s === 'a' ? g.a : g.b)).join('  ')}
+                    </YMono>
+                  </View>
+                );
+              })}
+              {match.winnerSide && mySide ? (
+                <View style={[styles.resultBadge, { backgroundColor: won ? 'rgba(11,122,55,0.12)' : YColors.bg3 }]}>
+                  <YUiText size={11} weight={800} color={won ? '#0b7a37' : YColors.ink3}>
+                    {won ? 'YOU WON' : 'YOU LOST'}
+                  </YUiText>
+                </View>
+              ) : null}
+            </View>
+          );
+        })()}
 
         {/* Invoice */}
         <View style={[styles.section, styles.invoiceBox]}>
@@ -455,6 +553,15 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: YColors.line,
+  },
+  resultPrompt: { flexDirection: 'row', alignItems: 'center' },
+  resultCta: {
+    backgroundColor: YColors.accent, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999,
+  },
+  resultRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 },
+  resultBadge: {
+    alignSelf: 'flex-start', marginTop: 8,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
   },
   invoiceBox: {
     backgroundColor: YColors.bg,
