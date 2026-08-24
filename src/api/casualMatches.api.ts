@@ -50,7 +50,22 @@ export interface LogCasualMatchBody {
   scores?: CasualGame[];
 }
 
+export interface RecentPartner {
+  userId: string | null;
+  name: string;
+  phone: string | null;
+  onYoiden: boolean;
+  lastPlayedAt: string | null;
+  playedTogether: number;
+}
+
 export const casualMatchesApi = {
+  /** People you've played with before — powers the player picker. */
+  partners: (limit = 12) =>
+    apiClient.get<{ success: boolean; data: RecentPartner[] }>(
+      `/casual-matches/partners?limit=${limit}`,
+    ),
+
   log: (data: LogCasualMatchBody) =>
     apiClient.post<{ success: boolean; data: CasualMatch }>('/casual-matches', data),
 
