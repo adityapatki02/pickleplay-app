@@ -1075,7 +1075,7 @@ const styles = StyleSheet.create({
   },
   catCTA: {
     paddingVertical: 12,
-    backgroundColor: YColors.ink,
+    backgroundColor: YColors.accent,
     alignItems: 'center',
   },
 });
