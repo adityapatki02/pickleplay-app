@@ -39,6 +39,9 @@ import {
   inviteDuprCoOwner,
   getTournamentDuprInvites,
   revokeDuprInvite,
+  getMyDuprAdminClubs,
+  enableTournamentDupr,
+  disableTournamentDupr,
   type DuprTournamentInvite,
 } from '../../api/dupr.api';
 
@@ -504,7 +507,13 @@ export default function TournamentDetailScreen() {
               </>
             ) : null}
 
-            {DUPR_ENABLED ? <DuprCoOwnerManage tournamentId={t.id} /> : null}
+            {DUPR_ENABLED ? (
+              <DuprCoOwnerManage
+                tournamentId={t.id}
+                duprClubId={(t as any).duprClubId ?? null}
+                onChanged={fetchDetail}
+              />
+            ) : null}
           </>
         ) : null}
 
@@ -625,11 +634,19 @@ export default function TournamentDetailScreen() {
 // ─── DUPR co-owner management (organizer) ───────────────────────
 // Lets an organizer who doesn't hold a DUPR club role invite a DIRECTOR/
 // ORGANIZER co-owner to authorize this event under their club.
-const DuprCoOwnerManage: React.FC<{ tournamentId: string }> = ({ tournamentId }) => {
+const DuprCoOwnerManage: React.FC<{
+  tournamentId: string;
+  /** Club already attached to this event, if any. */
+  duprClubId?: number | null;
+  onChanged?: () => void;
+}> = ({ tournamentId, duprClubId, onChanged }) => {
   const [invites, setInvites] = useState<DuprTournamentInvite[]>([]);
   const [contact, setContact] = useState('');
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  // Clubs this viewer can authorize under — also how we resolve the attached
+  // club's name for display.
+  const [myClubs, setMyClubs] = useState<{ clubId: number; clubName: string; role: string }[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -646,7 +663,45 @@ const DuprCoOwnerManage: React.FC<{ tournamentId: string }> = ({ tournamentId })
     load();
   }, [load]);
 
+  useEffect(() => {
+    getMyDuprAdminClubs()
+      .then((r: any) => setMyClubs(r?.data?.clubs ?? []))
+      .catch(() => setMyClubs([]));
+  }, []);
+
   const authorized = invites.find((i) => i.status === 'accepted');
+  const attachedClub = myClubs.find((c) => Number(c.clubId) === Number(duprClubId));
+
+  // The organizer holds a club role themself — they can authorize directly
+  // instead of inviting anyone.
+  const enableWithMyClub = useCallback(
+    async (clubId: number) => {
+      setBusy(true);
+      try {
+        await enableTournamentDupr(tournamentId, clubId);
+        onChanged?.();
+      } catch (e: any) {
+        xAlert('DUPR', e?.response?.data?.message || 'Could not enable DUPR for this event.');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [tournamentId, onChanged],
+  );
+
+  const turnOff = useCallback(() => {
+    xConfirm('Turn off DUPR', 'Results for this event will stop being submitted to DUPR.', async () => {
+      setBusy(true);
+      try {
+        await disableTournamentDupr(tournamentId);
+        onChanged?.();
+      } catch {
+        /* non-fatal */
+      } finally {
+        setBusy(false);
+      }
+    });
+  }, [tournamentId, onChanged]);
 
   const sendInvite = useCallback(async () => {
     const value = contact.trim();
@@ -686,7 +741,47 @@ const DuprCoOwnerManage: React.FC<{ tournamentId: string }> = ({ tournamentId })
     <>
       <YSectionHead eyebrow="ORGANIZER · DUPR" title="RATED EVENT AUTHORIZATION" />
       <View style={styles.duprManageCard}>
-        {authorized ? (
+        {duprClubId ? (
+          /* The event already submits under a club — the common case once a
+             director has authorized it, and previously not rendered at all. */
+          <>
+            <YUiText size={13} color={YColors.ink2} style={{ lineHeight: 19 }}>
+              ✓ DUPR rated. Results for rated categories are submitted under{' '}
+              <YUiText size={13} weight={800} color={YColors.ink}>
+                {attachedClub?.clubName?.trim() || `club ${duprClubId}`}
+              </YUiText>
+              .
+            </YUiText>
+            {attachedClub ? (
+              <Pressable onPress={turnOff} disabled={busy} hitSlop={8} style={{ marginTop: 10 }}>
+                <YUiText size={12} weight={800} color={YColors.live}>Turn off DUPR for this event</YUiText>
+              </Pressable>
+            ) : null}
+          </>
+        ) : myClubs.length > 0 ? (
+          /* Viewer is a DIRECTOR/ORGANIZER — let them authorize directly rather
+             than telling them to invite someone else. */
+          <>
+            <YUiText size={13} color={YColors.ink2} style={{ lineHeight: 19, marginBottom: 12 }}>
+              You can authorize this event under your own DUPR club.
+            </YUiText>
+            {myClubs.map((c) => (
+              <Pressable
+                key={c.clubId}
+                onPress={() => enableWithMyClub(Number(c.clubId))}
+                disabled={busy}
+                style={[styles.duprClubBtn, busy && { opacity: 0.5 }]}
+              >
+                <YUiText size={12.5} weight={900} color="#fff" style={{ letterSpacing: 0.4 }}>
+                  {busy ? 'ENABLING…' : `ENABLE UNDER ${c.clubName.trim().toUpperCase()}`}
+                </YUiText>
+                <YUiText size={10.5} color="rgba(255,255,255,0.8)" style={{ marginTop: 2 }}>
+                  {c.role}
+                </YUiText>
+              </Pressable>
+            ))}
+          </>
+        ) : authorized ? (
           <YUiText size={13} color={YColors.ink2} style={{ lineHeight: 19 }}>
             ✓ Authorized by{' '}
             <YUiText size={13} weight={800} color={YColors.ink}>
@@ -1021,6 +1116,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+  },
+  duprClubBtn: {
+    backgroundColor: YColors.accent,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    marginBottom: 8,
   },
   duprManageCard: {
     marginHorizontal: 16,
