@@ -386,10 +386,10 @@ export default function TournamentDetailScreen() {
                     disabled={visBusy}
                     style={[styles.visToggle, active && styles.visToggleActive]}
                   >
-                    <YUiText size={12} weight={900} color={active ? '#000' : YColors.ink2} style={{ letterSpacing: 0.6 }}>
+                    <YUiText size={12} weight={900} color={active ? '#fff' : YColors.ink2} style={{ letterSpacing: 0.6 }}>
                       {opt.label}
                     </YUiText>
-                    <YUiText size={10} weight={600} color={active ? 'rgba(0,0,0,0.6)' : YColors.ink3} style={{ marginTop: 1 }}>
+                    <YUiText size={10} weight={600} color={active ? 'rgba(255,255,255,0.78)' : YColors.ink3} style={{ marginTop: 1 }}>
                       {opt.hint}
                     </YUiText>
                   </Pressable>
@@ -965,7 +965,7 @@ const styles = StyleSheet.create({
   },
   visToggleActive: {
     backgroundColor: YColors.accent,
-    borderColor: YColors.ink,
+    borderColor: YColors.accent,
   },
   shareBtn: {
     marginTop: 12,
