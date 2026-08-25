@@ -416,7 +416,7 @@ export default function TournamentDetailScreen() {
               </YUiText>
             </View>
             <View style={styles.linkActions}>
-              <Pressable onPress={copyLink} style={[styles.shareBtn, styles.linkAction, copied && styles.copiedBtn]}>
+              <Pressable onPress={copyLink} style={[styles.shareBtn, styles.linkAction, copied ? styles.copiedBtn : styles.copyBtn]}>
                 <YUiText size={12} weight={900} color={copied ? '#fff' : '#000'} style={{ letterSpacing: 0.6 }}>
                   {copied ? 'COPIED!' : 'COPY LINK'}
                 </YUiText>
@@ -992,8 +992,17 @@ const styles = StyleSheet.create({
   linkAction: {
     flex: 1,
   },
+  // Default (not yet copied): white with a hairline, so the black label reads.
+  // shareBtn's accent background is only correct for the COPIED! state below.
+  copyBtn: {
+    backgroundColor: YColors.bg2,
+    borderWidth: 1,
+    borderColor: YColors.line2,
+  },
   copiedBtn: {
     backgroundColor: YColors.accent,
+    borderWidth: 1,
+    borderColor: YColors.accent,
   },
   shareAlt: {
     backgroundColor: YColors.bg3,
