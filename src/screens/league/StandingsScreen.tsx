@@ -49,6 +49,35 @@ const COLUMNS: { key: string; label: string; flex: number; bold?: boolean }[] = 
   { key: 'PD', label: 'PD', flex: 0.7 },
 ];
 
+// MCA BKC ranks on cumulative POINTS SCORED, so PF is the headline column and
+// the SPPL-only Bonus/Standing Points columns are dropped — MCA awards no
+// bonuses and its "SP" would just restate games won.
+const MCA_COLUMNS: { key: string; label: string; flex: number; bold?: boolean }[] = [
+  { key: 'rank', label: '#', flex: 0.4, bold: true },
+  { key: 'team', label: 'Team', flex: 2, bold: true },
+  { key: 'P', label: 'P', flex: 0.5 },
+  { key: 'MW', label: 'GW', flex: 0.6 },
+  { key: 'ML', label: 'GL', flex: 0.6 },
+  { key: 'PF', label: 'PTS', flex: 0.9, bold: true },
+  { key: 'PA', label: 'PA', flex: 0.8 },
+  { key: 'PD', label: 'PD', flex: 0.8 },
+];
+
+const MCA_TIEBREAKER_RULES: { num: number; title: string; desc: string }[] = [
+  { num: 1, title: 'Points Scored',   desc: 'Total cumulative points scored across all 4 ties (max 600). Games won do not decide the table.' },
+  { num: 2, title: 'Head-to-Head Points', desc: 'If level, the team that scored more cumulative points in their direct fixture ranks higher.' },
+  { num: 3, title: 'Head-to-Head Games',  desc: 'If still level, the team that won more games in that direct fixture takes the higher seed.' },
+];
+
+const MCA_LEGEND: { abbr: string; desc: string }[] = [
+  { abbr: 'P', desc: 'Ties Played' },
+  { abbr: 'GW', desc: 'Games Won' },
+  { abbr: 'GL', desc: 'Games Lost' },
+  { abbr: 'PTS', desc: 'Points Scored (ranking metric)' },
+  { abbr: 'PA', desc: 'Points Against' },
+  { abbr: 'PD', desc: 'Point Difference' },
+];
+
 // ─── Tiebreaker rules ────────────────────────────────────────────────────────
 // Order matches the backend comparator (see league-standings.service.ts).
 // "Tie Points" is the primary metric — only when teams are tied on TP do the
@@ -92,6 +121,11 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'overall', label: 'OVERALL' },
 ];
 
+/** MCA BKC has one pool, so its only meaningful view is the single table. */
+const MCA_TABS: { key: TabKey; label: string }[] = [
+  { key: 'pool', label: 'STANDINGS' },
+];
+
 // ═════════════════════════════════════════════════════════════════════════════
 // Component
 // ═════════════════════════════════════════════════════════════════════════════
@@ -114,6 +148,16 @@ const StandingsScreen: React.FC = () => {
   // tiebreaker when re-sorting cross-pool views (Group + Overall) on the
   // client and when rendering the "Beat <X> head-to-head" reason text.
   const [h2h, setH2h] = useState<Record<string, string>>({});
+  // Season format shipped alongside the standings. Drives which ranking chain,
+  // column set and legend this screen uses. null/'sppl' = the original SPPL view.
+  const [format, setFormat] = useState<string | null>(null);
+  const isMca = format === 'mca_5doubles';
+  // MCA is a single pool of 5 — there is no pool PAIR to merge and no separate
+  // "overall", so the tab bar collapses to the one table that exists.
+  const activeColumns = isMca ? MCA_COLUMNS : COLUMNS;
+  const activeRules = isMca ? MCA_TIEBREAKER_RULES : TIEBREAKER_RULES;
+  const activeLegend = isMca ? MCA_LEGEND : LEGEND;
+  const activeTabs = isMca ? MCA_TABS : TABS;
   // GROUP is the most useful default — that's what stakeholders watch during
   // knockout qualification week. POOL view is still one click away.
   const [activeTab, setActiveTab] = useState<TabKey>('group');
@@ -145,6 +189,7 @@ const StandingsScreen: React.FC = () => {
       // client-side rankCompare and reason-builder can use it.
       const h2hData = (standingsData && (standingsData as any).h2h) || {};
       setH2h(typeof h2hData === 'object' ? h2hData : {});
+      setFormat(((standingsData as any)?.format as string | null) ?? null);
       setGroups(Array.isArray(groupsData) ? groupsData : []);
       setFranchises(Array.isArray(franchisesData) ? franchisesData : []);
       store.setStandings(flatStandings);
@@ -198,6 +243,15 @@ const StandingsScreen: React.FC = () => {
   //   6) Total match points (deterministic fallback)
   const rankCompare = React.useCallback(
     (a: LeagueStanding, b: LeagueStanding) => {
+      // MCA BKC ranks strictly on cumulative points scored. Its head-to-head
+      // tiebreakers need per-fixture point totals the client doesn't hold, so
+      // fall through to the backend's own rank, which already applied them.
+      if (isMca) {
+        const aPts = a.ralliesFor || 0;
+        const bPts = b.ralliesFor || 0;
+        if (bPts !== aPts) return bPts - aPts;
+        return (a.rank || 999) - (b.rank || 999);
+      }
       if (b.standingPoints !== a.standingPoints) return b.standingPoints - a.standingPoints;
       const w = headToHead(a.franchiseId, b.franchiseId);
       if (w === a.franchiseId) return -1;
@@ -211,7 +265,7 @@ const StandingsScreen: React.FC = () => {
       if (bPF !== aPF) return bPF - aPF;
       return b.totalMatchPoints - a.totalMatchPoints;
     },
-    [headToHead],
+    [headToHead, isMca],
   );
 
   // Compute the tiebreaker reason for a row that sits above `nxt` in the
@@ -222,6 +276,12 @@ const StandingsScreen: React.FC = () => {
     (cur: LeagueStanding, nxt: LeagueStanding):
       | { reason: string; type: 'h2h' | 'matchesWon' | 'rallyPointDiff' | 'ralliesFor' }
       | null => {
+      if (isMca) {
+        // Backend annotated this row (annotateMcaTiebreakers) — reuse it rather
+        // than re-deriving a chain the client lacks the inputs for.
+        const reason = (cur as any).tiebreakerReason as string | undefined;
+        return reason ? { reason, type: 'h2h' } : null;
+      }
       if (cur.standingPoints !== nxt.standingPoints) return null;
       const otherName = teamName(nxt.franchiseId);
       const w = headToHead(cur.franchiseId, nxt.franchiseId);
@@ -253,7 +313,7 @@ const StandingsScreen: React.FC = () => {
       }
       return null;
     },
-    [headToHead, teamName],
+    [headToHead, teamName, isMca],
   );
 
   // POOL view: group by pool (4×4), use backend ranks
@@ -380,8 +440,10 @@ const StandingsScreen: React.FC = () => {
 
       {/* Tab bar */}
       <View style={styles.tabBar}>
-        {TABS.map((t) => {
-          const active = activeTab === t.key;
+        {activeTabs.map((t) => {
+          // MCA renders a single tab that is always the current view, so it
+          // shouldn't look unselected just because activeTab defaults to 'group'.
+          const active = isMca || activeTab === t.key;
           return (
             <TouchableOpacity
               key={t.key}
@@ -404,7 +466,10 @@ const StandingsScreen: React.FC = () => {
         {(() => {
           // Build sections based on active tab
           let sections: { label: string; rows: LeagueStanding[]; qualifyTop: number }[] = [];
-          if (activeTab === 'pool') {
+          if (isMca) {
+            // One pool; top 4 advance to the semi-finals (rulebook §4).
+            sections = standingsByPool.map((s) => ({ label: s.label, rows: s.rows, qualifyTop: 4 }));
+          } else if (activeTab === 'pool') {
             sections = standingsByPool.map((s) => ({ label: s.label, rows: s.rows, qualifyTop: 0 }));
           } else if (activeTab === 'group') {
             sections = standingsByGroupPair.map((s) => ({ label: s.label, rows: s.rows, qualifyTop: 4 }));
@@ -436,7 +501,7 @@ const StandingsScreen: React.FC = () => {
                 <View style={styles.table}>
                   {/* Header row */}
                   <View style={styles.tableHeaderRow}>
-                    {COLUMNS.map((col) => (
+                    {activeColumns.map((col) => (
                       <View key={col.key} style={[styles.tableHeaderCell, { flex: col.flex }]}>
                         <Text style={styles.tableHeaderText}>{col.label}</Text>
                       </View>
@@ -465,7 +530,7 @@ const StandingsScreen: React.FC = () => {
                       >
                         <View style={styles.tableRow}>
                           {qualified && <View style={styles.qualifiedBorder} />}
-                          {COLUMNS.map((col) => {
+                          {activeColumns.map((col) => {
                             // In group/overall views, show computed rank (1-based idx)
                             const val = col.key === 'rank' ? String(idx + 1) : getCellValue(row, col.key, idx);
                             const isTeam = col.key === 'team';
@@ -524,7 +589,7 @@ const StandingsScreen: React.FC = () => {
               <Text style={styles.tbHint}>Applied in order until one rule decides</Text>
             </View>
             <View style={styles.tbList}>
-              {TIEBREAKER_RULES.map((r) => (
+              {activeRules.map((r) => (
                 <View key={r.num} style={styles.tbRow}>
                   <View style={styles.tbNum}>
                     <Text style={styles.tbNumText}>{r.num}</Text>
@@ -544,7 +609,7 @@ const StandingsScreen: React.FC = () => {
           <View style={[styles.legendContainer, { marginTop: 12 }]}>
             <Text style={styles.legendTitle}>Legend</Text>
             <View style={styles.legendGrid}>
-              {LEGEND.map((item) => (
+              {activeLegend.map((item) => (
                 <View key={item.abbr} style={styles.legendItem}>
                   <Text style={styles.legendAbbr}>{item.abbr}</Text>
                   <Text style={styles.legendDesc}>{item.desc}</Text>

@@ -337,6 +337,9 @@ const LeagueDashboardScreen: React.FC = () => {
   const [franchises, setFranchises] = useState<Franchise[]>([]);
   const [knockoutData, setKnockoutData] = useState<KnockoutBracketData | null>(null);
   const season = store.currentSeason;
+  // MCA BKC: one pool of 5, ranked on cumulative points scored rather than tie
+  // points. Drives the sub-tabs, the comparator and which number the tables show.
+  const isMcaFormat = (season as any)?.format === 'mca_5doubles';
 
   // ── Data fetching ──
   const fetchAll = useCallback(async () => {
@@ -901,9 +904,10 @@ const LeagueDashboardScreen: React.FC = () => {
       knockout_eliminator: ['H3', 'H4'],
       knockout_q2: ['Loser Q1', 'Winner Elim'],
       // cross_5game seeding: SF1 = A1·B2, SF2 = B1·A2, Final = SF1·SF2
-      knockout_sf1: ['A1', 'B2'],
-      knockout_sf2: ['B1', 'A2'],
-      knockout_final: isCross ? ['SF1', 'SF2'] : ['Winner Q1', 'Winner Q2'],
+      // MCA seeds within its single pool: SF1 = 1v4, SF2 = 2v3.
+      knockout_sf1: isMcaFormat ? ['Rank 1', 'Rank 4'] : ['A1', 'B2'],
+      knockout_sf2: isMcaFormat ? ['Rank 2', 'Rank 3'] : ['B1', 'A2'],
+      knockout_final: (isCross || isMcaFormat) ? ['Winner SF1', 'Winner SF2'] : ['Winner Q1', 'Winner Q2'],
     };
     const stageLabel = KNOCKOUT_LABELS[tie.round] || null;
     const koPh = KO_PLACEHOLDERS[tie.round];
@@ -1345,7 +1349,13 @@ const LeagueDashboardScreen: React.FC = () => {
       .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
       .map((g) => ({
         group: g,
-        rows: standings.filter((s) => s.groupId === g.id).sort((a, b) => b.standingPoints - a.standingPoints),
+        rows: standings
+          .filter((s) => s.groupId === g.id)
+          .sort((a, b) =>
+            isMcaFormat
+              ? ((b as any).ralliesFor || 0) - ((a as any).ralliesFor || 0)
+              : b.standingPoints - a.standingPoints,
+          ),
       }))
       .filter((x) => x.rows.length > 0);
     if (byGroup.length === 0) return null;
@@ -1378,8 +1388,14 @@ const LeagueDashboardScreen: React.FC = () => {
                   <View style={{ width: 4, height: 30, borderRadius: 2, backgroundColor: accent, marginRight: 12 }} />
                   <YUiText size={16} weight={800} color={YColors.ink} numberOfLines={1} style={{ flex: 1 }}>{teamName(row.franchiseId)}</YUiText>
                   <View style={{ alignItems: 'flex-end' }}>
-                    <YDisplay size={20} color={YColors.ink} style={{ lineHeight: 26 }}>{String(row.standingPoints)}</YDisplay>
-                    <YEyebrow size={8} color={YColors.ink3} style={{ marginTop: 2 }}>{`SP · ${row.tiesPlayed}P ${row.tiesWon}W`}</YEyebrow>
+                    <YDisplay size={20} color={YColors.ink} style={{ lineHeight: 26 }}>
+                      {String(isMcaFormat ? ((row as any).ralliesFor || 0) : row.standingPoints)}
+                    </YDisplay>
+                    <YEyebrow size={8} color={YColors.ink3} style={{ marginTop: 2 }}>
+                      {isMcaFormat
+                        ? `PTS · ${row.tiesPlayed}P ${row.matchesWon}GW`
+                        : `SP · ${row.tiesPlayed}P ${row.tiesWon}W`}
+                    </YEyebrow>
                   </View>
                 </View>
               );
@@ -1907,6 +1923,14 @@ const LeagueDashboardScreen: React.FC = () => {
     // Mirrors the backend chain exactly:
     //   TP → H2H → matchesWon → rallyPointDiff → ralliesFor → totalMatchPoints
     const rankCompare = (a: LeagueStanding, b: LeagueStanding) => {
+      // MCA BKC: cumulative points scored, then the backend's own rank (it
+      // applied the head-to-head point/game tiebreakers the client can't).
+      if (isMcaFormat) {
+        const aPts = (a as any).ralliesFor || 0;
+        const bPts = (b as any).ralliesFor || 0;
+        if (bPts !== aPts) return bPts - aPts;
+        return (a.rank || 999) - (b.rank || 999);
+      }
       if (b.standingPoints !== a.standingPoints) return b.standingPoints - a.standingPoints;
       const w = headToHead(a.franchiseId, b.franchiseId);
       if (w === a.franchiseId) return -1;
@@ -1928,6 +1952,12 @@ const LeagueDashboardScreen: React.FC = () => {
       cur: LeagueStanding,
       nxt: LeagueStanding,
     ): { reason: string; type: 'h2h' | 'matchesWon' | 'rallyPointDiff' | 'ralliesFor' } | null => {
+      if (isMcaFormat) {
+        // Backend annotated the row (annotateMcaTiebreakers) — the head-to-head
+        // point totals it used aren't shipped to the client.
+        const reason = (cur as any).tiebreakerReason as string | undefined;
+        return reason ? { reason, type: 'h2h' } : null;
+      }
       if (cur.standingPoints !== nxt.standingPoints) return null;
       const otherName = teamName(nxt.franchiseId);
       const w = headToHead(cur.franchiseId, nxt.franchiseId);
@@ -1964,7 +1994,19 @@ const LeagueDashboardScreen: React.FC = () => {
     type Section = { label: string; rows: LeagueStanding[]; qualifyTop: number };
     let sections: Section[] = [];
 
-    if (standingsSubTab === 'qf') {
+    if (isMcaFormat) {
+      // One pool; top 4 advance to the semi-finals (rulebook §4). Rendered
+      // regardless of standingsSubTab, whose GROUP/OVERALL views are
+      // meaningless without a second pool.
+      const sortedGroups = [...groups].sort((a, b) => a.displayOrder - b.displayOrder);
+      sections = sortedGroups
+        .map((g) => ({
+          label: g.name,
+          rows: standings.filter((st) => st.groupId === g.id).sort(rankCompare),
+          qualifyTop: 4,
+        }))
+        .filter((sec) => sec.rows.length > 0);
+    } else if (standingsSubTab === 'qf') {
       // QF view doesn't go through the section/row rendering — handled
       // separately below. Leave sections empty so hasData drops out and we
       // skip straight to the QF render branch.
@@ -2023,7 +2065,9 @@ const LeagueDashboardScreen: React.FC = () => {
     // first so it's the obvious landing spot during knockout day.
     const qfRanking = knockoutData?.qfRanking;
     const hasQfRanking = Array.isArray(qfRanking) && qfRanking.length > 0;
-    const SUB_TABS: { key: 'qf' | 'pool' | 'group' | 'overall'; label: string }[] = [
+    const SUB_TABS: { key: 'qf' | 'pool' | 'group' | 'overall'; label: string }[] = isMcaFormat
+      ? [{ key: 'pool' as const, label: 'STANDINGS' }]
+      : [
       ...(hasQfRanking ? [{ key: 'qf' as const, label: 'QF' }] : []),
       { key: 'pool', label: 'POOL' },
       { key: 'group', label: 'GROUP' },
@@ -2178,10 +2222,12 @@ const LeagueDashboardScreen: React.FC = () => {
                     <Text style={[styles.tableHeaderCell, { width: 30 }]}>W</Text>
                     <Text style={[styles.tableHeaderCell, { width: 30 }]}>L</Text>
                     {/* TP carries no own right border — the divider provides it. */}
-                    <Text style={[styles.tableHeaderCell, styles.tableHeaderCellLast, { width: 44 }]}>TP</Text>
+                    <Text style={[styles.tableHeaderCell, styles.tableHeaderCellLast, { width: 44 }]}>
+                      {isMcaFormat ? 'PTS' : 'TP'}
+                    </Text>
                     <View style={styles.tableColDivider} />
-                    <Text style={[styles.tableHeaderCell, { width: 36 }]}>MW</Text>
-                    <Text style={[styles.tableHeaderCell, { width: 44 }]}>PW</Text>
+                    <Text style={[styles.tableHeaderCell, { width: 36 }]}>{isMcaFormat ? 'GW' : 'MW'}</Text>
+                    {!isMcaFormat && <Text style={[styles.tableHeaderCell, { width: 44 }]}>PW</Text>}
                     <Text style={[styles.tableHeaderCell, { width: 44 }]}>PL</Text>
                     <Text style={[styles.tableHeaderCell, styles.tableHeaderCellLast, { width: 48 }]}>PD</Text>
                   </View>
@@ -2218,12 +2264,13 @@ const LeagueDashboardScreen: React.FC = () => {
                         <Text style={[styles.tableCell, { width: 30 }]}>{row.tiesLost}</Text>
                         {/* TP — divider carries the right border, so this cell drops its own. */}
                         <Text style={[styles.tableCell, styles.tableCellLast, { width: 44, fontWeight: '800', color: NAVY }]}>
-                          {row.standingPoints}
+                          {isMcaFormat ? rf : row.standingPoints}
                         </Text>
                         {/* Match the header divider so columns line up. */}
                         <View style={styles.tableColDivider} />
                         <Text style={[styles.tableCell, { width: 36 }]}>{row.matchesWon}</Text>
-                        <Text style={[styles.tableCell, { width: 44 }]}>{rf}</Text>
+                        {/* PW repeats the MCA headline column exactly — hide it there. */}
+                        {!isMcaFormat && <Text style={[styles.tableCell, { width: 44 }]}>{rf}</Text>}
                         <Text style={[styles.tableCell, { width: 44 }]}>{ra}</Text>
                         <Text
                           style={[
@@ -2279,7 +2326,9 @@ const LeagueDashboardScreen: React.FC = () => {
                 </View>
               </ScrollView>
               <Text style={{ fontSize: 10, color: TEXT_MUTED, fontStyle: 'italic', paddingHorizontal: 12, paddingVertical: 6 }}>
-                P=Played, W=Won, L=Lost, TP=Total Points · MW=Match Wins, PW=Points Won, PL=Points Lost, PD=Point Diff
+                {isMcaFormat
+                  ? 'P=Ties Played, W=Won, L=Lost, PTS=Points Scored (ranking metric) · GW=Games Won, PL=Points Conceded, PD=Point Diff'
+                  : 'P=Played, W=Won, L=Lost, TP=Total Points · MW=Match Wins, PW=Points Won, PL=Points Lost, PD=Point Diff'}
               </Text>
             </View>
           ))
@@ -2304,13 +2353,19 @@ const LeagueDashboardScreen: React.FC = () => {
                 Applied in order until one rule decides
               </Text>
             </View>
-            {[
+            {(isMcaFormat
+              ? [
+                  { num: 1, title: 'Points Scored',        desc: 'Total cumulative points scored across all 4 ties (max 600). Games won do not decide the table.' },
+                  { num: 2, title: 'Head-to-Head Points',  desc: 'If level, the team that scored more cumulative points in their direct fixture ranks higher.' },
+                  { num: 3, title: 'Head-to-Head Games',   desc: 'If still level, the team that won more games in that direct fixture takes the higher seed.' },
+                ]
+              : [
               { num: 1, title: 'Tie Points',          desc: 'Higher Tie Points (TP = match points + bonus) ranks higher.' },
               { num: 2, title: 'Head-to-Head',        desc: 'If still tied, the team that won the league tie between them ranks higher.' },
               { num: 3, title: 'Matches Won',         desc: 'If still tied, more individual match (pair-game) wins ranks higher.' },
               { num: 4, title: 'Rally Point Diff',    desc: 'If still tied, higher rally point difference (PW − PL) ranks higher.' },
               { num: 5, title: 'Rally Points Scored', desc: 'If still tied, more total rally points scored ranks higher.' },
-            ].map((r) => (
+            ]).map((r) => (
               <View key={r.num} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
                 <View
                   style={{
@@ -2458,7 +2513,9 @@ const LeagueDashboardScreen: React.FC = () => {
         {!seeded ? (
           <View style={{ marginHorizontal: 14, marginBottom: 16 }}>
             <YUiText size={13} color={YColors.ink2} style={{ marginBottom: 12 }}>
-              Top 2 of each group advance. SF1 = A1 vs B2, SF2 = B1 vs A2.
+              {isMcaFormat
+                ? 'Top 4 of the pool advance. SF1 = Rank 1 vs Rank 4, SF2 = Rank 2 vs Rank 3.'
+                : 'Top 2 of each group advance. SF1 = A1 vs B2, SF2 = B1 vs A2.'}
             </YUiText>
             {allGroupDone ? (
               <YButton
@@ -2481,8 +2538,8 @@ const LeagueDashboardScreen: React.FC = () => {
           </View>
         ) : null}
         <View style={{ marginHorizontal: 14 }}>
-          {koCard(sf1, 'SEMIFINAL 1', ['A1', 'B2'])}
-          {koCard(sf2, 'SEMIFINAL 2', ['B1', 'A2'])}
+          {koCard(sf1, 'SEMIFINAL 1', isMcaFormat ? ['RANK 1', 'RANK 4'] : ['A1', 'B2'])}
+          {koCard(sf2, 'SEMIFINAL 2', isMcaFormat ? ['RANK 2', 'RANK 3'] : ['B1', 'A2'])}
           {koCard(final, 'FINAL', ['SF1', 'SF2'])}
         </View>
       </ScrollView>
@@ -2490,7 +2547,9 @@ const LeagueDashboardScreen: React.FC = () => {
   };
 
   const renderKnockoutTab = () => {
-    if ((season as any)?.format === 'cross_5game') return renderCrossPoolKnockout();
+    // cross_5game and MCA share the SF1/SF2/Final shape; only the seeding
+    // differs (cross-pool A1·B2 vs MCA's within-pool 1v4 / 2v3).
+    if ((season as any)?.format === 'cross_5game' || isMcaFormat) return renderCrossPoolKnockout();
     // SBPL runs a straight QF → SF → Final bracket (no IPL-style Q1/Eliminator/
     // Q2). Its SFs seed and its Final advances automatically on the backend, so
     // the middle round is labelled "SF" and shows SF1/SF2 instead of playoffs.
