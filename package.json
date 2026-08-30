@@ -14,7 +14,8 @@
     "build:ajanta": "EXPO_PUBLIC_INDOOR_EVENT=$AJANTA_EVENT_ID expo export --platform web --output-dir dist-ajanta --clear && printf '/*    /index.html   200\\n' > dist-ajanta/_redirects && node scripts/postbuild-pwa.js dist-ajanta",
     "web:tournament-local": "EXPO_PUBLIC_API_URL=http://localhost:3000/api/v1 EXPO_PUBLIC_TOURNAMENT_ID=$TOURNAMENT_ID expo start --web --port 8095",
     "build:tournament": "EXPO_PUBLIC_TOURNAMENT_ID=$TOURNAMENT_ID expo export --platform web --output-dir dist-tournament --clear && printf '/*    /index.html   200\\n' > dist-tournament/_redirects && node scripts/postbuild-pwa.js dist-tournament",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "build:console": "cp .env.console.local .env.local && expo export --platform web --clear ; rm -f .env.local; printf '/*    /index.html   200\\n' > dist/_redirects && node scripts/postbuild-pwa.js"
   },
   "dependencies": {
     "@expo-google-fonts/anton": "^0.4.2",
