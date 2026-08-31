@@ -690,7 +690,7 @@ export default function HomeScreen() {
                     <View style={styles.venueCardBody}>
                       <View style={styles.venueCardHead}>
                         <View style={{ flex: 1 }}>
-                          <YDisplay size={18} color={YColors.accent} numberOfLines={1}>
+                          <YDisplay size={22} color={YColors.accent} numberOfLines={1}>
                             {v.name}
                           </YDisplay>
                           <View style={styles.venueCardLoc}>
@@ -698,13 +698,13 @@ export default function HomeScreen() {
                               <Path d="M12 21s7-5.5 7-11a7 7 0 10-14 0c0 5.5 7 11 7 11z" stroke={YColors.ink3} strokeWidth={2} strokeLinejoin="round" />
                               <Path d="M12 12.5a2 2 0 100-4 2 2 0 000 4z" fill={YColors.ink3} />
                             </Svg>
-                            <YUiText size={11.5} color={YColors.ink2} numberOfLines={1} style={{ flexShrink: 1 }}>
+                            <YUiText size={12} color={YColors.ink2} numberOfLines={1} style={{ flexShrink: 1 }}>
                               {shortArea(v)}
                             </YUiText>
                             {distanceLabel(v) ? (
                               <>
-                                <YUiText size={11.5} color={YColors.ink3}>·</YUiText>
-                                <YUiText size={11.5} weight={800} color={YColors.accent}>{distanceLabel(v)} away</YUiText>
+                                <YUiText size={12} color={YColors.ink3}>·</YUiText>
+                                <YUiText size={12} weight={800} color={YColors.accent}>{distanceLabel(v)} away</YUiText>
                               </>
                             ) : null}
                           </View>
@@ -713,8 +713,11 @@ export default function HomeScreen() {
                           <YBadge color={YColors.accentDeep} bg="rgba(24,88,214,0.12)">{priceRange(v)}/hr</YBadge>
                         ) : null}
                       </View>
+                      <YUiText size={12} color={YColors.ink3} numberOfLines={2} style={{ marginTop: 10 }}>
+                        {v.address}
+                      </YUiText>
                       <View style={styles.venueCardFoot}>
-                        <YMono size={9.5} color={YColors.ink3} style={{ letterSpacing: 0.8 }}>
+                        <YMono size={10} color={YColors.ink3} style={{ letterSpacing: 1 }}>
                           {(v.courts?.length ?? 0)} COURT{(v.courts?.length ?? 0) === 1 ? '' : 'S'} · {v.openTime}–{v.closeTime}
                         </YMono>
                         <YButton variant="primary" size="sm" onPress={() => openVenue(v.id)}>BOOK</YButton>
@@ -1107,23 +1110,27 @@ const styles = StyleSheet.create({
     borderColor: YColors.line2,
   },
   // Compact court cards (Book-tab layout, smaller) for the Home "Book" face.
-  courtList: { marginHorizontal: 16, marginTop: 14, gap: 12 },
+  // faceBody already insets by 16; a second margin here made the card
+  // narrower than the Book tab's and than the promo banner below it.
+  courtList: { marginTop: 14, gap: 12 },
+  // Matches the Book tab's court card exactly — same radius, image height,
+  // padding and rhythm, so the two surfaces read as one component.
   venueCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: YColors.bg2,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: YColors.line2,
+    borderColor: YColors.line,
     overflow: 'hidden',
   },
-  venueCardImage: { width: '100%', height: 116, backgroundColor: YColors.bg3 },
-  venueCardBody: { padding: 12 },
-  venueCardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  venueCardLoc: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  venueCardImage: { width: '100%', height: 150, backgroundColor: YColors.bg3 },
+  venueCardBody: { padding: 16 },
+  venueCardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  venueCardLoc: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' },
   venueCardFoot: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 12,
+    marginTop: 16,
   },
   courtCardHead: {
     flexDirection: 'row',
