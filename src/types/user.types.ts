@@ -12,6 +12,10 @@ export interface User {
   displayName?: string;
   avatarUrl?: string;
   city?: string;
+  /** Coordinates of the city the user picked, saved by CityPickerScreen. Used to
+   *  centre nearby-court search when they're browsing a city they aren't in. */
+  cityLat?: number;
+  cityLng?: number;
   state?: string;
   dateOfBirth?: string;
   gender?: Gender;

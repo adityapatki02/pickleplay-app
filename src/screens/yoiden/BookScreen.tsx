@@ -185,7 +185,7 @@ export default function BookScreen() {
                 <View style={styles.cardBody}>
                   <View style={styles.cardHead}>
                     <View style={{ flex: 1 }}>
-                      <YDisplay size={22} color={YColors.accent} style={{ lineHeight: 24 }}>
+                      <YDisplay size={22} color={YColors.accent}>
                         {v.name}
                       </YDisplay>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>

@@ -65,6 +65,31 @@ const SHOW_FEATURED_LEAGUES = false;
 
 
 // Helpers
+/** Straight-line km between two points (Haversine) — good enough to tell
+ *  "same city" from "browsing somewhere else". */
+const kmBetween = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+  const R = 6371, toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+};
+
+/** Device GPS when it's in (or near) the chosen city; otherwise the city itself. */
+const pickSearchOrigin = (
+  gps: { lat: number; lng: number } | null,
+  user?: { cityLat?: number; cityLng?: number },
+): { lat: number; lng: number } | null => {
+  const city =
+    user?.cityLat != null && user?.cityLng != null
+      ? { lat: Number(user.cityLat), lng: Number(user.cityLng) }
+      : null;
+  if (!city) return gps;
+  if (!gps) return city;
+  return kmBetween(gps, city) > 50 ? city : gps;
+};
+
 const unwrap = <T,>(res: any): T => (res?.data?.data ?? res?.data ?? res) as T;
 // DUPR rating → compact display (e.g. 4.213 → "4.213", null → "NR").
 const formatDuprRating = (v: string | number | null | undefined): string => {
@@ -120,17 +145,23 @@ export default function HomeScreen() {
       // without a fix it can't, and far-away courts would rank as high as close
       // ones. No GPS yet → the backend falls back to newest-first (unchanged).
       const hasCity = !!user?.city;
+      // Which point do we measure distance from? Normally the device GPS, so
+      // "1.1 km away" stays accurate while you're at home. But if you've picked a
+      // city you're not in, GPS would rank that city's courts by how far they
+      // are from YOU — which is useless and makes changing city look like it
+      // did nothing. In that case centre on the city instead.
+      const origin = pickSearchOrigin(userCoords.current, user as any);
       const res = await venuesApi.list({
         city: hasCity ? user!.city : undefined,
-        lat: userCoords.current?.lat,
-        lng: userCoords.current?.lng,
+        lat: origin?.lat,
+        lng: origin?.lng,
         limit: 8,
         sport: sport || undefined,
       }) as any;
       const data: ApiVenue[] = res?.data?.data ?? res?.data ?? [];
       setApiVenues(Array.isArray(data) ? data : []);
     } catch { /* silent — fallback venues shown */ }
-  }, [user?.city]);
+  }, [user?.city, user?.cityLat, user?.cityLng]);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -228,7 +259,7 @@ export default function HomeScreen() {
       loadVenues(activeSport);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSport, user?.city]);
+  }, [activeSport, user?.city, user?.cityLat, user?.cityLng]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -659,7 +690,7 @@ export default function HomeScreen() {
                     <View style={styles.venueCardBody}>
                       <View style={styles.venueCardHead}>
                         <View style={{ flex: 1 }}>
-                          <YDisplay size={18} color={YColors.accent} style={{ lineHeight: 20 }} numberOfLines={1}>
+                          <YDisplay size={18} color={YColors.accent} numberOfLines={1}>
                             {v.name}
                           </YDisplay>
                           <View style={styles.venueCardLoc}>
@@ -896,7 +927,7 @@ export default function HomeScreen() {
               <YUiText size={11} weight={900} color="#fff" style={{ letterSpacing: 2 }}>
                 CUSTOM TOURNAMENTS
               </YUiText>
-              <YDisplay size={26} color="#fff" style={{ marginTop: 8, lineHeight: 27 }}>
+              <YDisplay size={26} color="#fff" style={{ marginTop: 8 }}>
                 Your rules. Your scoring.{'\n'}Our platform.
               </YDisplay>
               <YUiText size={12.5} weight={600} color="rgba(255,255,255,0.82)" style={{ marginTop: 8 }}>
