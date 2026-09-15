@@ -103,6 +103,14 @@ const CATEGORY_COLORS: Record<string, { color: string; bg: string; label: string
   menA: { color: BLUE, bg: '#DBEAFE', label: 'Men A' },
   menB: { color: BLUE, bg: '#DBEAFE', label: 'Men B' },
   menC: { color: BLUE, bg: '#DBEAFE', label: 'Men C' },
+  // Labs League (labs_5rubber) rubber types
+  singles: { color: BLUE, bg: '#DBEAFE', label: 'Singles' },
+  doubles: { color: PURPLE, bg: '#EDE9FE', label: 'Open Doubles' },
+  mixed: { color: PINK, bg: '#FCE7F3', label: 'Mixed Doubles' },
+};
+// Labs League names its rubbers by position (order of play, rulebook §2).
+const LABS_RUBBER_NAMES: Record<number, string> = {
+  1: 'Singles 1', 2: 'Singles 2', 3: 'Open Doubles 1', 4: 'Open Doubles 2', 5: 'Mixed Doubles',
 };
 
 // ─── Status chip colors ─────────────────────────────────────────────────────
@@ -1093,7 +1101,9 @@ const TieDetailScreen: React.FC = () => {
       // own category via CATEGORY_COLORS; eligibility stays open for now
       // (group → auction sub-category mapping is a follow-up).
       const useSppl = !isOpen && !!sppl && SPPL_SLUGS.includes(slug);
-      const label = isOpen
+      const label = seasonFormat === 'labs_5rubber'
+        ? LABS_RUBBER_NAMES[tm.slotNumber] || `Rubber ${tm.slotNumber}`
+        : isOpen
         ? `Game ${tm.slotNumber}`
         : useSppl
           ? sppl!.label
@@ -1913,7 +1923,10 @@ const TieDetailScreen: React.FC = () => {
   );
 
   const renderMatchCard = (tm: TieMatch, idx: number) => {
-    const cat = CATEGORY_COLORS[tm.categorySlug] || CATEGORY_COLORS.men1;
+    const baseCat = CATEGORY_COLORS[tm.categorySlug] || CATEGORY_COLORS.men1;
+    const cat = seasonFormat === 'labs_5rubber'
+      ? { ...baseCat, label: LABS_RUBBER_NAMES[tm.slotNumber] || baseCat.label }
+      : baseCat;
     const matchStatus = tm.match?.status || 'scheduled';
     const scores = tm.match?.scores?.[0];
     const isCompleted = matchStatus === 'completed';
@@ -2333,7 +2346,7 @@ const TieDetailScreen: React.FC = () => {
             {tm && (
               <Text style={styles.modalSubtitle}>
                 Match #{tm.slotNumber} -{' '}
-                {CATEGORY_COLORS[tm.categorySlug]?.label || tm.categorySlug}{' '}
+                {(seasonFormat === 'labs_5rubber' && LABS_RUBBER_NAMES[tm.slotNumber]) || CATEGORY_COLORS[tm.categorySlug]?.label || tm.categorySlug}{' '}
                 ({tm.pointValue}pts)
               </Text>
             )}

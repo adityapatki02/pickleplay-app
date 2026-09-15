@@ -5,12 +5,15 @@ import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { YColors } from '../../config/yoiden';
 import { IS_LEAGUE_KIOSK, LEAGUE_KIOSK_ID } from '../../config/appMode';
+import { useLeagueStore } from '../../store/leagueStore';
 import { YMono } from './YText';
 
 type TabId = 'home' | 'play' | 'book' | 'me' | 'profile';
 
-// Center Fantasy action (league-kiosk only). Pinned to the SBPL S2 season — the
-// kiosk is a single-season build, so the season id is stable for its lifetime.
+// Center Fantasy action (league-kiosk only). The season comes from the store
+// (set by the league dashboard on load) so every kiosk build — SBPL, Labs, … —
+// opens ITS OWN season's fantasy. The SBPL S2 id is only a last-resort fallback
+// for the original SBPL kiosk before the dashboard has populated the store.
 const FANTASY_ORANGE = '#F97316';
 const KIOSK_FANTASY_SEASON_ID = '90bc945f-3907-4c72-85b8-8b2eb3f38dc5';
 
@@ -118,6 +121,10 @@ const TAB_ROOT: Record<TabId, string> = {
 };
 
 export const YTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
+  const storeSeasonId = useLeagueStore((st) => st.currentSeason?.id);
+  const storeLeagueId = useLeagueStore((st) => st.currentLeague?.id);
+  const kioskSeasonId =
+    storeLeagueId === LEAGUE_KIOSK_ID && storeSeasonId ? storeSeasonId : KIOSK_FANTASY_SEASON_ID;
   const insets = useSafeAreaInsets();
   const activeRoute = state.routes[state.index].name;
   const active = routeToTab(activeRoute);
@@ -141,7 +148,7 @@ export const YTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
     const go = navigation.navigate as (name: string, params?: object) => void;
     go('HomeTab', {
       screen: 'LeagueFantasy',
-      params: { seasonId: KIOSK_FANTASY_SEASON_ID, leagueId: LEAGUE_KIOSK_ID },
+      params: { seasonId: kioskSeasonId, leagueId: LEAGUE_KIOSK_ID },
     });
   };
 
