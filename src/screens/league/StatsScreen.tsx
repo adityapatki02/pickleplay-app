@@ -12,7 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import { getAllPlayerStats, getTopPerformers, getLeague } from '../../api/leagues.api';
+import { getAllPlayerStats, getTopPerformers, getLeague, getSeason } from '../../api/leagues.api';
 import { useAuthStore } from '../../store/authStore';
 import type { PlayerStat, TopPerformer, League } from '../../types/league.types';
 import { xAlert } from '../../utils/alert';
@@ -171,6 +171,7 @@ const StatsScreen: React.FC = () => {
   const [allStats, setAllStats] = useState<PlayerStat[]>([]);
   const [topPerformers, setTopPerformers] = useState<TopPerformer[]>([]);
   const [league, setLeague] = useState<League | null>(null);
+  const [seasonFormat, setSeasonFormat] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -180,12 +181,14 @@ const StatsScreen: React.FC = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [all, leagueData] = await Promise.all([
+      const [all, leagueData, seasonData] = await Promise.all([
         getAllPlayerStats(leagueId, seasonId).catch(() => []),
         getLeague(leagueId).catch(() => null),
+        getSeason(leagueId, seasonId).catch(() => null),
       ]);
       setAllStats(Array.isArray(all) ? all : []);
       setLeague(leagueData);
+      setSeasonFormat(((seasonData as any)?.format as string) || null);
     } catch (err: any) {
       xAlert('Error', err?.message || 'Failed to load stats');
     }
@@ -334,12 +337,14 @@ const StatsScreen: React.FC = () => {
   }
 
   // Labs League (labs_5rubber): the organiser wanted a table like Standings,
-  // not the SPPL cards. Detected from the rubber types present in the data
-  // (singles / doubles / mixed only exist in this format).
-  const isLabs = allStats.some((st) => {
-    const keys = Object.keys((st as any).categoryBreakdown || {});
-    return keys.includes('singles') || keys.includes('mixed');
-  });
+  // not the SPPL cards. Keyed on the season format so it shows before any
+  // rubber is played; the data-shape check is a fallback for older bundles.
+  const isLabs =
+    seasonFormat === 'labs_5rubber' ||
+    allStats.some((st) => {
+      const keys = Object.keys((st as any).categoryBreakdown || {});
+      return keys.includes('singles') || keys.includes('mixed');
+    });
   if (isLabs) {
     return (
       <SafeAreaView style={styles.root}>
