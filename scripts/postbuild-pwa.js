@@ -31,7 +31,17 @@ const icons = [
   'icon-512.png',
   'icon-512-maskable.png',
   'apple-touch-icon.png',
+  'og-image.png',
 ];
+
+// Share-preview (Open Graph) tags. WhatsApp/iMessage/Slack need an ABSOLUTE
+// image URL, so the kiosk build passes its public origin:
+//   PWA_SITE_URL=https://pl.yoiden.com PWA_TITLE="Pickle Labs League"
+// Without a site URL the tags still go in with a root-relative image, which
+// some scrapers accept; the title falls back to Yoiden.
+const SITE_URL = (process.env.PWA_SITE_URL || '').replace(/\/+$/, '');
+const OG_TITLE = process.env.PWA_TITLE ? `${process.env.PWA_TITLE} · Yoiden` : 'Yoiden';
+const OG_DESC = process.env.PWA_DESCRIPTION || 'Fixtures, live scores, standings and fantasy — powered by Yoiden.';
 for (const f of icons) {
   const src = path.join(PWA_SRC, f);
   const dest = path.join(DIST, f);
@@ -71,7 +81,20 @@ console.log('[postbuild-pwa] wrote manifest.webmanifest');
 const indexPath = path.join(DIST, 'index.html');
 let html = fs.readFileSync(indexPath, 'utf8');
 
+const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+const ogImage = `${SITE_URL}/og-image.png`;
 const pwaHead = `
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="${esc(OG_TITLE)}" />
+  <meta property="og:description" content="${esc(OG_DESC)}" />
+  <meta property="og:image" content="${esc(ogImage)}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  ${SITE_URL ? `<meta property="og:url" content="${esc(SITE_URL)}/" />` : ''}
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${esc(OG_TITLE)}" />
+  <meta name="twitter:description" content="${esc(OG_DESC)}" />
+  <meta name="twitter:image" content="${esc(ogImage)}" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
