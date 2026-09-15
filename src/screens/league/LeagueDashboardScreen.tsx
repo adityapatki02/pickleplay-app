@@ -568,6 +568,17 @@ const LeagueDashboardScreen: React.FC = () => {
     return Number.POSITIVE_INFINITY;
   };
   const isKnockoutTie = (t: any) => (t.round || '').startsWith('knockout_');
+  // Order of play when ties carry no clock time (Labs League): round number
+  // for the league stage, then SF1, SF2, Final. Keeps the organiser's sheet
+  // order instead of falling through to court/id, which interleaves rounds.
+  const tieRoundRank = (t: any) => {
+    const r: string = t.round || '';
+    const m = /^league_week_(\d+)$/.exec(r);
+    if (m) return parseInt(m[1], 10);
+    return ({ knockout_qf1: 100, knockout_qf2: 101, knockout_qf3: 102, knockout_qf4: 103,
+      knockout_q1: 104, knockout_eliminator: 105, knockout_q2: 106,
+      knockout_sf1: 110, knockout_sf2: 111, knockout_final: 120 } as Record<string, number>)[r] ?? 999;
+  };
   const upcomingTies = ties
     .filter((t) => t.status !== 'completed' && t.status !== 'postponed')
     .slice()
@@ -584,6 +595,8 @@ const LeagueDashboardScreen: React.FC = () => {
       const da = (a as any).matchDay || '';
       const db = (b as any).matchDay || '';
       if (da !== db) return da < db ? -1 : 1;
+      const ra = tieRoundRank(a), rb = tieRoundRank(b);
+      if (ra !== rb) return ra - rb;
       const ca = (a as any).courtNumber ?? Number.POSITIVE_INFINITY;
       const cb = (b as any).courtNumber ?? Number.POSITIVE_INFINITY;
       if (ca !== cb) return ca - cb;
@@ -1872,6 +1885,9 @@ const LeagueDashboardScreen: React.FC = () => {
           const aTime = new Date(a.scheduledStart || a.matchDay || 0).getTime();
           const bTime = new Date(b.scheduledStart || b.matchDay || 0).getTime();
           if (aTime !== bTime) return fixtureTab === 'completed' ? bTime - aTime : aTime - bTime;
+          // Same day, no clock times: follow the organiser's round order.
+          const aRound = tieRoundRank(a), bRound = tieRoundRank(b);
+          if (aRound !== bRound) return fixtureTab === 'completed' ? bRound - aRound : aRound - bRound;
           const aCourt = (a as any).courtNumber ?? Number.MAX_SAFE_INTEGER;
           const bCourt = (b as any).courtNumber ?? Number.MAX_SAFE_INTEGER;
           if (aCourt !== bCourt) return aCourt - bCourt;
