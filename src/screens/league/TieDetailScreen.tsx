@@ -239,8 +239,8 @@ const TieDetailScreen: React.FC = () => {
     pid
       ? (<>{playerMap[pid] || 'Player'}{isSub ? <Text style={SUB_ORANGE}> (sub)</Text> : null}</>)
       : (<Text style={SUB_ORANGE}>Substitute</Text>);
-  const pairNameJSX = (p1?: string | null, p1s?: any, p2?: string | null, p2s?: any) =>
-    (<>{posNameJSX(p1, p1s)} & {posNameJSX(p2, p2s)}</>);
+  const pairNameJSX = (p1?: string | null, p1s?: any, p2?: string | null, p2s?: any, singles = false) =>
+    singles ? (<>{posNameJSX(p1, p1s)}</>) : (<>{posNameJSX(p1, p1s)} & {posNameJSX(p2, p2s)}</>);
   const [showLineups, setShowLineups] = useState(false);
 
   // Full rosters per team for the substitute modal — { home: [...], away: [...] }
@@ -653,15 +653,22 @@ const TieDetailScreen: React.FC = () => {
     }
   };
 
-  /** Target points (14 / 15 / 21) derived from the match's scoringMode. */
+  /** Target points (11 / 14 / 15 / 21 / 30) derived from the match's scoringMode. */
   const getTargetPoints = (tm: TieMatch | null): number => {
     if (!tm?.match) return tie?.pointsToWin || 15;
     const mode = (tm.match as any).scoringMode;
     if (mode === 'rally_point_game') return 14;
     if (mode === 'rally_21') return 21;
-    if (mode === 'rally_15') return 15;
+    if (mode === 'rally_15' || mode === 'rally_15_winby2') return 15;
+    if (mode === 'rally_30') return 30;
+    if (mode === 'sideout_11_cap15') return 11;
     return tie?.pointsToWin || 15;
   };
+  /** Labs League (sideout_11_cap15): to 11, win by 2, golden point at 14-14 → 15 is the ceiling. */
+  const isCappedWinByTwo = (tm: TieMatch | null): boolean =>
+    (tm?.match as any)?.scoringMode === 'sideout_11_cap15';
+  const getHardCap = (tm: TieMatch | null): number =>
+    isCappedWinByTwo(tm) ? 15 : (tm?.match as any)?.scoringMode === 'rally_15_winby2' ? 99 : getTargetPoints(tm);
 
   /** Ref-like mutable for debounced live pushes so rapid taps coalesce. */
   const livePushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -683,7 +690,7 @@ const TieDetailScreen: React.FC = () => {
   const adjScore = (side: 'a' | 'b', delta: number) => {
     const tm = scoreModal.tieMatch;
     if (!tm) return;
-    const cap = getTargetPoints(tm);
+    const cap = getHardCap(tm);
     const before = side === 'a' ? scoreVals.a : scoreVals.b;
     const after = Math.max(0, Math.min(cap, before + delta));
     if (after === before) return; // no change at floor/cap
@@ -843,6 +850,20 @@ const TieDetailScreen: React.FC = () => {
       xAlert('Cannot save tied score', 'Use DECLARE WINNER for forfeits / decisions.');
       return;
     }
+    // Labs League: win by 2 from 10-10, capped by the golden point at 14-14 (15-14).
+    if (isCappedWinByTwo(tm)) {
+      const max = Math.max(a, b), min = Math.min(a, b);
+      if (max > 15) { xAlert('Game is capped at 15-14', 'Golden point at 14-14 — 15-14 is the highest score.'); return; }
+      if (max === 15 && min !== 14) { xAlert('15 needs the golden point', '15 is only reachable as 15-14.'); return; }
+      if (max < 15) {
+        if (max < 11) { xAlert('Score must reach 11', `Winning side needs at least 11. Current: ${a}-${b}.`); return; }
+        if (max === 11 && min > 9) { xAlert("Can't end 11-10", 'At 10-10 the game must be won by 2.'); return; }
+        if (max > 11 && max - min !== 2) { xAlert('Win by exactly 2', `Past 11 the game ends ${max}-${max - 2}.`); return; }
+      }
+      setSwapWinner(false);
+      setWinnerPickerVisible(true);
+      return;
+    }
     if (Math.max(a, b) !== target) {
       xAlert(`Score must reach ${target}`, `Winning team needs exactly ${target}. Current: ${a}-${b}.`);
       return;
@@ -928,10 +949,13 @@ const TieDetailScreen: React.FC = () => {
         player2Id: picks?.player2Id || '',
       };
     });
-    // Validate all slots filled
-    const empty = lineupData.filter((s) => !s.player1Id || !s.player2Id);
+    // Validate all slots filled (Labs singles rubbers take one player).
+    const isSinglesSlot = (slotNumber: number) =>
+      (tieSlots.find((s) => s.slotNumber === slotNumber)?.categorySlug as string | undefined) === 'singles';
+    for (const s of lineupData) if (isSinglesSlot(s.slotNumber)) s.player2Id = '';
+    const empty = lineupData.filter((s) => !s.player1Id || (!isSinglesSlot(s.slotNumber) && !s.player2Id));
     if (empty.length > 0) {
-      xAlert('Incomplete', `${empty.length} slot(s) still need both players selected.`);
+      xAlert('Incomplete', `${empty.length} slot(s) still need their player(s) selected.`);
       return;
     }
     // Validate Player 1 ≠ Player 2 within the same slot
@@ -997,8 +1021,11 @@ const TieDetailScreen: React.FC = () => {
       const slug = s.categorySlug as string;
       return slug && slug !== 'open' && !SPPL_SLUGS.includes(slug);
     });
+    const LABS_NAMES: Record<number, string> = { 1: 'Singles 1', 2: 'Singles 2', 3: 'Open Doubles 1', 4: 'Open Doubles 2', 5: 'Mixed Doubles' };
+    const isLabs = seasonFormat === 'labs_5rubber';
     const labelFor = (slotNum: number) => {
       if (slotNum === 0) return 'Rally Pt';
+      if (isLabs) return LABS_NAMES[slotNum] || `Rubber ${slotNum}`;
       const slug = catBySlot.get(slotNum);
       if (isSbpl) return (slug && CATEGORY_COLORS[slug]?.label) || `Game ${slotNum}`;
       return SPPL_TIE_SHEET_LABELS[slotNum] || `Game ${slotNum}`;
@@ -1012,9 +1039,9 @@ const TieDetailScreen: React.FC = () => {
         slotNumber: slotNum,
         gameLabel: labelFor(slotNum),
         team1Player1: nameSub(homeSlot?.player1Id, homeSlot?.player1IsSub),
-        team1Player2: nameSub(homeSlot?.player2Id, homeSlot?.player2IsSub),
+        team1Player2: catBySlot.get(slotNum) === 'singles' ? '' : nameSub(homeSlot?.player2Id, homeSlot?.player2IsSub),
         team2Player1: nameSub(awaySlot?.player1Id, awaySlot?.player1IsSub),
-        team2Player2: nameSub(awaySlot?.player2Id, awaySlot?.player2IsSub),
+        team2Player2: catBySlot.get(slotNum) === 'singles' ? '' : nameSub(awaySlot?.player2Id, awaySlot?.player2IsSub),
       };
     });
     const ist = (d: Date) => d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
@@ -1968,7 +1995,7 @@ const TieDetailScreen: React.FC = () => {
                 : !canSeeLineups
                   ? homeName
                   : (tm.homePlayer1Id || tm.homePlayer2Id)
-                    ? pairNameJSX(tm.homePlayer1Id, (tm as any).homePlayer1IsSub, tm.homePlayer2Id, (tm as any).homePlayer2IsSub)
+                    ? pairNameJSX(tm.homePlayer1Id, (tm as any).homePlayer1IsSub, tm.homePlayer2Id, (tm as any).homePlayer2IsSub, (tm.categorySlug as string) === 'singles')
                     : 'TBD'}
             </Text>
           </View>
@@ -1986,7 +2013,7 @@ const TieDetailScreen: React.FC = () => {
                 : !canSeeLineups
                   ? awayName
                   : (tm.awayPlayer1Id || tm.awayPlayer2Id)
-                    ? pairNameJSX(tm.awayPlayer1Id, (tm as any).awayPlayer1IsSub, tm.awayPlayer2Id, (tm as any).awayPlayer2IsSub)
+                    ? pairNameJSX(tm.awayPlayer1Id, (tm as any).awayPlayer1IsSub, tm.awayPlayer2Id, (tm as any).awayPlayer2IsSub, (tm.categorySlug as string) === 'singles')
                     : 'TBD'}
             </Text>
           </View>
@@ -2118,8 +2145,11 @@ const TieDetailScreen: React.FC = () => {
                 // SPPL Season 1 rule: each player plays at most 1 match per
                 // tie. Build a set of every playerId already picked in any
                 // OTHER slot so the chips can grey them out.
+                // Labs League lets ONE player double up per tie (server-validated), so
+                // its chips are never greyed for being used in another rubber.
                 const pickedElsewhere = new Set<string>();
                 Object.entries(lineupSlots).forEach(([slotKey, sel]) => {
+                  if (seasonFormat === 'labs_5rubber') return;
                   if (Number(slotKey) === slot.slotNumber) return;
                   if (sel.player1Id) pickedElsewhere.add(sel.player1Id);
                   if (sel.player2Id) pickedElsewhere.add(sel.player2Id);
@@ -2197,7 +2227,8 @@ const TieDetailScreen: React.FC = () => {
                       </ScrollView>
                     </View>
 
-                    {/* Player 2 picker */}
+                    {/* Player 2 picker (Labs singles rubbers take one player) */}
+                    {(slot.categorySlug as string) !== 'singles' && (
                     <View>
                       <Text style={{ fontSize: 10, fontWeight: '600', color: TEXT_SUB, marginBottom: 4 }}>Player 2</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -2246,6 +2277,7 @@ const TieDetailScreen: React.FC = () => {
                         </View>
                       </ScrollView>
                     </View>
+                    )}
                   </View>
                 );
               })}
@@ -2308,7 +2340,9 @@ const TieDetailScreen: React.FC = () => {
 
             {/* Target + live sync pip */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, marginBottom: 10 }}>
-              <Text style={{ fontSize: 11, color: TEXT_SUB, fontWeight: '700' }}>FIRST TO {target}</Text>
+              <Text style={{ fontSize: 11, color: TEXT_SUB, fontWeight: '700' }}>
+                FIRST TO {target}{isCappedWinByTwo(tm) ? ' · WIN BY 2 · GOLDEN POINT AT 14-14 · CHANGE ENDS AT 6' : ''}
+              </Text>
               <Text style={{ fontSize: 10, fontWeight: '800', color: pipColor }}>{pipText}</Text>
             </View>
 

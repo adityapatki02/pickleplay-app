@@ -10,6 +10,8 @@ export type FantasyConfig = {
   fantasyFrozen: boolean;
   now: string;
   form2Shape: Record<string, number>; // bucket key → number of picks
+  /** 'single_pool' = no pool-qualifier steps (Labs League: pick 4 semifinalists from the table). */
+  form1Kind?: 'pools' | 'single_pool';
 };
 
 export type FantasyRosterOption = {

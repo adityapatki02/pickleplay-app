@@ -25,6 +25,10 @@ export function computeMatchBonus(
   if (scoringMode === 'rally_point_game') {
     return { winnerBonus: 0, loserBonus: 0 };
   }
+  // MCA BKC (rally_30) and Labs League (sideout_11_cap15) award no bonus points.
+  if (scoringMode === 'rally_30' || scoringMode === 'sideout_11_cap15') {
+    return { winnerBonus: 0, loserBonus: 0 };
+  }
 
   if (scoringMode === 'rally_21') {
     // 21-pt knockout rules (SBPL knockouts are 15-pt, so not parameterised)

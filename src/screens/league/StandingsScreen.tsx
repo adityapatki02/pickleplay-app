@@ -78,6 +78,36 @@ const MCA_LEGEND: { abbr: string; desc: string }[] = [
   { abbr: 'PD', desc: 'Point Difference' },
 ];
 
+// Labs League (labs_5rubber): one pool of 5, ranked on tie wins → rubber wins →
+// points won → point difference (rulebook §9). Every rubber is worth 1.
+const LABS_COLUMNS: { key: string; label: string; flex: number; bold?: boolean }[] = [
+  { key: 'rank', label: '#', flex: 0.4, bold: true },
+  { key: 'team', label: 'Team', flex: 2, bold: true },
+  { key: 'P', label: 'P', flex: 0.5 },
+  { key: 'W', label: 'W', flex: 0.5, bold: true },
+  { key: 'L', label: 'L', flex: 0.5 },
+  { key: 'MW', label: 'RW', flex: 0.6 },
+  { key: 'PF', label: 'PF', flex: 0.7 },
+  { key: 'PA', label: 'PA', flex: 0.7 },
+  { key: 'PD', label: 'PD', flex: 0.7 },
+];
+const LABS_TIEBREAKER_RULES: { num: number; title: string; desc: string }[] = [
+  { num: 1, title: 'Tie Wins',          desc: 'More ties won ranks higher.' },
+  { num: 2, title: 'Rubber Wins',       desc: 'If level, more individual rubbers won across the league.' },
+  { num: 3, title: 'Points Won',        desc: 'If still level, more total points scored.' },
+  { num: 4, title: 'Point Difference',  desc: 'If still level, the better point difference.' },
+  { num: 5, title: 'Coin Toss',         desc: 'Dead heat on all four — decided by the Organising Committee.' },
+];
+const LABS_LEGEND: { abbr: string; desc: string }[] = [
+  { abbr: 'P', desc: 'Ties Played' },
+  { abbr: 'W', desc: 'Ties Won (ranking metric)' },
+  { abbr: 'L', desc: 'Ties Lost' },
+  { abbr: 'RW', desc: 'Rubbers Won' },
+  { abbr: 'PF', desc: 'Points For' },
+  { abbr: 'PA', desc: 'Points Against' },
+  { abbr: 'PD', desc: 'Point Difference' },
+];
+
 // ─── Tiebreaker rules ────────────────────────────────────────────────────────
 // Order matches the backend comparator (see league-standings.service.ts).
 // "Tie Points" is the primary metric — only when teams are tied on TP do the
@@ -152,12 +182,13 @@ const StandingsScreen: React.FC = () => {
   // column set and legend this screen uses. null/'sppl' = the original SPPL view.
   const [format, setFormat] = useState<string | null>(null);
   const isMca = format === 'mca_5doubles';
-  // MCA is a single pool of 5 — there is no pool PAIR to merge and no separate
-  // "overall", so the tab bar collapses to the one table that exists.
-  const activeColumns = isMca ? MCA_COLUMNS : COLUMNS;
-  const activeRules = isMca ? MCA_TIEBREAKER_RULES : TIEBREAKER_RULES;
-  const activeLegend = isMca ? MCA_LEGEND : LEGEND;
-  const activeTabs = isMca ? MCA_TABS : TABS;
+  const isLabs = format === 'labs_5rubber';
+  // MCA and Labs are a single pool of 5 — there is no pool PAIR to merge and
+  // no separate "overall", so the tab bar collapses to the one table that exists.
+  const activeColumns = isMca ? MCA_COLUMNS : isLabs ? LABS_COLUMNS : COLUMNS;
+  const activeRules = isMca ? MCA_TIEBREAKER_RULES : isLabs ? LABS_TIEBREAKER_RULES : TIEBREAKER_RULES;
+  const activeLegend = isMca ? MCA_LEGEND : isLabs ? LABS_LEGEND : LEGEND;
+  const activeTabs = (isMca || isLabs) ? MCA_TABS : TABS;
   // GROUP is the most useful default — that's what stakeholders watch during
   // knockout qualification week. POOL view is still one click away.
   const [activeTab, setActiveTab] = useState<TabKey>('group');
@@ -252,6 +283,15 @@ const StandingsScreen: React.FC = () => {
         if (bPts !== aPts) return bPts - aPts;
         return (a.rank || 999) - (b.rank || 999);
       }
+      // Labs League: tie wins → rubber wins → points won → point diff (§9); the
+      // backend already ranked on that chain, so its rank settles anything level.
+      if (isLabs) {
+        if (b.tiesWon !== a.tiesWon) return b.tiesWon - a.tiesWon;
+        if (b.matchesWon !== a.matchesWon) return b.matchesWon - a.matchesWon;
+        if ((b.ralliesFor || 0) !== (a.ralliesFor || 0)) return (b.ralliesFor || 0) - (a.ralliesFor || 0);
+        if ((b.rallyPointDiff || 0) !== (a.rallyPointDiff || 0)) return (b.rallyPointDiff || 0) - (a.rallyPointDiff || 0);
+        return (a.rank || 999) - (b.rank || 999);
+      }
       if (b.standingPoints !== a.standingPoints) return b.standingPoints - a.standingPoints;
       const w = headToHead(a.franchiseId, b.franchiseId);
       if (w === a.franchiseId) return -1;
@@ -265,7 +305,7 @@ const StandingsScreen: React.FC = () => {
       if (bPF !== aPF) return bPF - aPF;
       return b.totalMatchPoints - a.totalMatchPoints;
     },
-    [headToHead, isMca],
+    [headToHead, isMca, isLabs],
   );
 
   // Compute the tiebreaker reason for a row that sits above `nxt` in the
@@ -276,9 +316,9 @@ const StandingsScreen: React.FC = () => {
     (cur: LeagueStanding, nxt: LeagueStanding):
       | { reason: string; type: 'h2h' | 'matchesWon' | 'rallyPointDiff' | 'ralliesFor' }
       | null => {
-      if (isMca) {
-        // Backend annotated this row (annotateMcaTiebreakers) — reuse it rather
-        // than re-deriving a chain the client lacks the inputs for.
+      if (isMca || isLabs) {
+        // Backend annotated this row (annotateMcaTiebreakers / annotateLabsTiebreakers)
+        // — reuse it rather than re-deriving a chain the client lacks the inputs for.
         const reason = (cur as any).tiebreakerReason as string | undefined;
         return reason ? { reason, type: 'h2h' } : null;
       }
@@ -313,7 +353,7 @@ const StandingsScreen: React.FC = () => {
       }
       return null;
     },
-    [headToHead, teamName, isMca],
+    [headToHead, teamName, isMca, isLabs],
   );
 
   // POOL view: group by pool (4×4), use backend ranks
@@ -443,7 +483,7 @@ const StandingsScreen: React.FC = () => {
         {activeTabs.map((t) => {
           // MCA renders a single tab that is always the current view, so it
           // shouldn't look unselected just because activeTab defaults to 'group'.
-          const active = isMca || activeTab === t.key;
+          const active = (isMca || isLabs) || activeTab === t.key;
           return (
             <TouchableOpacity
               key={t.key}
@@ -466,7 +506,7 @@ const StandingsScreen: React.FC = () => {
         {(() => {
           // Build sections based on active tab
           let sections: { label: string; rows: LeagueStanding[]; qualifyTop: number }[] = [];
-          if (isMca) {
+          if (isMca || isLabs) {
             // One pool; top 4 advance to the semi-finals (rulebook §4).
             sections = standingsByPool.map((s) => ({ label: s.label, rows: s.rows, qualifyTop: 4 }));
           } else if (activeTab === 'pool') {

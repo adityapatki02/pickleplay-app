@@ -107,8 +107,12 @@ const BUCKET_META: Record<string, { name: string; accent: string; hint: string }
   menA:    { name: 'Men A',     accent: BLUE, hint: '' },
   menB:    { name: 'Men B',     accent: BLUE, hint: '' },
   menC:    { name: 'Men C',     accent: BLUE, hint: '' },
+  // Labs League (Pickle Labs) — roster tiers; 1 point per rubber won.
+  advanced:     { name: 'Advanced',     accent: BLUE,   hint: 'Any Advanced player (captains included)' },
+  intermediate: { name: 'Intermediate', accent: ORANGE, hint: 'Any Intermediate player' },
+  female:       { name: 'Female',       accent: PINK,   hint: 'Any of the five female players' },
 };
-const BUCKET_ORDER = ['kids', 'teenBoys', 'teenGirls', 'm1', 'w1', 'm2', 'w2', 'm3', 'women13', 'women45', 'menA', 'menB', 'menC'];
+const BUCKET_ORDER = ['kids', 'teenBoys', 'teenGirls', 'm1', 'w1', 'm2', 'w2', 'm3', 'women13', 'women45', 'menA', 'menB', 'menC', 'advanced', 'intermediate', 'female'];
 function buildBuckets(shape?: Record<string, number>): BucketDef[] {
   if (!shape) return [];
   return Object.keys(shape)
@@ -349,8 +353,10 @@ export default function FantasyScreen() {
     const hasChampion = !!form1Draft.champion;
 
     const missing: string[] = [];
-    if (abCount < 4) missing.push(`Pool AB: pick ${4 - abCount} more`);
-    if (cdCount < 4) missing.push(`Pool CD: pick ${4 - cdCount} more`);
+    // Single-pool leagues (Labs) have no pool-qualifier steps.
+    const singlePool = config?.form1Kind === 'single_pool';
+    if (!singlePool && abCount < 4) missing.push(`Pool AB: pick ${4 - abCount} more`);
+    if (!singlePool && cdCount < 4) missing.push(`Pool CD: pick ${4 - cdCount} more`);
     if (sfCount < 4) missing.push(`Semifinalists: pick ${4 - sfCount} more`);
     if (finCount < 2) missing.push(`Finalists: pick ${2 - finCount} more`);
     if (!hasChampion) missing.push(`Champion: pick 1`);
@@ -467,7 +473,13 @@ export default function FantasyScreen() {
   // PREDICT TAB — Form 1 (bracket picker)
   // ═════════════════════════════════════════════════════════════════════
   const renderPredictTab = () => {
-    const quals = [...(form1Draft.abQualifiers || []), ...(form1Draft.cdQualifiers || [])];
+    // Labs League: one pool of 5 — semifinalists are picked straight from the
+    // table, so the pool-qualifier steps disappear and the numbering shifts.
+    const singlePool = config?.form1Kind === 'single_pool';
+    const quals = singlePool
+      ? franchises.map((f) => f.id)
+      : [...(form1Draft.abQualifiers || []), ...(form1Draft.cdQualifiers || [])];
+    const stepNo = (n: number) => (singlePool ? n - 2 : n);
     const qualSet = new Set(quals);
     const sfSet = new Set(form1Draft.semifinalists || []);
     const finSet = new Set(form1Draft.finalists || []);
@@ -588,13 +600,13 @@ export default function FantasyScreen() {
       <ScrollView contentContainerStyle={styles.tabContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {renderCountdown()}
 
-        {renderPoolStep('1. Pool AB — Top 4', 'abQualifiers')}
-        {renderPoolStep('2. Pool CD — Top 4', 'cdQualifiers')}
+        {!singlePool && renderPoolStep('1. Pool AB — Top 4', 'abQualifiers')}
+        {!singlePool && renderPoolStep('2. Pool CD — Top 4', 'cdQualifiers')}
 
         {/* Step 3: Semifinalists (from the 8 quals) */}
         {form1ReadOnly ? (
           <View style={styles.stepCard}>
-            <Text style={styles.stepTitle}>3. Your Semifinalists</Text>
+            <Text style={styles.stepTitle}>{stepNo(3)}. Your Semifinalists</Text>
             <View style={styles.chipRow}>
               {(form1Draft.semifinalists || []).length === 0 ? (
                 <Text style={[styles.stepSub, { fontStyle: 'italic' }]}>No picks saved</Text>
@@ -611,11 +623,11 @@ export default function FantasyScreen() {
           </View>
         ) : (
           <View style={styles.stepCard}>
-            <Text style={styles.stepTitle}>3. Pick Your 4 Semifinalists</Text>
-            <Text style={styles.stepSub}>Choose from your 8 Pool AB + CD qualifiers</Text>
+            <Text style={styles.stepTitle}>{stepNo(3)}. Pick Your 4 Semifinalists</Text>
+            <Text style={styles.stepSub}>{singlePool ? 'Choose 4 of the 5 teams' : 'Choose from your 8 Pool AB + CD qualifiers'}</Text>
             <View style={styles.chipRow}>
               {quals.length === 0 ? (
-                <Text style={styles.hintText}>Pick qualifiers first</Text>
+                <Text style={styles.hintText}>{singlePool ? 'Teams are loading…' : 'Pick qualifiers first'}</Text>
               ) : (
                 quals.map((id) => {
                   const selected = sfSet.has(id);
@@ -653,7 +665,7 @@ export default function FantasyScreen() {
         {/* Step 4: Finalists (from SFs) */}
         {form1ReadOnly ? (
           <View style={styles.stepCard}>
-            <Text style={styles.stepTitle}>4. Your Finalists</Text>
+            <Text style={styles.stepTitle}>{stepNo(4)}. Your Finalists</Text>
             <View style={styles.chipRow}>
               {(form1Draft.finalists || []).length === 0 ? (
                 <Text style={[styles.stepSub, { fontStyle: 'italic' }]}>No picks saved</Text>
@@ -670,7 +682,7 @@ export default function FantasyScreen() {
           </View>
         ) : (
           <View style={styles.stepCard}>
-            <Text style={styles.stepTitle}>4. Pick Your 2 Finalists</Text>
+            <Text style={styles.stepTitle}>{stepNo(4)}. Pick Your 2 Finalists</Text>
             <Text style={styles.stepSub}>Choose from your 4 semifinalists</Text>
             <View style={styles.chipRow}>
               {(form1Draft.semifinalists || []).length === 0 ? (
@@ -711,7 +723,7 @@ export default function FantasyScreen() {
         {/* Step 5: Champion (from Finalists) */}
         {form1ReadOnly ? (
           <View style={styles.stepCard}>
-            <Text style={styles.stepTitle}>5. Your Champion 🏆</Text>
+            <Text style={styles.stepTitle}>{stepNo(5)}. Your Champion 🏆</Text>
             <View style={styles.chipRow}>
               {form1Draft.champion ? (
                 <View style={[styles.chip, { paddingHorizontal: 18, paddingVertical: 14, backgroundColor: RED, borderColor: RED }]}>
@@ -726,7 +738,7 @@ export default function FantasyScreen() {
           </View>
         ) : (
           <View style={styles.stepCard}>
-            <Text style={styles.stepTitle}>5. Predict the Champion 🏆</Text>
+            <Text style={styles.stepTitle}>{stepNo(5)}. Predict the Champion 🏆</Text>
             <Text style={styles.stepSub}>Pick from your 2 finalists</Text>
             <View style={styles.chipRow}>
               {(form1Draft.finalists || []).length === 0 ? (
@@ -978,8 +990,10 @@ export default function FantasyScreen() {
             {(bd?.form1 && bd.form1.length > 0
               ? bd.form1
               : [
-                  { bucket: 'Pool AB qualifiers', earned: 0, max: 8 },
-                  { bucket: 'Pool CD qualifiers', earned: 0, max: 8 },
+                  ...(config?.form1Kind === 'single_pool' ? [] : [
+                    { bucket: 'Pool AB qualifiers', earned: 0, max: 8 },
+                    { bucket: 'Pool CD qualifiers', earned: 0, max: 8 },
+                  ]),
                   { bucket: 'Semifinalists', earned: 0, max: 12 },
                   { bucket: 'Finalists', earned: 0, max: 10 },
                   { bucket: 'Champion', earned: 0, max: 12 },
