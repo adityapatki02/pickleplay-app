@@ -111,6 +111,10 @@ const SBPL_SPONSORS_RIGHT = [
   // uses `contain` (full logo, blends on the dark card).
   { img: require('../../../assets/sbpl/kamakhya.png'), label: 'TROPHY SPONSOR', fit: 'contain' as const },
 ];
+// ── Pickle Labs "Labs League" (20 Sep 2026): wordmark in the top bar, same
+// pattern as SBPL (gated by league id so no other league picks it up).
+const LABS_LEAGUE_ID = '4886e391-8638-4457-a061-4772f2a98b46';
+const LABS_LOGO = require('../../../assets/labs/picklelabs-logo.png');
 const ORANGE = '#F97316';
 const PINK = '#EC4899';
 
@@ -3391,6 +3395,11 @@ const LeagueDashboardScreen: React.FC = () => {
           <View style={styles.headerCenter}>
             <Image source={SBPL_LOGO} style={styles.sbplHeaderLogo} resizeMode="contain" />
           </View>
+        ) : store.currentLeague?.id === LABS_LEAGUE_ID ? (
+          <View style={styles.headerCenter}>
+            <Image source={LABS_LOGO} style={styles.labsHeaderLogo} resizeMode="contain" />
+            <Text style={styles.headerSubtitle}>{season?.name || 'Season'}</Text>
+          </View>
         ) : (
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle} numberOfLines={1}>
@@ -5154,6 +5163,7 @@ const styles = StyleSheet.create({
   sbplLogoImg: { width: '100%', height: 66 },
   // Top bar: league logo only (slightly larger).
   sbplHeaderLogo: { width: 168, height: 70 },
+  labsHeaderLogo: { width: 220, height: 64, marginBottom: 2 },
   // Overview sponsor showcase — logos shown directly (no tile background).
   sbplShowcaseImg: { width: '100%', maxWidth: 200, height: 96 },
   // 2-up sponsor slider — every logo sits in an identical fixed card so all
