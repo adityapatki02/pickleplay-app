@@ -1108,15 +1108,19 @@ const TieDetailScreen: React.FC = () => {
         : useSppl
           ? sppl!.label
           : CATEGORY_COLORS[slug]?.label || `Game ${tm.slotNumber}`;
+      // Labs Mixed Doubles: Player 1 from the men (advanced + intermediate,
+      // exposed as the synthetic 'male' pool), Player 2 the female player.
+      // Two entries = order-significant, same convention as SPPL's mixed slots.
+      const labsMixed = seasonFormat === 'labs_5rubber' && slug === 'mixed';
       return {
         slotNumber: tm.slotNumber,
         categorySlug: tm.categorySlug,
-        allowedCategories: useSppl ? sppl!.allowedCategories : [],
+        allowedCategories: labsMixed ? ['male', 'female'] : useSppl ? sppl!.allowedCategories : [],
         label,
         pointValue: tm.pointValue,
       };
     });
-  }, [tie]);
+  }, [tie, seasonFormat]);
 
   // ── Live score computation from individual matches (must be before early return) ──
   const liveScores = React.useMemo(() => {
@@ -2104,6 +2108,11 @@ const TieDetailScreen: React.FC = () => {
       if (!playersByCategory[cat]) playersByCategory[cat] = [];
       playersByCategory[cat].push(r);
     });
+    // Labs League: the mixed rubber's Player 1 seat draws from every non-female
+    // roster tier (advanced + intermediate), keyed as 'male'.
+    if (seasonFormat === 'labs_5rubber') {
+      playersByCategory.male = rosterPlayers.filter((r) => r.categorySlug !== 'female');
+    }
 
     return (
       <Modal
