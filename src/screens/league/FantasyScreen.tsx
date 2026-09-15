@@ -1362,16 +1362,21 @@ export default function FantasyScreen() {
               </View>
             </View>
 
-            {/* Pool AB + Pool CD — stacked pies */}
-            <View style={styles.chartCard}>
-              <Text style={styles.chartTitle}>POOL AB — QUARTERFINAL PREDICTIONS</Text>
-              <PieChartCard data={withColors(trends.abQualifiers || []).map((c) => ({ label: c.franchiseName, value: c.count, pct: c.pct, color: c.color }))} />
-            </View>
+            {/* Pool AB + Pool CD — stacked pies (pool brackets only; a
+                single-pool league such as Labs has no qualifier step). */}
+            {config?.form1Kind !== 'single_pool' && (
+              <>
+                <View style={styles.chartCard}>
+                  <Text style={styles.chartTitle}>POOL AB — QUARTERFINAL PREDICTIONS</Text>
+                  <PieChartCard data={withColors(trends.abQualifiers || []).map((c) => ({ label: c.franchiseName, value: c.count, pct: c.pct, color: c.color }))} />
+                </View>
 
-            <View style={styles.chartCard}>
-              <Text style={styles.chartTitle}>POOL CD — QUARTERFINAL PREDICTIONS</Text>
-              <PieChartCard data={withColors(trends.cdQualifiers || []).map((c) => ({ label: c.franchiseName, value: c.count, pct: c.pct, color: c.color }))} />
-            </View>
+                <View style={styles.chartCard}>
+                  <Text style={styles.chartTitle}>POOL CD — QUARTERFINAL PREDICTIONS</Text>
+                  <PieChartCard data={withColors(trends.cdQualifiers || []).map((c) => ({ label: c.franchiseName, value: c.count, pct: c.pct, color: c.color }))} />
+                </View>
+              </>
+            )}
 
             {/* Semifinalist bar chart — shows every team that got any picks */}
             <View style={styles.chartCard}>
