@@ -162,6 +162,8 @@ const StatsScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
+  // Labs League: one plain table with rubber-type chips (see LabsStatsTable).
+  const [labsCat, setLabsCat] = useState<LabsCat>('all');
   const [selectedMetric, setSelectedMetric] = useState<MetricKey>('wins');
   // Default ranking — Team Pts total (Pts + Bonus), tiebroken by Point Diff
   const [sortBy, setSortBy] = useState<SortKey>('totalContribution');
@@ -331,10 +333,37 @@ const StatsScreen: React.FC = () => {
     );
   }
 
+  // Labs League (labs_5rubber): the organiser wanted a table like Standings,
+  // not the SPPL cards. Detected from the rubber types present in the data
+  // (singles / doubles / mixed only exist in this format).
+  const isLabs = allStats.some((st) => {
+    const keys = Object.keys((st as any).categoryBreakdown || {});
+    return keys.includes('singles') || keys.includes('mixed');
+  });
+  if (isLabs) {
+    return (
+      <SafeAreaView style={styles.root}>
+        <StatusBar barStyle="light-content" backgroundColor={NAVY} />
+        <YTopBar eyebrow={league?.name || 'LEAGUE'} title="PLAYER STATS" onBack={() => navigation.goBack()} />
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          {isAdmin && (
+            <View style={statsAdminBarStyle}>
+              <DownloadButton onPress={onDownloadStats} compact label="DOWNLOAD CSV" />
+            </View>
+          )}
+          <LabsStatsTable stats={allStats} cat={labsCat} onCat={setLabsCat} />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor={NAVY} />
-      <YTopBar eyebrow="SPPL" title="PLAYER STATS" onBack={() => navigation.goBack()} />
+      <YTopBar eyebrow={league?.name || 'SPPL'} title="PLAYER STATS" onBack={() => navigation.goBack()} />
 
       {/* Tab bar */}
       <View style={styles.tabBar}>
@@ -718,6 +747,129 @@ const StatsScreen: React.FC = () => {
 };
 
 export default StatsScreen;
+
+// ─── Labs League: simple per-rubber-type table ──────────────────────────────
+type LabsCat = 'all' | 'singles' | 'doubles' | 'mixed';
+const LABS_CATS: { key: LabsCat; label: string }[] = [
+  { key: 'all', label: 'ALL' },
+  { key: 'singles', label: 'SINGLES' },
+  { key: 'doubles', label: 'DOUBLES' },
+  { key: 'mixed', label: 'MIXED DOUBLES' },
+];
+const LABS_COLS: { key: string; label: string; w: number; align?: 'left' | 'center' }[] = [
+  { key: 'rank', label: '#', w: 30 },
+  { key: 'player', label: 'PLAYER', w: 168, align: 'left' },
+  { key: 'team', label: 'TEAM', w: 52 },
+  { key: 'p', label: 'P', w: 34 },
+  { key: 'w', label: 'W', w: 34 },
+  { key: 'l', label: 'L', w: 34 },
+  { key: 'pf', label: 'PF', w: 44 },
+  { key: 'pa', label: 'PA', w: 44 },
+  { key: 'pd', label: 'PD', w: 48 },
+];
+function LabsStatsTable({
+  stats, cat, onCat,
+}: { stats: PlayerStat[]; cat: LabsCat; onCat: (c: LabsCat) => void }) {
+  const rows = stats
+    .map((st) => {
+      const b = cat === 'all' ? null : (st as any).categoryBreakdown?.[cat];
+      const played = cat === 'all' ? st.matchesPlayed : (b?.played || 0);
+      const won = cat === 'all' ? st.matchesWon : (b?.won || 0);
+      const lost = cat === 'all' ? st.matchesLost : (b?.lost || 0);
+      const pf = cat === 'all' ? st.pointsScored : (b?.scored || 0);
+      const pa = cat === 'all' ? ((st as any).pointsConceded || 0) : (b?.conceded || 0);
+      return {
+        id: st.playerId, name: st.playerName,
+        team: st.franchiseShortName || st.franchiseName || '—', color: st.franchiseColor,
+        played, won, lost, pf, pa, pd: pf - pa,
+      };
+    })
+    .sort((a, b) =>
+      b.won - a.won || b.pd - a.pd || b.pf - a.pf || a.played - b.played || a.name.localeCompare(b.name),
+    );
+  const played = rows.filter((r) => r.played > 0);
+  const idle = rows.filter((r) => r.played === 0);
+  const cell = (txt: string | number, col: typeof LABS_COLS[number], bold = false, color?: string) => (
+    <Text
+      key={col.key}
+      numberOfLines={1}
+      style={{
+        width: col.w, paddingHorizontal: 6, paddingVertical: 11, fontSize: 12.5,
+        textAlign: col.align || 'center', fontWeight: bold ? '800' : '600',
+        color: color || TEXT_COLOR,
+      }}
+    >
+      {String(txt)}
+    </Text>
+  );
+  const renderRows = (list: typeof rows, offset = 0) => list.map((r, i) => (
+    <View
+      key={r.id}
+      style={{ flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: BORDER, backgroundColor: r.played === 0 ? '#F8FAFC' : WHITE }}
+    >
+      {cell(r.played === 0 ? '–' : offset + i + 1, LABS_COLS[0], true)}
+      <View style={{ width: LABS_COLS[1].w, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6 }}>
+        <View style={{ width: 3, height: 18, borderRadius: 2, backgroundColor: r.color || BORDER, marginRight: 8 }} />
+        <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, fontWeight: '800', color: TEXT_COLOR }}>{r.name}</Text>
+      </View>
+      {cell(r.team, LABS_COLS[2], false, TEXT_SUB)}
+      {cell(r.played, LABS_COLS[3])}
+      {cell(r.won, LABS_COLS[4], true)}
+      {cell(r.lost, LABS_COLS[5])}
+      {cell(r.pf, LABS_COLS[6])}
+      {cell(r.pa, LABS_COLS[7])}
+      {cell((r.pd > 0 ? '+' : '') + r.pd, LABS_COLS[8], true, r.pd > 0 ? GREEN : r.pd < 0 ? RED : TEXT_MUTED)}
+    </View>
+  ));
+  return (
+    <View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+        {LABS_CATS.map((c) => {
+          const on = cat === c.key;
+          return (
+            <TouchableOpacity
+              key={c.key}
+              onPress={() => onCat(c.key)}
+              activeOpacity={0.8}
+              style={{
+                paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20,
+                backgroundColor: on ? NAVY : WHITE, borderWidth: 1, borderColor: on ? NAVY : BORDER,
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '800', letterSpacing: 0.5, color: on ? WHITE : TEXT_SUB }}>{c.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <View style={{ backgroundColor: WHITE, borderRadius: 14, borderWidth: 1, borderColor: BORDER, overflow: 'hidden' }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View>
+            <View style={{ flexDirection: 'row', backgroundColor: SURFACE }}>
+              {LABS_COLS.map((col) => (
+                <Text
+                  key={col.key}
+                  style={{ width: col.w, paddingHorizontal: 6, paddingVertical: 10, fontSize: 10.5, fontWeight: '900', letterSpacing: 0.6, color: TEXT_MUTED, textAlign: col.align || 'center' }}
+                >
+                  {col.label}
+                </Text>
+              ))}
+            </View>
+            {played.length === 0 && (
+              <Text style={{ padding: 18, textAlign: 'center', color: TEXT_MUTED, fontSize: 13 }}>
+                No {cat === 'all' ? 'rubbers' : LABS_CATS.find((c) => c.key === cat)?.label.toLowerCase()} played yet.
+              </Text>
+            )}
+            {renderRows(played)}
+            {renderRows(idle, played.length)}
+          </View>
+        </ScrollView>
+      </View>
+      <Text style={{ fontSize: 10.5, color: TEXT_MUTED, fontStyle: 'italic', marginTop: 8, paddingHorizontal: 4, lineHeight: 15 }}>
+        P = rubbers played, W/L = won/lost, PF/PA = points for/against, PD = point difference. Ranked on wins, then PD.
+      </Text>
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: SURFACE },
