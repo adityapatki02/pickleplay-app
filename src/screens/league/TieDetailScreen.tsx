@@ -2111,7 +2111,7 @@ const TieDetailScreen: React.FC = () => {
     // Labs League: the mixed rubber's Player 1 seat draws from every non-female
     // roster tier (advanced + intermediate), keyed as 'male'.
     if (seasonFormat === 'labs_5rubber') {
-      playersByCategory.male = rosterPlayers.filter((r) => r.categorySlug !== 'female');
+      playersByCategory.male = rosterPlayers.filter((r) => (r.categorySlug as string) !== 'female');
     }
 
     return (
