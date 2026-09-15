@@ -240,6 +240,7 @@ export default function FantasyScreen() {
   // info only. Pulled from the league's organizerId vs current authUser.id.
   const authUser = useAuthStore((s) => s.user);
   const [leagueOrganizerId, setLeagueOrganizerId] = useState<string | null>(null);
+  const [leagueName, setLeagueName] = useState<string | null>(null);
   const isAdmin = !!authUser?.id && !!leagueOrganizerId && leagueOrganizerId === authUser.id;
 
   // Admin-only fantasy CSV export. Loading state guards against rapid clicks
@@ -301,6 +302,7 @@ export default function FantasyScreen() {
       setFranchises(Array.isArray(franchiseList) ? franchiseList : []);
       setGroups(Array.isArray(groupList) ? groupList : []);
       setLeagueOrganizerId((leagueData as any)?.organizerId ?? null);
+      setLeagueName((leagueData as any)?.name ?? null);
     } catch (err: any) {
       xAlert('Error', err?.response?.data?.message || err?.message || 'Failed to load fantasy data');
     } finally {
@@ -374,13 +376,19 @@ export default function FantasyScreen() {
       const saved = await upsertFantasyEntry(seasonId, { form1: form1Draft });
       setEntry(saved);
       setEditingForm1(false); // flip back to read-only view after save
-      xConfirm(
-        'Predictions Saved 🎯',
-        'Now build your Dream Team — pick 16 players across 8 categories.',
-        () => setTab('DREAM'),
-        'GO TO DREAM TEAM',
-        'STAY HERE',
-      );
+      if (config?.form1Kind === 'single_pool') {
+        // Labs League: one straight flow — predictions, then Dream Team.
+        setTab('DREAM');
+        xAlert('Predictions saved 🎯', 'Step 2: pick your Dream Team — 2 Advanced, 3 Intermediate and 1 Female player.');
+      } else {
+        xConfirm(
+          'Predictions Saved 🎯',
+          'Now build your Dream Team — pick 16 players across 8 categories.',
+          () => setTab('DREAM'),
+          'GO TO DREAM TEAM',
+          'STAY HERE',
+        );
+      }
     } catch (err: any) {
       xAlert('Save Failed', err?.response?.data?.message || err?.message || 'Could not save');
     } finally {
@@ -413,7 +421,12 @@ export default function FantasyScreen() {
       const saved = await upsertFantasyEntry(seasonId, { form2: form2Draft });
       setEntry(saved);
       setEditingForm2(false);
-      xAlert('Saved 🏆', 'Dream Team saved. Tap EDIT to change before the deadline.');
+      if (config?.form1Kind === 'single_pool') {
+        setTab('LEADER');
+        xAlert('Dream Team saved 🏆', 'You are in. Points land as rubbers finish on match day — you can edit until the lock.');
+      } else {
+        xAlert('Saved 🏆', 'Dream Team saved. Tap EDIT to change before the deadline.');
+      }
     } catch (err: any) {
       xAlert('Save Failed', err?.response?.data?.message || err?.message || 'Could not save');
     } finally {
@@ -484,7 +497,10 @@ export default function FantasyScreen() {
     const sfSet = new Set(form1Draft.semifinalists || []);
     const finSet = new Set(form1Draft.finalists || []);
     const franchiseById = new Map(franchises.map((f) => [f.id, f]));
-    const displayName = (id: string) => franchiseById.get(id)?.shortName || franchiseById.get(id)?.name || id.slice(0, 8);
+    const displayName = (id: string) =>
+      (config?.form1Kind === 'single_pool'
+        ? franchiseById.get(id)?.name || franchiseById.get(id)?.shortName
+        : franchiseById.get(id)?.shortName || franchiseById.get(id)?.name) || id.slice(0, 8);
 
     const togglePick = (list: string[] | undefined, max: number, id: string): string[] => {
       const cur = list ? [...list] : [];
@@ -1512,7 +1528,7 @@ export default function FantasyScreen() {
       <StatusBar barStyle="light-content" backgroundColor={NAVY} />
 
       <YTopBar
-        eyebrow={`SPPL · MY POINTS ${entry?.totalPoints ?? 0}`}
+        eyebrow={`${leagueName || 'SPPL'} · MY POINTS ${entry?.totalPoints ?? 0}`}
         title="FANTASY"
         onBack={() => navigation.goBack()}
       />
