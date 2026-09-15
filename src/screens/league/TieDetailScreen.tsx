@@ -110,7 +110,7 @@ const CATEGORY_COLORS: Record<string, { color: string; bg: string; label: string
 };
 // Labs League names its rubbers by position (order of play, rulebook §2).
 const LABS_RUBBER_NAMES: Record<number, string> = {
-  1: 'Singles 1', 2: 'Singles 2', 3: 'Open Doubles 1', 4: 'Open Doubles 2', 5: 'Mixed Doubles',
+  1: 'Singles 1 · Advanced', 2: 'Singles 2 · Intermediate', 3: 'Open Doubles 1', 4: 'Open Doubles 2', 5: 'Mixed Doubles',
 };
 
 // ─── Status chip colors ─────────────────────────────────────────────────────
@@ -1029,7 +1029,7 @@ const TieDetailScreen: React.FC = () => {
       const slug = s.categorySlug as string;
       return slug && slug !== 'open' && !SPPL_SLUGS.includes(slug);
     });
-    const LABS_NAMES: Record<number, string> = { 1: 'Singles 1', 2: 'Singles 2', 3: 'Open Doubles 1', 4: 'Open Doubles 2', 5: 'Mixed Doubles' };
+    const LABS_NAMES: Record<number, string> = LABS_RUBBER_NAMES;
     const isLabs = seasonFormat === 'labs_5rubber';
     const labelFor = (slotNum: number) => {
       if (slotNum === 0) return 'Rally Pt';
