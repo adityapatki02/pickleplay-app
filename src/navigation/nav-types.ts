@@ -59,6 +59,7 @@ export type BookStackParamList = {
 
 export type MeStackParamList = DetailAndManageRoutes & {
   Me: undefined;
+  Wallet: undefined;
   VenueAdmin: { venueId: string };
   OwnerDashboard: { venueId?: string };
   HeatmapDetail: { venueId: string; courtId?: string };

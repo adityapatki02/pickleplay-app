@@ -19,6 +19,8 @@ export interface VenueCourt {
 }
 
 export interface Venue {
+  /** Max wallet credit redeemable per booking here. 0 = not accepted. */
+  walletMaxRedeemPerBooking?: number | string;
   id: string;
   ownerId?: string;
   name: string;
@@ -132,6 +134,8 @@ export interface CreateBookingInput {
   guestPhone?: string;
   promoCode?: string;
   notes?: string;
+  /** Wallet credit to apply, in rupees. Server re-clamps it. */
+  walletRedeem?: number;
 }
 
 export interface CreateBookingResult {

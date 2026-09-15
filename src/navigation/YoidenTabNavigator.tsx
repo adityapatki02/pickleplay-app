@@ -48,6 +48,7 @@ import SponsoredDetailScreen from '../screens/yoiden/SponsoredDetailScreen';
 // Court booking screens
 import BookScreen from '../screens/yoiden/BookScreen';
 import VenueDetailScreen from '../screens/yoiden/VenueDetailScreen';
+import WalletScreen from '../screens/yoiden/WalletScreen';
 import MyBookingsScreen from '../screens/yoiden/MyBookingsScreen';
 import BookingSuccessScreen from '../screens/yoiden/BookingSuccessScreen';
 import BookingDetailScreen from '../screens/yoiden/BookingDetailScreen';
@@ -160,6 +161,7 @@ const MeStack = createNativeStackNavigator<MeStackParamList>();
 const MeStackNavigator = () => (
   <MeStack.Navigator screenOptions={{ headerShown: false }}>
     <MeStack.Screen name="Me" component={MeScreen} />
+    <MeStack.Screen name="Wallet" component={WalletScreen} />
     <MeStack.Screen name="VenueAdmin" component={VenueAdminScreen} />
     <MeStack.Screen name="OwnerDashboard" component={OwnerDashboardScreen} />
     <MeStack.Screen name="HeatmapDetail" component={HeatmapDetailScreen} />

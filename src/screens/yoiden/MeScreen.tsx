@@ -25,6 +25,7 @@ import {
   YSectionHead,
   YTournamentRow,
 } from '../../components/yoiden';
+import { walletApi } from '../../api/wallet.api';
 import { useAuthStore } from '../../store/authStore';
 import { authApi } from '../../api/auth.api';
 import { tournamentsApi } from '../../api/tournaments.api';
@@ -103,6 +104,8 @@ export default function MeScreen() {
   const skill = (user as any)?.selfReportedSkill as string | undefined;
 
   const [refreshing, setRefreshing] = useState(false);
+
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [myRegs, setMyRegs] = useState<Registration[]>([]);
   const [myHosted, setMyHosted] = useState<Tournament[]>([]);
@@ -116,14 +119,19 @@ export default function MeScreen() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [regsRes, hostedRes, venueRes, duprRes, invitesRes, adminRes] = await Promise.allSettled([
+      const [regsRes, hostedRes, venueRes, duprRes, invitesRes, adminRes, walletRes] = await Promise.allSettled([
         registrationsApi.getMyRegistrations(),
         tournamentsApi.getMyTournaments(),
         venuesApi.getMyVenues(),
         DUPR_ENABLED ? getDuprMe() : Promise.resolve(null),
         DUPR_ENABLED ? getMyDuprInvites() : Promise.resolve(null),
         DUPR_ENABLED ? getMyDuprAdminClubs() : Promise.resolve(null),
+        walletApi.mine(),
       ]);
+      if (walletRes.status === 'fulfilled') {
+        const d = (walletRes.value as any)?.data?.data;
+        setWalletBalance(d ? Number(d.balance ?? 0) : 0);
+      }
       if (regsRes.status === 'fulfilled') {
         const data = unwrap<Registration[]>(regsRes.value);
         setMyRegs(Array.isArray(data) ? data : []);
@@ -526,6 +534,34 @@ export default function MeScreen() {
             <Path d="M9 6l6 6-6 6" stroke={YColors.ink3} strokeWidth={2} strokeLinecap="round" />
           </Svg>
         </Pressable>
+
+        {/* Wallet card — only shown once the player actually has credit, so it
+            is not dead furniture for everyone else. */}
+        {walletBalance !== null && walletBalance > 0 ? (
+          <Pressable
+            style={styles.bookingsCard}
+            onPress={() => (nav as any).navigate('MeTab', { screen: 'Wallet' })}
+          >
+            <View style={styles.bookingsIcon}>
+              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                <Path d="M3 7.5h15.5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H3z" stroke={YColors.accent} strokeWidth={1.8} strokeLinejoin="round" />
+                <Path d="M3 7.5V6a2 2 0 0 1 2-2h11" stroke={YColors.accent} strokeWidth={1.8} strokeLinecap="round" />
+                <Path d="M16.5 13h1.5" stroke={YColors.accent} strokeWidth={2.4} strokeLinecap="round" />
+              </Svg>
+            </View>
+            <View style={{ flex: 1 }}>
+              <YUiText size={13} weight={800} color={YColors.ink} style={{ letterSpacing: 0.5 }}>
+                WALLET
+              </YUiText>
+              <YUiText size={12} color={YColors.ink3} style={{ marginTop: 2 }}>
+                ₹{walletBalance} credit — use it on your next booking
+              </YUiText>
+            </View>
+            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+              <Path d="M9 6l6 6-6 6" stroke={YColors.ink3} strokeWidth={2} strokeLinecap="round" />
+            </Svg>
+          </Pressable>
+        ) : null}
 
         {/* Hosting section */}
         {myHosted.length > 0 ? (

@@ -26,6 +26,8 @@ import {
   YBadge,
   YButton,
 } from '../../components/yoiden';
+import { AmenityIcon, amenityLabel } from '../../constants/amenities';
+import { walletApi, type WalletQuote } from '../../api/wallet.api';
 import { notify, confirmAction } from '../../utils/notify';
 import { openRazorpay } from '../../utils/razorpay';
 import { resizeUrl } from '../../utils/img';
@@ -117,27 +119,9 @@ const StarIcon = () => (
     <Path d="M12 2.5l2.9 6.1 6.6.9-4.8 4.7 1.1 6.6L12 17.7l-5.8 3.1 1.1-6.6-4.8-4.7 6.6-.9L12 2.5z" fill={YColors.gold} stroke={YColors.gold} strokeWidth={1} strokeLinejoin="round" />
   </Svg>
 );
-const AmenityIcon = () => (
-  <Svg width={16} height={16} viewBox="0 0 24 24">
-    <Path d="M20 6L9 17l-5-5" stroke={YColors.accent} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-  </Svg>
-);
 
-/** Amenity key → display label. Unknown keys fall back to a title-cased key. */
-const AMENITY_META: Record<string, { label: string }> = {
-  floodlights: { label: 'Flood Lights' },
-  parking: { label: 'Parking' },
-  drinking_water: { label: 'Drinking Water' },
-  rental_equipment: { label: 'Rental Equipment' },
-  washroom: { label: 'Washroom' },
-  seating: { label: 'Seating' },
-  cafe: { label: 'Café' },
-  first_aid: { label: 'First Aid' },
-  changing_room: { label: 'Changing Room' },
-};
 const titleCase = (key: string) =>
   key.split(/[_-]/).map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(' ');
-const amenityLabel = (key: string) => AMENITY_META[key]?.label ?? titleCase(key);
 
 const SPORT_LABELS: Record<string, string> = {
   pickleball: 'Pickleball',
@@ -179,6 +163,8 @@ export default function VenueDetailScreen() {
   const [selNote, setSelNote] = useState<string | null>(null);
 
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [wallet, setWallet] = useState<WalletQuote | null>(null);
+  const [useWallet, setUseWallet] = useState(false);
   const [guestName, setGuestName] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -207,9 +193,21 @@ export default function VenueDetailScreen() {
     return (raw as any[]).map((p) => (typeof p === 'string' ? { url: p } : p)).filter((p) => p?.url);
   }, [venue]);
   const venueCourts = (venue as any)?.courts ?? [];
-  const minCourtPrice = useMemo(() => {
-    const prices = venueCourts.map((c: any) => Number(c.basePrice)).filter((n: number) => !Number.isNaN(n));
-    return prices.length ? Math.min(...prices) : null;
+  // Court prices are per slot (30 min at RallyHive), so a raw "₹150 onwards"
+  // reads as hourly. Show the hourly range instead — same as Home and Book.
+  const hourlyPriceLabel = useMemo(() => {
+    const prices: number[] = [];
+    for (const c of venueCourts) {
+      const perHour = 60 / (Number(c.slotDurationMin) || 60);
+      for (const p of [c.basePrice, c.peakPrice]) {
+        const n = Number(p);
+        if (p != null && !Number.isNaN(n)) prices.push(n * perHour);
+      }
+    }
+    if (!prices.length) return null;
+    const min = Math.round(Math.min(...prices));
+    const max = Math.round(Math.max(...prices));
+    return min === max ? `₹${min}/hr` : `₹${min}–₹${max}/hr`;
   }, [venueCourts]);
   const amenities: string[] = (venue as any)?.amenities ?? [];
   const description: string | null = (venue as any)?.description ?? null;
@@ -285,6 +283,34 @@ export default function VenueDetailScreen() {
     return { courtId, startTime };
   });
   const total = cells.reduce((s, c) => s + priceAt(c.courtId, c.startTime), 0);
+
+  // Quote wallet credit when the confirm sheet opens. Re-quoted rather than
+  // cached, because the balance can change between sittings — and the quote
+  // also releases credit stuck in an abandoned checkout.
+  useEffect(() => {
+    if (!sheetOpen || !isAuthed || total <= 0) {
+      setWallet(null);
+      setUseWallet(false);
+      return;
+    }
+    let live = true;
+    walletApi
+      .quote(venueId, total)
+      .then((res: any) => {
+        if (!live) return;
+        const q: WalletQuote | null = res?.data?.data ?? null;
+        setWallet(q);
+        setUseWallet((q?.redeemable ?? 0) > 0);
+      })
+      .catch(() => live && setWallet(null));
+    return () => {
+      live = false;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheetOpen, isAuthed, total, venueId]);
+
+  const redeeming = useWallet ? (wallet?.redeemable ?? 0) : 0;
+  const payNow = Math.max(0, total - redeeming);
   const distinctCourtIds = [...new Set(cells.map((c) => c.courtId))];
   const summaryCourts =
     distinctCourtIds.length === courts.length && courts.length > 1
@@ -409,6 +435,8 @@ export default function VenueDetailScreen() {
         date,
         cells,
         channel,
+        // Wallet credit only applies where we collect the money.
+        ...(channel === 'online' && redeeming > 0 ? { walletRedeem: redeeming } : {}),
         ...(isAuthed ? {} : { guestName: guestName.trim(), guestPhone: guestPhone.trim() }),
       });
       const result = res.data;
@@ -568,7 +596,7 @@ export default function VenueDetailScreen() {
               {venue.name}
             </YUiText>
             <YUiText size={13} weight={700} color={YColors.ink2} style={{ marginTop: 6 }}>
-              {minCourtPrice != null ? `₹${minCourtPrice} onwards` : 'Pricing on request'}
+              {hourlyPriceLabel ?? 'Pricing on request'}
               {'  ·  '}
               {to12h(venue.openTime)}–{to12h(venue.closeTime)}
             </YUiText>
@@ -615,16 +643,16 @@ export default function VenueDetailScreen() {
           </View>
         ) : null}
 
-        {/* Amenities */}
+        {/* Facilities */}
         {amenities.length > 0 ? (
           <View style={styles.infoCard}>
             <YUiText size={13} weight={900} color={YColors.ink} style={{ letterSpacing: 0.4, textTransform: 'uppercase' }}>
-              Amenities
+              Facilities
             </YUiText>
             <View style={styles.amenityGrid}>
               {amenities.map((a) => (
                 <View key={a} style={styles.amenityItem}>
-                  <AmenityIcon />
+                  <AmenityIcon name={a} />
                   <YUiText size={12} weight={600} color={YColors.ink2} style={{ marginLeft: 8, flexShrink: 1 }}>
                     {amenityLabel(a)}
                   </YUiText>
@@ -865,6 +893,40 @@ export default function VenueDetailScreen() {
             </View>
           ) : null}
 
+          {wallet && wallet.accepted && wallet.balance > 0 ? (
+            <Pressable
+              onPress={() => setUseWallet((v) => !v)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: useWallet }}
+              style={[styles.walletRow, useWallet && styles.walletRowOn]}
+            >
+              <View style={[styles.walletCheck, useWallet && styles.walletCheckOn]}>
+                {useWallet ? (
+                  <Svg width={13} height={13} viewBox="0 0 24 24">
+                    <Path d="M20 6L9 17l-5-5" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                  </Svg>
+                ) : null}
+              </View>
+              <View style={{ flex: 1 }}>
+                <YUiText size={13} weight={800} color={YColors.ink}>
+                  Use ₹{wallet.redeemable} from wallet
+                </YUiText>
+                <YUiText size={11} color={YColors.ink3} style={{ marginTop: 2 }}>
+                  {wallet.redeemable < wallet.balance
+                    ? `Balance ₹${wallet.balance} · this court allows ₹${wallet.venueCap} per booking`
+                    : `Balance ₹${wallet.balance}`}
+                </YUiText>
+              </View>
+            </Pressable>
+          ) : null}
+
+          {redeeming > 0 ? (
+            <View style={styles.walletTotals}>
+              <YUiText size={12} color={YColors.ink2}>Wallet credit</YUiText>
+              <YUiText size={12} weight={800} color={YColors.ink}>−₹{redeeming}</YUiText>
+            </View>
+          ) : null}
+
           {modalError ? (
             <YUiText size={12} color={YColors.live} style={{ marginTop: 12 }}>
               {modalError}
@@ -876,10 +938,15 @@ export default function VenueDetailScreen() {
               <YButton variant="primary" size="md" disabled={submitting} onPress={() => submit('venue')}>
                 {submitting ? 'BOOKING…' : 'PAY AT VENUE'}
               </YButton>
+              {redeeming > 0 ? (
+                <YUiText size={10} color={YColors.ink3} style={{ marginTop: 6, textAlign: 'center' }}>
+                  Wallet credit needs online payment
+                </YUiText>
+              ) : null}
             </View>
             <View style={{ flex: 1 }}>
               <YButton variant="primary" size="md" disabled={submitting} onPress={() => submit('online')}>
-                PAY ONLINE
+                {payNow === 0 ? 'BOOK WITH CREDIT' : `PAY ₹${payNow}`}
               </YButton>
             </View>
           </View>
@@ -927,6 +994,21 @@ const styles = StyleSheet.create({
     backgroundColor: YColors.bg,
     borderWidth: 1,
     borderColor: YColors.line2,
+  },
+  walletRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 11, marginTop: 16,
+    paddingVertical: 12, paddingHorizontal: 14,
+    borderRadius: 12, borderWidth: 1.5, borderColor: YColors.line2, backgroundColor: YColors.bg,
+  },
+  walletRowOn: { borderColor: YColors.accent, backgroundColor: 'rgba(24,88,214,0.06)' },
+  walletCheck: {
+    width: 21, height: 21, borderRadius: 6, borderWidth: 1.5, borderColor: YColors.line2,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: YColors.bg2,
+  },
+  walletCheckOn: { backgroundColor: YColors.accent, borderColor: YColors.accent },
+  walletTotals: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: YColors.line,
   },
   amenityGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12 },
   amenityItem: { width: '50%', flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingRight: 8 },
