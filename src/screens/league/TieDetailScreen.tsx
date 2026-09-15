@@ -2158,15 +2158,31 @@ const TieDetailScreen: React.FC = () => {
                 // SPPL Season 1 rule: each player plays at most 1 match per
                 // tie. Build a set of every playerId already picked in any
                 // OTHER slot so the chips can grey them out.
-                // Labs League lets ONE player double up per tie (server-validated), so
-                // its chips are never greyed for being used in another rubber.
+                // Labs League (rulebook §3): 7 players fill 8 seats, so exactly ONE
+                // player may appear in two rubbers. Grey a player out once they are
+                // already in two other rubbers, or in one other rubber while somebody
+                // else is already doubled up. Other formats: one rubber per player.
                 const pickedElsewhere = new Set<string>();
-                Object.entries(lineupSlots).forEach(([slotKey, sel]) => {
-                  if (seasonFormat === 'labs_5rubber') return;
-                  if (Number(slotKey) === slot.slotNumber) return;
-                  if (sel.player1Id) pickedElsewhere.add(sel.player1Id);
-                  if (sel.player2Id) pickedElsewhere.add(sel.player2Id);
-                });
+                if (seasonFormat === 'labs_5rubber') {
+                  const counts: Record<string, number> = {};
+                  Object.entries(lineupSlots).forEach(([slotKey, sel]) => {
+                    if (Number(slotKey) === slot.slotNumber) return;
+                    for (const pid of [sel.player1Id, sel.player2Id]) {
+                      if (pid) counts[pid] = (counts[pid] || 0) + 1;
+                    }
+                  });
+                  const someoneDoubled = Object.keys(counts).find((pid) => counts[pid] >= 2);
+                  for (const pid of Object.keys(counts)) {
+                    if (counts[pid] >= 2) pickedElsewhere.add(pid);
+                    else if (someoneDoubled && someoneDoubled !== pid) pickedElsewhere.add(pid);
+                  }
+                } else {
+                  Object.entries(lineupSlots).forEach(([slotKey, sel]) => {
+                    if (Number(slotKey) === slot.slotNumber) return;
+                    if (sel.player1Id) pickedElsewhere.add(sel.player1Id);
+                    if (sel.player2Id) pickedElsewhere.add(sel.player2Id);
+                  });
+                }
 
                 return (
                   <View
