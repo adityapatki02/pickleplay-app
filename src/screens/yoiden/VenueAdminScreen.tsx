@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Pressable, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Svg, { Path } from 'react-native-svg';
@@ -20,6 +20,10 @@ const Chevron = ({ open }: { open: boolean }) => (
 
 export default function VenueAdminScreen({ route }: Props) {
   const nav = useNavigation();
+  const insets = useSafeAreaInsets();
+  // YTabBar floats over the screen (72px row + bottom safe area), so the page
+  // must scroll far enough to lift the booking grid's last slot above it.
+  const tabBarClearance = 72 + Math.max(insets.bottom, 12) + 16;
 
   const [venues, setVenues] = useState<Venue[]>([]);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
@@ -43,7 +47,7 @@ export default function VenueAdminScreen({ route }: Props) {
 
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: tabBarClearance }}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerTop}>

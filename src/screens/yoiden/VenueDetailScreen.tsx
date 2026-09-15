@@ -207,9 +207,21 @@ export default function VenueDetailScreen() {
     return (raw as any[]).map((p) => (typeof p === 'string' ? { url: p } : p)).filter((p) => p?.url);
   }, [venue]);
   const venueCourts = (venue as any)?.courts ?? [];
-  const minCourtPrice = useMemo(() => {
-    const prices = venueCourts.map((c: any) => Number(c.basePrice)).filter((n: number) => !Number.isNaN(n));
-    return prices.length ? Math.min(...prices) : null;
+  // Court prices are per slot (30 min at RallyHive), so a raw "₹150 onwards"
+  // reads as hourly. Show the hourly range instead — same as Home and Book.
+  const hourlyPriceLabel = useMemo(() => {
+    const prices: number[] = [];
+    for (const c of venueCourts) {
+      const perHour = 60 / (Number(c.slotDurationMin) || 60);
+      for (const p of [c.basePrice, c.peakPrice]) {
+        const n = Number(p);
+        if (p != null && !Number.isNaN(n)) prices.push(n * perHour);
+      }
+    }
+    if (!prices.length) return null;
+    const min = Math.round(Math.min(...prices));
+    const max = Math.round(Math.max(...prices));
+    return min === max ? `₹${min}/hr` : `₹${min}–₹${max}/hr`;
   }, [venueCourts]);
   const amenities: string[] = (venue as any)?.amenities ?? [];
   const description: string | null = (venue as any)?.description ?? null;
@@ -568,7 +580,7 @@ export default function VenueDetailScreen() {
               {venue.name}
             </YUiText>
             <YUiText size={13} weight={700} color={YColors.ink2} style={{ marginTop: 6 }}>
-              {minCourtPrice != null ? `₹${minCourtPrice} onwards` : 'Pricing on request'}
+              {hourlyPriceLabel ?? 'Pricing on request'}
               {'  ·  '}
               {to12h(venue.openTime)}–{to12h(venue.closeTime)}
             </YUiText>

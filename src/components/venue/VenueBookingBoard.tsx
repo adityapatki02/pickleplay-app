@@ -120,7 +120,6 @@ export default function VenueBookingBoard({ venue, showCashflow = true, onOpenDa
   const [addPaid, setAddPaid] = useState(false);
   const [addError, setAddError] = useState('');
   const [payError, setPayError] = useState('');
-  const [cancelError, setCancelError] = useState('');
   const { show: showToast, node: toastNode } = useToast();
 
   const sports = venue.sports ?? [];
@@ -248,15 +247,12 @@ export default function VenueBookingBoard({ venue, showCashflow = true, onOpenDa
 
   const handleCancel = (bookingId: string) => {
     setCancelReason('');
-    setCancelError('');
     setCancelModal({ bookingId });
   };
 
   const confirmCancel = async () => {
     if (!cancelModal) return;
-    if (!cancelReason.trim()) { setCancelError('Please add a reason for cancellation.'); return; }
     const { bookingId } = cancelModal;
-    setCancelError('');
     setCancelModal(null);
     setActionLoading(bookingId);
     try {
@@ -512,22 +508,18 @@ export default function VenueBookingBoard({ venue, showCashflow = true, onOpenDa
           <View style={styles.modalBox}>
             <YUiText size={16} weight={800} color={YColors.ink} style={{ marginBottom: 6 }}>Cancel Booking</YUiText>
             <YUiText size={13} color={YColors.ink3} style={{ marginBottom: 16 }}>
-              Please provide a reason. This will be logged against the booking.
+              Add a reason if you like — it's saved with the booking.
             </YUiText>
             <TextInput
               style={styles.reasonInput}
-              placeholder="e.g. Court maintenance, Guest request..."
+              placeholder="Reason (optional) — e.g. court maintenance, guest request"
               placeholderTextColor={YColors.ink3}
               value={cancelReason}
-              onChangeText={t => { setCancelReason(t); if (cancelError) setCancelError(''); }}
+              onChangeText={setCancelReason}
               multiline
               maxLength={200}
-              autoFocus
             />
-            {cancelError ? (
-              <View style={styles.addErrorBox}><YUiText size={12.5} weight={600} color="#b91c1c">{cancelError}</YUiText></View>
-            ) : null}
-            <View style={[styles.modalActions, { marginTop: cancelError ? 12 : undefined }]}>
+            <View style={styles.modalActions}>
               <Pressable style={styles.modalBtnSecondary} onPress={() => setCancelModal(null)}>
                 <YUiText size={14} weight={700} color={YColors.ink2}>Keep Booking</YUiText>
               </Pressable>
