@@ -100,6 +100,9 @@ export const useAuthStore = create<AuthState>()((set) => ({
         isAuthenticated: !!parsed.token,
         isLoading: false,
       });
+      // Restored session: tie this device's analytics to the signed-in user
+      // (login() only runs on a fresh sign-in).
+      if (parsed.token && parsed.user) analytics.identify(parsed.user as any);
       return;
     }
   } catch {
