@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
-import { analytics } from './index';
+import { analytics, SCREEN_EVENTS } from './index';
 
 type Props = React.ComponentProps<typeof NavigationContainer>;
 
@@ -17,9 +17,13 @@ export function TrackedNavigationContainer({ children, onReady, onStateChange, .
     if (!route || route.name === lastRoute.current) return;
     lastRoute.current = route.name;
     const p = (route.params || {}) as Record<string, any>;
-    analytics.screen(route.name, {
-      leagueId: p.leagueId, seasonId: p.seasonId, tieId: p.tieId, tournamentId: p.tournamentId, venueId: p.venueId,
-    });
+    const props = {
+      leagueId: p.leagueId, seasonId: p.seasonId, tieId: p.tieId, tournamentId: p.tournamentId,
+      venueId: p.venueId, playerId: p.playerId || p.userId, franchiseId: p.franchiseId, screen: route.name,
+    };
+    analytics.screen(route.name, props);
+    const ev = SCREEN_EVENTS[route.name];
+    if (ev) analytics.capture(ev, props);
   };
   return (
     <NavigationContainer

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { analytics } from '../../analytics';
 import {
   View, StyleSheet, Pressable, ScrollView, ActivityIndicator, TextInput,
   KeyboardAvoidingView, Platform, Modal, Share,
@@ -168,6 +169,7 @@ export default function LogMatchScreen() {
 
   const invite = (s: Slot) => {
     const who = s.name.trim() || 'there';
+    analytics.capture('link_shared', { kind: 'invite', channel: 'share_sheet' });
     Share.share({
       message: `Hi ${who}! I logged our match on Yoiden — join to see the result and build your own match record: ${INVITE_URL}`,
       url: INVITE_URL,

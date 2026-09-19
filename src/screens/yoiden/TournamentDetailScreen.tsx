@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { analytics } from '../../analytics';
 import {
   View,
   ScrollView,
@@ -138,6 +139,7 @@ export default function TournamentDetailScreen() {
   };
   const shareLink = () => {
     if (!t) return;
+    analytics.capture('link_shared', { kind: 'tournament', channel: 'share_sheet', tournamentId: t.id });
     Share.share({ message: `${t.name} — register here: ${shareUrl}`, url: shareUrl }).catch(() => {});
   };
 
@@ -149,6 +151,7 @@ export default function TournamentDetailScreen() {
     if (!shareUrl) return;
     try {
       await Clipboard.setStringAsync(shareUrl);
+      analytics.capture('link_shared', { kind: 'tournament', channel: 'copy', tournamentId: t?.id });
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {

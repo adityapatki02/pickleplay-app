@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { analytics } from '../../analytics';
 import {
   View,
   Text,
@@ -871,6 +872,7 @@ export default function CreateTournamentScreen() {
       if (!asDraft && shareUrl) {
         try {
           await Clipboard.setStringAsync(shareUrl);
+          analytics.capture('link_shared', { kind: 'tournament', channel: 'copy', context: 'create' });
           linkMsg = `\n\nLink copied to your clipboard:\n${shareUrl}`;
         } catch {
           linkMsg = `\n\nShare link:\n${shareUrl}`;

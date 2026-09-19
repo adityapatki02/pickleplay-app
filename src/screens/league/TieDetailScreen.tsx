@@ -1,4 +1,8 @@
 import { analytics } from '../../analytics';
+
+// Last tie we reported a view for — the screen re-polls every few seconds,
+// so the view event must fire once per tie, not once per poll.
+let lastViewedTieId: string | null = null;
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -360,6 +364,12 @@ const TieDetailScreen: React.FC = () => {
         getTieSheets(tieId).catch(() => [] as TieSheet[]),
       ]);
       setTie(tieData);
+      if (tieData && lastViewedTieId !== tieId) {
+        lastViewedTieId = tieId;
+        analytics.capture(tieData.status === 'completed' ? 'result_viewed' : 'match_viewed', {
+          tieId, seasonId: tieData.seasonId, status: tieData.status, round: tieData.round,
+        });
+      }
       setTieSheets(Array.isArray(sheetsData) ? sheetsData : []);
       store.setCurrentTie(tieData);
 

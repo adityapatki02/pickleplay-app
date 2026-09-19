@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { analytics } from '../../analytics';
 import * as Clipboard from 'expo-clipboard';
 import {
   View,
@@ -3590,6 +3591,7 @@ const LeagueDashboardScreen: React.FC = () => {
                         style={{ marginTop: 6, backgroundColor: BLUE, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, alignSelf: 'flex-start' }}
                         onPress={async () => {
                           await Clipboard.setStringAsync(fullUrl);
+                          analytics.capture('link_shared', { kind: 'captain_portal', channel: 'copy', leagueId });
                           xAlert('Copied', `Link for ${link.name} copied to clipboard`);
                         }}
                       >
@@ -4753,6 +4755,7 @@ const LeagueDashboardScreen: React.FC = () => {
                         <TouchableOpacity
                           onPress={async () => {
                             await Clipboard.setStringAsync(url);
+                            analytics.capture('link_shared', { kind: 'league_link', channel: 'copy', label, leagueId });
                             xAlert('Copied', copyMsg);
                           }}
                           style={{ paddingHorizontal: 14, justifyContent: 'center', backgroundColor: NAVY, borderRadius: 8 }}
