@@ -1902,7 +1902,10 @@ const LeagueDashboardScreen: React.FC = () => {
           const on = fixtureTab === id;
           return (
             <TouchableOpacity
-              onPress={() => setFixtureTab(id)}
+              onPress={() => {
+                setFixtureTab(id);
+                analytics.capture(id === 'completed' ? 'results_viewed' : 'fixtures_viewed', { leagueId, seasonId: resolvedSeasonId, section: id });
+              }}
               activeOpacity={0.85}
               style={{
                 flex: 1,
@@ -3449,6 +3452,12 @@ const LeagueDashboardScreen: React.FC = () => {
                     navigation.navigate('LeagueStats', { leagueId, seasonId: resolvedSeasonId });
                   } else {
                     setActiveTab(tab);
+                    // Kiosk spectators switch tabs inside this one screen, so the
+                    // business events are fired here rather than by the navigator.
+                    analytics.capture(
+                      tab === 'FIXTURES' ? 'fixtures_viewed' : tab === 'STANDINGS' ? 'standings_viewed' : 'event_page_viewed',
+                      { leagueId, seasonId: resolvedSeasonId, section: tab.toLowerCase() },
+                    );
                   }
                 }}
                 activeOpacity={0.8}
