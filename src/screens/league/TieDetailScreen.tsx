@@ -1,3 +1,4 @@
+import { analytics } from '../../analytics';
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -898,6 +899,7 @@ const TieDetailScreen: React.FC = () => {
     setScoreSubmitting(true);
     try {
       await adminFinalizeMatch(tieId, tm.matchId, scoreVals.a, scoreVals.b, winnerId);
+      analytics.capture('score_saved', { tieId, matchId: tm.matchId, a: scoreVals.a, b: scoreVals.b, via: 'app' });
       setWinnerPickerVisible(false);
       setScoreModal({ visible: false, tieMatch: null });
       await fetchData();
@@ -922,6 +924,7 @@ const TieDetailScreen: React.FC = () => {
         setScoreSubmitting(true);
         try {
           await adminDeclareWinner(tieId, tm.matchId, winnerId, scoreVals.a, scoreVals.b);
+          analytics.capture('score_saved', { tieId, matchId: tm.matchId, a: scoreVals.a, b: scoreVals.b, via: 'app', declared: true });
           setScoreModal({ visible: false, tieMatch: null });
           await fetchData();
         } catch (err: any) {

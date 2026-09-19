@@ -4,6 +4,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { analytics } from './src/analytics';
+analytics.init();
 import { RazorpayCheckoutHost } from './src/components/RazorpayCheckoutHost';
 import { DuprSsoHost } from './src/components/DuprSsoHost';
 import { YoidenFontMap } from './src/config/yoiden-fonts';

@@ -40,6 +40,7 @@ import DownloadButton from '../../components/DownloadButton';
 import { downloadCSV } from '../../utils/csvExport';
 
 import { YColors, YTopBar } from '../../components/yoiden';
+import { analytics } from '../../analytics';
 
 // ─── Design tokens (matches Home CTA card: navy + orange + light blue) ───
 const NAVY: string = YColors.ink;
@@ -376,6 +377,7 @@ export default function FantasyScreen() {
       const saved = await upsertFantasyEntry(seasonId, { form1: form1Draft });
       setEntry(saved);
       setEditingForm1(false); // flip back to read-only view after save
+      analytics.capture('fantasy_predictions_saved', { seasonId });
       if (config?.form1Kind === 'single_pool') {
         // Labs League: one straight flow — predictions, then Dream Team.
         setTab('DREAM');
@@ -421,6 +423,7 @@ export default function FantasyScreen() {
       const saved = await upsertFantasyEntry(seasonId, { form2: form2Draft });
       setEntry(saved);
       setEditingForm2(false);
+      analytics.capture('fantasy_dream_team_saved', { seasonId });
       if (config?.form1Kind === 'single_pool') {
         setTab('LEADER');
         xAlert('Dream Team saved 🏆', 'You are in. Points land as rubbers finish on match day — you can edit until the lock.');

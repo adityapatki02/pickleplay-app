@@ -1,3 +1,4 @@
+import { analytics } from '../analytics';
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from '../types';
@@ -60,21 +61,25 @@ export const useAuthStore = create<AuthState>()((set) => ({
   setLoading: (isLoading) => set({ isLoading }),
   setOnboarded: (isOnboarded) => set({ isOnboarded }),
 
-  login: (user, token) =>
-    set({
+  login: (user, token) => {
+    analytics.identify(user as any);
+    return set({
       user,
       token,
       isAuthenticated: true,
       isLoading: false,
-    }),
+    });
+  },
 
-  logout: () =>
-    set({
+  logout: () => {
+    analytics.reset();
+    return set({
       user: null,
       token: null,
       isAuthenticated: false,
       isOnboarded: false,
-    }),
+    });
+  },
 
   updateUser: (updates) =>
     set((state) => ({

@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, View, StyleSheet, Platform } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { TrackedNavigationContainer as NavigationContainer } from '../analytics/TrackedNavigationContainer';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from './types';
 import { AuthNavigator } from './AuthNavigator';
