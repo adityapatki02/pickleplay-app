@@ -266,6 +266,29 @@ const LeagueDashboardScreen: React.FC = () => {
     return () => { alive = false; clearInterval(id); };
   }, [resolvedSeasonId, store.currentLeague?.id]);
 
+  // Live tiles for every other league (Labs, SPPL, MCA …): poll the public
+  // league feed, which already carries each tie's rubbers with player pairs,
+  // scores and status. One tile per in-progress tie.
+  const [publicLive, setPublicLive] = useState<any[]>([]);
+  React.useEffect(() => {
+    const slug = (league as any)?.slug || (store.currentLeague as any)?.slug;
+    if (!slug || store.currentLeague?.id === SBPL_LEAGUE_ID) return;
+    let alive = true;
+    const base = API_BASE_URL.replace(/\/$/, '');
+    const load = async () => {
+      try {
+        const res = await fetch(`${base}/l/${slug}/data`, { cache: 'no-store' });
+        const j = await res.json();
+        const d = j?.data || j;
+        const live = (d?.ties || []).filter((t: any) => t.status === 'in_progress');
+        if (alive) setPublicLive(live);
+      } catch { /* keep last tiles on a transient error */ }
+    };
+    load();
+    const id = setInterval(load, 8000);
+    return () => { alive = false; clearInterval(id); };
+  }, [(league as any)?.slug, store.currentLeague?.id, store.currentLeague?.slug]);
+
   // Captain's own portal link — a logged-in captain (matched by phone) gets a
   // blue "Open Captain's Portal" tile that opens their tie-sheet portal.
   const [captainTeams, setCaptainTeams] = useState<{ franchiseName: string; url: string }[]>([]);
@@ -1432,10 +1455,103 @@ const LeagueDashboardScreen: React.FC = () => {
     );
   };
 
-  // ── Live / Next Up tie highlight ──
+  // Live tiles from the public feed — one per in-progress tie: court, teams,
+  // rubbers won, the rubber being played (or up next) with player names, and
+  // the last finished rubber. Tap opens the tie.
+  const renderPublicLive = () => {
+    if (store.currentLeague?.id === SBPL_LEAGUE_ID || publicLive.length === 0) return null;
+    const pair = (p: any) => (Array.isArray(p) ? p.filter(Boolean).join(' & ') : (p || ''));
+    return (
+      <View style={{ paddingHorizontal: 20, marginTop: 18 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' }} />
+          <YEyebrow size={10} color={YColors.ink3}>LIVE NOW</YEyebrow>
+        </View>
+        <View style={{ gap: 12 }}>
+          {publicLive.map((t: any) => {
+            const games: any[] = t.games || [];
+            const playing = games.find((g) => g.status === 'in_progress');
+            const next = games.find((g) => g.status === 'scheduled');
+            const done = games.filter((g) => g.status === 'completed');
+            const last = done.length ? done[done.length - 1] : null;
+            const cur = playing || next;
+            const hc = t.home?.color || '#0A2A6B';
+            const ac = t.away?.color || '#0FB5A6';
+            return (
+              <TouchableOpacity
+                key={t.id}
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate('TieDetail', { tieId: t.id, leagueId, seasonId: resolvedSeasonId })}
+                style={{
+                  backgroundColor: '#FFFFFF', borderRadius: YRadius.xl, borderWidth: 1, borderColor: YColors.line2, padding: 14,
+                  ...(Platform.OS === 'web'
+                    ? { boxShadow: '0 2px 10px rgba(10,10,11,0.05)' as any }
+                    : { shadowColor: '#0A0A0B', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }),
+                }}
+              >
+                {/* Court + LIVE, and rubbers won so far */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {t.court ? <YBadge color="#0369A1" bg="#E0F2FE">{`COURT ${t.court}`}</YBadge> : null}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#EF4444' }} />
+                      <YEyebrow size={9} color="#EF4444">LIVE</YEyebrow>
+                    </View>
+                  </View>
+                  <YEyebrow size={9} color={YColors.ink3}>{`${t.gamesDecided ?? done.length}/${t.gamesTotal ?? games.length} RUBBERS`}</YEyebrow>
+                </View>
+
+                {/* Teams + rubber score */}
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ width: 4, height: 28, borderRadius: 2, backgroundColor: hc }} />
+                    <YUiText size={14} weight={800} color={YColors.ink} style={{ flex: 1 }}>{t.home?.name || 'TBD'}</YUiText>
+                  </View>
+                  <YDisplay size={26} color={YColors.ink} style={{ marginHorizontal: 12, lineHeight: 32 }}>{`${t.homeWon ?? 0}–${t.awayWon ?? 0}`}</YDisplay>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                    <YUiText size={14} weight={800} color={YColors.ink} style={{ flex: 1, textAlign: 'right' }}>{t.away?.name || 'TBD'}</YUiText>
+                    <View style={{ width: 4, height: 28, borderRadius: 2, backgroundColor: ac }} />
+                  </View>
+                </View>
+
+                {/* The rubber on court now (or up next) */}
+                {cur ? (
+                  <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: YColors.line2 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <YBadge color={playing ? '#fff' : '#9A3412'} bg={playing ? '#EF4444' : '#FFEDD5'}>{playing ? 'ON COURT' : 'UP NEXT'}</YBadge>
+                      <YEyebrow size={9} color={YColors.ink3}>{String(cur.category || `RUBBER ${cur.slot}`).toUpperCase()}</YEyebrow>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <YUiText size={13} weight={700} color={YColors.ink} style={{ flex: 1, lineHeight: 18 }}>{pair(cur.homePair) || t.home?.name}</YUiText>
+                      {playing && cur.homeScore != null ? (
+                        <YDisplay size={20} color={YColors.accent} style={{ marginHorizontal: 12, lineHeight: 26 }}>{`${cur.homeScore}–${cur.awayScore}`}</YDisplay>
+                      ) : (
+                        <YEyebrow size={10} color={YColors.ink3} style={{ marginHorizontal: 12 }}>VS</YEyebrow>
+                      )}
+                      <YUiText size={13} weight={700} color={YColors.ink} style={{ flex: 1, textAlign: 'right', lineHeight: 18 }}>{pair(cur.awayPair) || t.away?.name}</YUiText>
+                    </View>
+                  </View>
+                ) : null}
+
+                {/* Last finished rubber */}
+                {last ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+                    <YEyebrow size={9} color={YColors.ink3}>{`LAST · ${String(last.category || `RUBBER ${last.slot}`).toUpperCase()}`}</YEyebrow>
+                    <YUiText size={12} weight={800} color={YColors.ink2}>{`${pair(last.homePair)} ${last.homeScore}–${last.awayScore} ${pair(last.awayPair)}`}</YUiText>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
+
+  // ── Live / Next Up tie highlight — every in-progress tie (two courts run in parallel) ──
   const renderLiveTie = () => {
-    const liveTie = ties.find((t) => t.status === 'in_progress');
-    if (!liveTie) return null;
+    const liveTies = ties.filter((t) => t.status === 'in_progress');
+    if (liveTies.length === 0) return null;
     return (
       <View style={{ marginBottom: 16 }}>
         <View style={styles.sectionHeaderRow}>
@@ -1444,7 +1560,7 @@ const LeagueDashboardScreen: React.FC = () => {
             <Text style={styles.sectionTitle}>Live Now</Text>
           </View>
         </View>
-        {renderTieCard(liveTie)}
+        {liveTies.map((t) => <View key={t.id}>{renderTieCard(t)}</View>)}
       </View>
     );
   };
@@ -1774,6 +1890,7 @@ const LeagueDashboardScreen: React.FC = () => {
 
       {/* Quick stats — compact row */}
       {renderLiveMatches()}
+      {renderPublicLive()}
       {renderWatchLive()}
       {renderQuickStats()}
 
