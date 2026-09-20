@@ -1535,9 +1535,16 @@ const LeagueDashboardScreen: React.FC = () => {
 
                 {/* Last finished rubber */}
                 {last ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
-                    <YEyebrow size={9} color={YColors.ink3}>{`LAST · ${String(last.category || `RUBBER ${last.slot}`).toUpperCase()}`}</YEyebrow>
-                    <YUiText size={12} weight={800} color={YColors.ink2}>{`${pair(last.homePair)} ${last.homeScore}–${last.awayScore} ${pair(last.awayPair)}`}</YUiText>
+                  <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: YColors.line2 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <YBadge color="#065F46" bg="#D1FAE5">LAST</YBadge>
+                      <YEyebrow size={9} color={YColors.ink3}>{String(last.category || `RUBBER ${last.slot}`).toUpperCase()}</YEyebrow>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <YUiText size={12} weight={700} color={last.homeScore > last.awayScore ? YColors.ink : YColors.ink3} style={{ flex: 1, lineHeight: 17 }}>{pair(last.homePair) || t.home?.name}</YUiText>
+                      <YDisplay size={18} color={YColors.ink2} style={{ marginHorizontal: 12, lineHeight: 24 }}>{`${last.homeScore}–${last.awayScore}`}</YDisplay>
+                      <YUiText size={12} weight={700} color={last.awayScore > last.homeScore ? YColors.ink : YColors.ink3} style={{ flex: 1, textAlign: 'right', lineHeight: 17 }}>{pair(last.awayPair) || t.away?.name}</YUiText>
+                    </View>
                   </View>
                 ) : null}
               </TouchableOpacity>
