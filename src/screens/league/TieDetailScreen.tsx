@@ -253,7 +253,7 @@ const TieDetailScreen: React.FC = () => {
       ? (<>{playerMap[pid] || 'Player'}{isSub ? <Text style={SUB_ORANGE}> (sub)</Text> : null}</>)
       : (<Text style={SUB_ORANGE}>Substitute</Text>);
   const pairNameJSX = (p1?: string | null, p1s?: any, p2?: string | null, p2s?: any, singles = false) =>
-    singles ? (<>{posNameJSX(p1, p1s)}</>) : (<>{posNameJSX(p1, p1s)} & {posNameJSX(p2, p2s)}</>);
+    singles ? (<>{posNameJSX(p1, p1s)}</>) : (<>{posNameJSX(p1, p1s)}{'\n'}& {posNameJSX(p2, p2s)}</>);
   const [showLineups, setShowLineups] = useState(false);
 
   // Full rosters per team for the substitute modal — { home: [...], away: [...] }
@@ -2019,7 +2019,7 @@ const TieDetailScreen: React.FC = () => {
             (no per-player lineup for it). */}
         <View style={styles.matchPlayers}>
           <View style={styles.matchPlayerSide}>
-            <Text style={styles.matchPlayerText} numberOfLines={2}>
+            <Text style={styles.matchPlayerText}>
               {isRally
                 ? homeName
                 : !canSeeLineups
@@ -2037,7 +2037,7 @@ const TieDetailScreen: React.FC = () => {
             )}
           </View>
           <View style={styles.matchPlayerSide}>
-            <Text style={[styles.matchPlayerText, { textAlign: 'right' }]} numberOfLines={2}>
+            <Text style={[styles.matchPlayerText, { textAlign: 'right' }]}>
               {isRally
                 ? awayName
                 : !canSeeLineups
@@ -3490,7 +3490,7 @@ const styles = StyleSheet.create({
 
   matchPlayers: { flexDirection: 'row', alignItems: 'center' },
   matchPlayerSide: { flex: 1 },
-  matchPlayerText: { fontSize: 13, fontWeight: '600', color: TEXT_COLOR },
+  matchPlayerText: { fontSize: 13, fontWeight: '600', color: TEXT_COLOR, lineHeight: 18 },
   matchScoreCenter: {
     minWidth: 60,
     alignItems: 'center',
