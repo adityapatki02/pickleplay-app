@@ -27,7 +27,11 @@
       "android": {
         "buildType": "app-bundle"
       },
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_POSTHOG_KEY": "phc_yq8iyqPaEAGdPVs6rTUypzQUVrq4tsStJVvN6Bk9DvFW",
+        "EXPO_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
+      }
     },
     "apk": {
       "distribution": "internal",
