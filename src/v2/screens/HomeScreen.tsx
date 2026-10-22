@@ -1,11 +1,11 @@
-// Home: search at the top, then the events you follow, then what's live,
-// registrations that are open, what's coming up and recent results. Rows
-// scroll sideways, the same tiles as the yoiden.com strip.
+// Home: search at the top, then the events you follow and what's live as
+// sideways cards, then registrations open, coming up, recent events and recent
+// auctions as short lists (five rows each, "See all" opens the Events tab).
 import React, { useMemo } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { AppHeader, Page } from '../components/chrome';
-import { CompactEventTile, RegistrationTile, useOpenRegistrations } from '../components/tiles';
+import { CompactEventTile, EventRow, RegistrationRow, useOpenRegistrations } from '../components/tiles';
 import { SectionLabel } from '../components/ui';
 import { ChevronRight, StarIcon } from '../components/icons';
 import { EVENTS, byDateDesc, isAuction, statusOf, type YoidenEvent } from '../data/events';
@@ -20,6 +20,25 @@ function Row({ children }: { children: React.ReactNode }) {
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 16 }}>
       {children}
     </ScrollView>
+  );
+}
+
+/** How many rows each list on Home shows before "See all". */
+const LIST_MAX = 5;
+
+/** White card holding list rows. */
+function List({ children }: { children: React.ReactNode }) {
+  return <View style={[card, { marginHorizontal: 16, overflow: 'hidden' }]}>{children}</View>;
+}
+
+function EventList({ events, status, onOpen }: { events: YoidenEvent[]; status: 'upcoming' | 'past'; onOpen: (e: YoidenEvent) => void }) {
+  const shown = events.slice(0, LIST_MAX);
+  return (
+    <List>
+      {shown.map((e, i) => (
+        <EventRow key={e.id} e={e} status={status} hideStatus last={i === shown.length - 1} onPress={() => onOpen(e)} />
+      ))}
+    </List>
   );
 }
 
@@ -97,38 +116,26 @@ export default function HomeScreen() {
         {regs.length > 0 && (
           <>
             <SectionLabel right={<SeeAll onPress={() => nav.navigate('EventsTab', { tab: 'registrations' })} />}>Registrations open</SectionLabel>
-            <Row>
-              {regs.map((o) => (
-                <RegistrationTile key={o.r.id} {...o} compact />
+            <List>
+              {regs.slice(0, LIST_MAX).map((o, i, a) => (
+                <RegistrationRow key={o.r.id} {...o} last={i === a.length - 1} />
               ))}
-            </Row>
+            </List>
           </>
         )}
 
         {soon.length > 0 && (
           <>
             <SectionLabel right={<SeeAll onPress={() => nav.navigate('EventsTab', { tab: 'upcoming' })} />}>Coming up</SectionLabel>
-            <Row>
-              {soon.map((e) => (
-                <CompactEventTile key={e.id} e={e} status="upcoming" onPress={() => open(e)} />
-              ))}
-            </Row>
+            <EventList events={soon} status="upcoming" onOpen={open} />
           </>
         )}
 
         <SectionLabel right={<SeeAll onPress={() => nav.navigate('EventsTab', { tab: 'past' })} />}>Recent events</SectionLabel>
-        <Row>
-          {recent.map((e) => (
-            <CompactEventTile key={e.id} e={e} status="past" onPress={() => open(e)} />
-          ))}
-        </Row>
+        <EventList events={recent} status="past" onOpen={open} />
 
         <SectionLabel right={<SeeAll onPress={() => nav.navigate('EventsTab', { tab: 'auctions' })} />}>Recent auctions</SectionLabel>
-        <Row>
-          {auctions.map((e) => (
-            <CompactEventTile key={e.id} e={e} status="past" onPress={() => open(e)} />
-          ))}
-        </Row>
+        <EventList events={auctions} status="past" onOpen={open} />
       </Page>
     </View>
   );

@@ -110,7 +110,20 @@ export function CompactEventTile({ e, status, onPress }: { e: YoidenEvent; statu
 }
 
 /** One line of the Events list: logo, name, sport · city · date, and the status on the right. */
-export function EventRow({ e, status, onPress, last }: { e: YoidenEvent; status: EventStatus; onPress: () => void; last?: boolean }) {
+export function EventRow({
+  e,
+  status,
+  onPress,
+  last,
+  hideStatus,
+}: {
+  e: YoidenEvent;
+  status: EventStatus;
+  onPress: () => void;
+  last?: boolean;
+  /** Under a heading that already says it ("Coming up", "Recent events"). */
+  hideStatus?: boolean;
+}) {
   const auction = e.kind === 'auction';
   const followed = useFollows((x) => x.ids.includes(e.id));
   return (
@@ -128,7 +141,7 @@ export function EventRow({ e, status, onPress, last }: { e: YoidenEvent; status:
         </Text>
       </View>
       <View style={{ alignItems: 'flex-end', gap: 4 }}>
-        <StatusLabel status={status} auction={auction} />
+        {!hideStatus && <StatusLabel status={status} auction={auction} />}
         {followed && <StarIcon size={12} color={C.bar} fill={C.hl} />}
       </View>
     </Pressable>
@@ -245,6 +258,45 @@ export function RegistrationTile({
           </Text>
         </View>
       )}
+    </Pressable>
+  );
+}
+
+/** One line of a registrations list: logo, name, what it's for, and its Open / Waitlist / Full state. Tapping opens the form. */
+export function RegistrationRow({ r, seats, closed, last }: OpenRegistration & { last?: boolean }) {
+  const states = seats?.map((x) => x.state) ?? [];
+  const overall: SeatLine['state'] | 'ended' = closed
+    ? 'ended'
+    : !states.length || states.includes('open')
+      ? 'open'
+      : states.includes('waitlist')
+        ? 'waitlist'
+        : 'closed';
+  const chip = overall === 'ended' ? { text: 'Closed', bg: C.page, fg: C.mute } : STATE[overall];
+  const url = logoUrl(r.logo);
+  return (
+    <Pressable
+      onPress={() => Linking.openURL(r.url)}
+      style={({ pressed }) => [s.row, !last && { borderBottomWidth: 1, borderBottomColor: C.line }, pressed && { backgroundColor: C.page }]}
+    >
+      <View style={[s.regLogo, { width: 44, height: 44 }, r.logoOnDark ? { backgroundColor: C.bar, borderWidth: 0 } : !url ? { backgroundColor: '#EEF0F3', borderWidth: 0 } : null]}>
+        {url ? (
+          <Image source={{ uri: url }} style={{ width: 40, height: 40 }} resizeMode="contain" />
+        ) : (
+          <Text style={{ fontFamily: F.heavy, fontSize: 13, color: C.ink }}>{r.initials}</Text>
+        )}
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={head(15.5, C.ink)} numberOfLines={2}>
+          {r.name}
+        </Text>
+        <Text style={[body(12, C.soft), { marginTop: 2 }]} numberOfLines={1}>
+          {r.sport} · {closed && r.ran ? r.ran : r.eventWhen}
+        </Text>
+      </View>
+      <View style={{ backgroundColor: chip.bg, borderRadius: 4, paddingHorizontal: 7, paddingVertical: 3 }}>
+        <Text style={label(11, chip.fg)}>{chip.text}</Text>
+      </View>
     </Pressable>
   );
 }

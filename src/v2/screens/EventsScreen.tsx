@@ -5,7 +5,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { AppHeader, Page } from '../components/chrome';
-import { EventRow, RegistrationTile, useAllRegistrations } from '../components/tiles';
+import { EventRow, RegistrationRow, useAllRegistrations } from '../components/tiles';
 import { Chip, ChipRow, Empty, SegTabs } from '../components/ui';
 import { SearchIcon } from '../components/icons';
 import { EVENTS, byDateDesc, isAuction, statusOf, type YoidenEvent } from '../data/events';
@@ -58,9 +58,6 @@ export default function EventsScreen() {
 
   const sports = useMemo(() => [...new Set(list.map((e) => e.sport))], [list]);
   const shown = sport === 'All' ? list : list.filter((e) => e.sport === sport);
-  // Two tiles a row when the window is wide (web, tablets).
-  const cols = Math.min(width, MAX_W) > 600 ? 2 : 1;
-  const tileW = cols === 2 ? (Math.min(width, MAX_W) - 32 - 12) / 2 : ('100%' as const);
 
   return (
     <View style={{ flex: 1, backgroundColor: C.page }}>
@@ -97,7 +94,11 @@ export default function EventsScreen() {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 16, marginTop: 14 }}>
           {tab === 'registrations' ? (
             regs.length ? (
-              regs.map((o) => <RegistrationTile key={o.r.id} {...o} width={tileW} />)
+              <View style={[card, { width: '100%', overflow: 'hidden' }]}>
+                {regs.map((o, i) => (
+                  <RegistrationRow key={o.r.id} {...o} last={i === regs.length - 1} />
+                ))}
+              </View>
             ) : (
               <View style={{ width: '100%' }}>
                 <Empty>No registration forms yet.</Empty>
