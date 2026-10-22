@@ -7,7 +7,9 @@ import { useNavigation } from '@react-navigation/native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { C, MAX_W, body, head, label } from '../theme';
 import { Mark, Wordmark } from './wordmark';
-import { BookmarkIcon, ChevronLeft, HomeIcon, SearchIcon, TrophyIcon, UserIcon } from './icons';
+import { useHasUnread } from '../store/notifications';
+import { useNow } from '../hooks';
+import { BellIcon, BookmarkIcon, ChevronLeft, HomeIcon, SearchIcon, TrophyIcon, UserIcon } from './icons';
 
 /** The Yoiden icon mark and wordmark, white on the navy bar (as on yoiden.com). */
 export function Logo() {
@@ -16,6 +18,18 @@ export function Logo() {
       <Mark height={26} />
       <Wordmark height={24} />
     </View>
+  );
+}
+
+/** The bell on Home's top bar, with a lime dot when something is new. */
+function Bell() {
+  const nav = useNavigation<any>();
+  const unread = useHasUnread(useNow());
+  return (
+    <Pressable onPress={() => nav.navigate('Notifications')} hitSlop={10} accessibilityLabel="Notifications" style={s.bell}>
+      <BellIcon size={21} />
+      {unread && <View style={s.bellDot} />}
+    </Pressable>
   );
 }
 
@@ -55,6 +69,7 @@ export function AppHeader({
             <View style={{ flex: 1 }} />
           )}
           {right}
+          {search && <Bell />}
         </View>
         {search && (
           <Pressable onPress={() => nav.navigate('Search')} style={s.search}>
@@ -129,6 +144,8 @@ const s = StyleSheet.create({
   inner: { width: '100%', maxWidth: MAX_W, alignSelf: 'center', paddingHorizontal: 16 },
   column: { width: '100%', maxWidth: MAX_W, alignSelf: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 34 },
+  bell: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.1)' },
+  bellDot: { position: 'absolute', top: 7, right: 8, width: 9, height: 9, borderRadius: 5, backgroundColor: C.hl, borderWidth: 1.5, borderColor: C.bar },
   back: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.1)' },
   search: { marginTop: 12, backgroundColor: C.white, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', gap: 8 },
   tabbar: { flexDirection: 'row', backgroundColor: C.white, borderTopWidth: 1, borderTopColor: C.line },

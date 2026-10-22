@@ -18,6 +18,7 @@ import EventScreen from './screens/EventScreen';
 import MatchScreen from './screens/MatchScreen';
 import PlayerScreen from './screens/PlayerScreen';
 import ManageScreen from './screens/ManageScreen';
+import NotificationsScreen from './screens/NotificationsScreen';
 
 export type V2Params = {
   Tabs: undefined;
@@ -27,6 +28,7 @@ export type V2Params = {
   Search: undefined;
   Manage: { eventId: string; leagueId: string; slug: string };
   Auth: undefined;
+  Notifications: undefined;
 };
 
 const Tab = createBottomTabNavigator();
@@ -54,6 +56,7 @@ export function V2Navigator() {
       <S name="Player" component={PlayerScreen} />
       <S name="Search" component={SearchScreen} options={{ animation: 'fade' }} />
       <S name="Manage" component={ManageScreen} />
+      <S name="Notifications" component={NotificationsScreen} />
       {/* Sign-in is only reachable while signed out; once the phone is verified the
           screen drops out of the stack and the player lands back where they were. */}
       {!isAuthenticated && <S name="Auth" component={AuthNavigator} options={{ presentation: 'modal' }} />}

@@ -57,6 +57,13 @@ view.
   (league owner / co-admin via `GET /leagues?organizerId=me`) and opens the existing
   LeagueDashboard; scorer mode opens the existing scorer screens.
 - **Follows** stored server-side. Until then, follows are kept on the device (AsyncStorage).
+- **Bell + push notifications (decided 2026-10-22):** for every followed event, **every match
+  result** is a notification ("Block Busters beat Lord Of The Strings 4–1 · CBBL · Final"),
+  delivered as a **push**. Server side: follows table (phone → event), device push tokens
+  (expo-notifications, needs a store release), and a sender that fires when a tie / football
+  match is closed. Also: event live, starting soon, registrations closing. Until then the bell
+  is built on the device from the same feeds (`src/v2/store/notifications.ts`), so the list and
+  wording are already final.
 - **Phone-keyed records** + saved profile + generic registration builder.
 
 ## Builder's calls (mine)

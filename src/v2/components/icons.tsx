@@ -117,3 +117,10 @@ export const ExternalIcon = ({ size = 14, color = '#4B5565', strokeWidth = 2.2 }
     <Path d="M7 17 17 7" />
   </Svg>
 );
+
+export const BellIcon = ({ size = 20, color = '#fff', strokeWidth = 2 }: P) => (
+  <Svg {...base(size)} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" />
+    <Path d="M3.3 15.3A1 1 0 0 0 4 17h16a1 1 0 0 0 .7-1.7C19.4 13.9 18 12.5 18 8a6 6 0 0 0-12 0c0 4.5-1.4 5.9-2.7 7.3" />
+  </Svg>
+);

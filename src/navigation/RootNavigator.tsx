@@ -143,6 +143,7 @@ export const RootNavigator: React.FC = () => {
             Match: 'events/:eventId/match/:matchId',
             Player: 'events/:eventId/player/:slug',
             Search: 'search',
+            Notifications: 'notifications',
             Manage: 'manage/:eventId/:slug',
           },
         },
