@@ -6,12 +6,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { C, MAX_W, body, head, label } from '../theme';
-import { Wordmark } from './wordmark';
+import { Mark, Wordmark } from './wordmark';
 import { BookmarkIcon, ChevronLeft, HomeIcon, SearchIcon, TrophyIcon, UserIcon } from './icons';
 
-/** The YOIDEN wordmark, white on the navy bar. */
+/** The Yoiden icon mark and wordmark, white on the navy bar (as on yoiden.com). */
 export function Logo() {
-  return <Wordmark height={24} />;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+      <Mark height={26} />
+      <Wordmark height={24} />
+    </View>
+  );
 }
 
 /**

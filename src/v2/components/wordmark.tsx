@@ -9,3 +9,11 @@ const XML = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"9 143 970 217\"
 export function Wordmark({ height = 24 }: { height?: number }) {
   return <SvgXml xml={XML} height={height} width={Math.round(height * (970 / 217))} />;
 }
+
+// The Yoiden icon mark (two strokes and a dot), from yoiden.com's brand/icon-white.svg,
+// cropped to the artwork. Shown before the wordmark, as on the website.
+const MARK = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"10 76 990 836\"> <g fill=\"none\" stroke=\"#FFFFFF\" stroke-width=\"115\" stroke-linecap=\"round\" stroke-linejoin=\"round\"> <line x1=\"718\" y1=\"138\" x2=\"72\" y2=\"645\"/> <path d=\"M 876 318 L 214 829 L 691 829\"/> </g> <circle cx=\"892\" cy=\"803\" r=\"100\" fill=\"#FFFFFF\"/> </svg>";
+
+export function Mark({ height = 24 }: { height?: number }) {
+  return <SvgXml xml={MARK} height={height} width={Math.round(height * (990 / 836))} />;
+}
