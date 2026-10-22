@@ -8,6 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, MAX_W, body, label } from '../theme';
 import { CloseIcon, SearchIcon } from '../components/icons';
+import { EVENTS, formatWhen } from '../data/events';
 
 export type SearchEntry = { k: 'Event' | 'Team' | 'Player' | 'Auction player'; n: string; s: string; h: string };
 
@@ -51,21 +52,30 @@ function rank(index: SearchEntry[], q: string): SearchEntry[] {
     .map((h) => h.e);
 }
 
+/** Events are searchable instantly from the app's own list; teams and players join once the index loads. */
+const LOCAL: SearchEntry[] = EVENTS.map((e) => ({
+  k: 'Event' as const,
+  n: e.name,
+  s: `${e.sport} · ${e.city} · ${formatWhen(e)}`,
+  h: `/events/${e.id}`,
+}));
+
 export default function SearchScreen() {
   const nav = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const [q, setQ] = useState('');
-  const [index, setIndex] = useState<SearchEntry[] | null>(null);
+  const [remote, setRemote] = useState<SearchEntry[]>([]);
+  const index = useMemo(() => [...LOCAL, ...remote.filter((x) => x.k !== 'Event')], [remote]);
 
   useEffect(() => {
     let alive = true;
-    loadIndex().then((d) => alive && setIndex(d));
+    loadIndex().then((d) => alive && setRemote(d));
     return () => {
       alive = false;
     };
   }, []);
 
-  const results = useMemo(() => (index ? rank(index, q) : []), [index, q]);
+  const results = useMemo(() => rank(index, q), [index, q]);
 
   const close = () => (nav.canGoBack() ? nav.goBack() : nav.navigate('Tabs'));
 
@@ -88,9 +98,7 @@ export default function SearchScreen() {
     if (h.startsWith('/')) Linking.openURL(`https://yoiden.com${h}`).catch(() => {});
   };
 
-  const message = !index
-    ? 'Loading…'
-    : !q.trim()
+  const message = !q.trim()
       ? 'Type a player, team or event name. Every league and auction on Yoiden is included.'
       : !results.length
         ? `Nothing matches “${q}”.`

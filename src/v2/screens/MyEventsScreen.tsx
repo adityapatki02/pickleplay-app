@@ -7,7 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import { C, body, card } from '../theme';
 import { Button } from '../components/ui';
 import { AppHeader, Page } from '../components/chrome';
-import { EventTile, RegistrationTile, useOpenRegistrations } from '../components/tiles';
+import { EventRow, RegistrationTile, useOpenRegistrations } from '../components/tiles';
 import { useNow } from '../hooks';
 import { useFollows } from '../store/follows';
 import { useMyRoles } from '../store/roles';
@@ -31,9 +31,15 @@ export default function MyEventsScreen() {
       <Page>
         <SectionLabel>★ Following</SectionLabel>
         {followed.length ? (
-          <View style={{ gap: 12 }}>
-            {followed.map((e) => (
-              <EventTile key={e.id} e={e} status={statusOf(e, now)} width="100%" onPress={() => nav.navigate('Event', { id: e.id })} />
+          <View style={[card, { overflow: 'hidden' }]}>
+            {followed.map((e, i) => (
+              <EventRow
+                key={e.id}
+                e={e}
+                status={statusOf(e, now)}
+                last={i === followed.length - 1}
+                onPress={() => nav.navigate('Event', { id: e.id })}
+              />
             ))}
           </View>
         ) : (

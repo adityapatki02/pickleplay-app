@@ -5,7 +5,7 @@ import React, { useMemo } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { AppHeader, Page } from '../components/chrome';
-import { EventTile, RegistrationTile, useOpenRegistrations } from '../components/tiles';
+import { CompactEventTile, RegistrationTile, useOpenRegistrations } from '../components/tiles';
 import { SectionLabel } from '../components/ui';
 import { ChevronRight, StarIcon } from '../components/icons';
 import { EVENTS, byDateDesc, isAuction, statusOf, type YoidenEvent } from '../data/events';
@@ -17,7 +17,7 @@ const ORDER = { live: 0, upcoming: 1, past: 2 } as const;
 
 function Row({ children }: { children: React.ReactNode }) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: 16 }}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 16 }}>
       {children}
     </ScrollView>
   );
@@ -66,7 +66,7 @@ export default function HomeScreen() {
             <SectionLabel right={<SeeAll onPress={() => nav.navigate('MyEventsTab')} text="Manage" />}>★ Following</SectionLabel>
             <Row>
               {following.map((e) => (
-                <EventTile key={e.id} e={e} status={statusOf(e, now)} onPress={() => open(e)} />
+                <CompactEventTile key={e.id} e={e} status={statusOf(e, now)} onPress={() => open(e)} />
               ))}
             </Row>
           </>
@@ -88,7 +88,7 @@ export default function HomeScreen() {
             <SectionLabel color={C.live}>● Live now</SectionLabel>
             <Row>
               {live.map((e) => (
-                <EventTile key={e.id} e={e} status="live" onPress={() => open(e)} />
+                <CompactEventTile key={e.id} e={e} status="live" onPress={() => open(e)} />
               ))}
             </Row>
           </>
@@ -99,7 +99,7 @@ export default function HomeScreen() {
             <SectionLabel right={<SeeAll onPress={() => nav.navigate('EventsTab', { tab: 'registrations' })} />}>Registrations open</SectionLabel>
             <Row>
               {regs.map((o) => (
-                <RegistrationTile key={o.r.id} {...o} />
+                <RegistrationTile key={o.r.id} {...o} compact />
               ))}
             </Row>
           </>
@@ -110,7 +110,7 @@ export default function HomeScreen() {
             <SectionLabel right={<SeeAll onPress={() => nav.navigate('EventsTab', { tab: 'upcoming' })} />}>Coming up</SectionLabel>
             <Row>
               {soon.map((e) => (
-                <EventTile key={e.id} e={e} status="upcoming" onPress={() => open(e)} />
+                <CompactEventTile key={e.id} e={e} status="upcoming" onPress={() => open(e)} />
               ))}
             </Row>
           </>
@@ -119,14 +119,14 @@ export default function HomeScreen() {
         <SectionLabel right={<SeeAll onPress={() => nav.navigate('EventsTab', { tab: 'past' })} />}>Recent events</SectionLabel>
         <Row>
           {recent.map((e) => (
-            <EventTile key={e.id} e={e} status="past" onPress={() => open(e)} />
+            <CompactEventTile key={e.id} e={e} status="past" onPress={() => open(e)} />
           ))}
         </Row>
 
         <SectionLabel right={<SeeAll onPress={() => nav.navigate('EventsTab', { tab: 'auctions' })} />}>Recent auctions</SectionLabel>
         <Row>
           {auctions.map((e) => (
-            <EventTile key={e.id} e={e} status="past" onPress={() => open(e)} />
+            <CompactEventTile key={e.id} e={e} status="past" onPress={() => open(e)} />
           ))}
         </Row>
       </Page>

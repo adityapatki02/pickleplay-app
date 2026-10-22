@@ -5,12 +5,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { AppHeader, Page } from '../components/chrome';
-import { EventTile, RegistrationTile, useAllRegistrations } from '../components/tiles';
+import { EventRow, RegistrationTile, useAllRegistrations } from '../components/tiles';
 import { Chip, ChipRow, Empty, SegTabs } from '../components/ui';
 import { SearchIcon } from '../components/icons';
 import { EVENTS, byDateDesc, isAuction, statusOf, type YoidenEvent } from '../data/events';
 import { useNow } from '../hooks';
-import { C, MAX_W } from '../theme';
+import { C, MAX_W, card } from '../theme';
 
 const TABS = [
   { key: 'live', label: 'Live' },
@@ -104,9 +104,17 @@ export default function EventsScreen() {
               </View>
             )
           ) : shown.length ? (
-            shown.map((e) => (
-              <EventTile key={e.id} e={e} status={statusOf(e, now)} width={tileW} onPress={() => nav.navigate('Event', { id: e.id })} />
-            ))
+            <View style={[card, { width: '100%', overflow: 'hidden' }]}>
+              {shown.map((e, i) => (
+                <EventRow
+                  key={e.id}
+                  e={e}
+                  status={statusOf(e, now)}
+                  last={i === shown.length - 1}
+                  onPress={() => nav.navigate('Event', { id: e.id })}
+                />
+              ))}
+            </View>
           ) : (
             <View style={{ width: '100%' }}>
               <Empty>

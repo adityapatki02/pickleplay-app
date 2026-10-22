@@ -6,18 +6,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { C, MAX_W, body, head, label } from '../theme';
+import { Wordmark } from './wordmark';
 import { BookmarkIcon, ChevronLeft, HomeIcon, SearchIcon, TrophyIcon, UserIcon } from './icons';
 
+/** The YOIDEN wordmark, white on the navy bar. */
 export function Logo() {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-      <View style={s.mark}>
-        <View style={[s.markSlash, { left: 3, backgroundColor: C.white }]} />
-        <View style={[s.markSlash, { left: 11, backgroundColor: C.hl }]} />
-      </View>
-      <Text style={head(23, C.white)}>Yoiden</Text>
-    </View>
-  );
+  return <Wordmark height={24} />;
 }
 
 /**
@@ -132,8 +126,6 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 34 },
   back: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.1)' },
   search: { marginTop: 12, backgroundColor: C.white, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  mark: { width: 24, height: 22, overflow: 'hidden' },
-  markSlash: { position: 'absolute', top: -2, width: 6, height: 26, transform: [{ skewX: '-22deg' }] },
   tabbar: { flexDirection: 'row', backgroundColor: C.white, borderTopWidth: 1, borderTopColor: C.line },
   tab: { flex: 1, alignItems: 'center', paddingTop: 8, gap: 3 },
   tabTop: { position: 'absolute', top: 0, height: 3, width: 36, borderRadius: 2, backgroundColor: 'transparent' },

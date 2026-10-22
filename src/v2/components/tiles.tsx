@@ -76,6 +76,65 @@ export function EventTile({
   );
 }
 
+/**
+ * Small card for the sideways rows on Home (like CricHeroes' carousels): status, logo, name and
+ * date only, and the whole card is the button. About two and a half fit across a phone.
+ */
+export function CompactEventTile({ e, status, onPress }: { e: YoidenEvent; status: EventStatus; onPress: () => void }) {
+  const auction = e.kind === 'auction';
+  const followed = useFollows((x) => x.ids.includes(e.id));
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        card,
+        s.compact,
+        { borderTopColor: status === 'live' ? C.live : auction ? C.hl : C.accent, opacity: pressed ? 0.92 : 1 },
+      ]}
+    >
+      <View style={s.top}>
+        <StatusLabel status={status} auction={auction} />
+        {followed && <StarIcon size={11} color={C.bar} fill={C.hl} />}
+      </View>
+      <View style={{ flexDirection: 'row', gap: 9, marginTop: 9, alignItems: 'center' }}>
+        <EventLogo e={e} size={38} />
+        <Text style={[head(14.5, C.ink), { flex: 1 }]} numberOfLines={2}>
+          {e.name}
+        </Text>
+      </View>
+      <Text style={[body(11.5, C.soft), { marginTop: 8 }]} numberOfLines={1}>
+        {e.sport} · {formatWhen(e)}
+      </Text>
+    </Pressable>
+  );
+}
+
+/** One line of the Events list: logo, name, sport · city · date, and the status on the right. */
+export function EventRow({ e, status, onPress, last }: { e: YoidenEvent; status: EventStatus; onPress: () => void; last?: boolean }) {
+  const auction = e.kind === 'auction';
+  const followed = useFollows((x) => x.ids.includes(e.id));
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [s.row, !last && { borderBottomWidth: 1, borderBottomColor: C.line }, pressed && { backgroundColor: C.page }]}
+    >
+      <EventLogo e={e} size={44} />
+      <View style={{ flex: 1 }}>
+        <Text style={head(15.5, C.ink)} numberOfLines={2}>
+          {e.name}
+        </Text>
+        <Text style={[body(12, C.soft), { marginTop: 2 }]} numberOfLines={1}>
+          {e.sport} · {e.city} · {formatWhen(e)}
+        </Text>
+      </View>
+      <View style={{ alignItems: 'flex-end', gap: 4 }}>
+        <StatusLabel status={status} auction={auction} />
+        {followed && <StarIcon size={12} color={C.bar} fill={C.hl} />}
+      </View>
+    </Pressable>
+  );
+}
+
 // ── Registrations ────────────────────────────────────────────────────
 
 export type OpenRegistration = { r: Registration; seats: SeatLine[] | undefined; closed?: boolean };
@@ -117,7 +176,13 @@ const STATE: Record<SeatLine['state'], { text: string; bg: string; fg: string }>
   closed: { text: 'Full', bg: C.page, fg: C.mute },
 };
 
-export function RegistrationTile({ r, seats, closed, width = TILE_W }: OpenRegistration & { width?: number | '100%' }) {
+export function RegistrationTile({
+  r,
+  seats,
+  closed,
+  width = TILE_W,
+  compact,
+}: OpenRegistration & { width?: number | '100%'; compact?: boolean }) {
   const states = seats?.map((x) => x.state) ?? [];
   const overall = closed ? 'ended' : !states.length || states.includes('open') ? 'open' : states.includes('waitlist') ? 'waitlist' : 'full';
   const tag = {
@@ -128,7 +193,10 @@ export function RegistrationTile({ r, seats, closed, width = TILE_W }: OpenRegis
   }[overall];
   const url = logoUrl(r.logo);
   return (
-    <Pressable onPress={() => Linking.openURL(r.url)} style={({ pressed }) => [card, s.tile, { width, borderTopColor: C.green, opacity: pressed ? 0.92 : 1 }]}>
+    <Pressable
+      onPress={() => Linking.openURL(r.url)}
+      style={({ pressed }) => [card, compact ? s.compact : s.tile, { width: compact ? 200 : width, borderTopColor: C.green, opacity: pressed ? 0.92 : 1 }]}
+    >
       <View style={s.top}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
           <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: tag.color }} />
@@ -139,21 +207,21 @@ export function RegistrationTile({ r, seats, closed, width = TILE_W }: OpenRegis
         </Text>
       </View>
       <View style={s.mid}>
-        <View style={[s.regLogo, r.logoOnDark ? { backgroundColor: C.bar, borderWidth: 0 } : !url ? { backgroundColor: '#EEF0F3', borderWidth: 0 } : null]}>
+        <View style={[s.regLogo, compact && { width: 38, height: 38 }, r.logoOnDark ? { backgroundColor: C.bar, borderWidth: 0 } : !url ? { backgroundColor: '#EEF0F3', borderWidth: 0 } : null]}>
           {url ? (
-            <Image source={{ uri: url }} style={{ width: 46, height: 46 }} resizeMode="contain" />
+            <Image source={{ uri: url }} style={{ width: compact ? 34 : 46, height: compact ? 34 : 46 }} resizeMode="contain" />
           ) : (
             <Text style={{ fontFamily: F.heavy, fontSize: 15, color: C.ink }}>{r.initials}</Text>
           )}
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={head(17, C.ink)} numberOfLines={2}>
+          <Text style={head(compact ? 14.5 : 17, C.ink)} numberOfLines={2}>
             {r.name}
           </Text>
           <Text style={[body(12.5, C.soft), { marginTop: 2 }]}>{closed && r.ran ? r.ran : r.eventWhen}</Text>
         </View>
       </View>
-      <Text style={[body(12.5, C.soft), { marginTop: 10 }]}>{r.kind}</Text>
+      {!compact && <Text style={[body(12.5, C.soft), { marginTop: 10 }]}>{r.kind}</Text>}
       {!closed && seats && seats.length > 0 && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
           {seats.map((x) => (
@@ -183,6 +251,8 @@ export function RegistrationTile({ r, seats, closed, width = TILE_W }: OpenRegis
 
 const s = StyleSheet.create({
   tile: { borderTopWidth: 3, padding: 14, minHeight: 190 },
+  compact: { width: 172, borderTopWidth: 3, padding: 11 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 11, backgroundColor: C.white },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   mid: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 },
   foot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: C.line, paddingTop: 11, marginTop: 12 },
