@@ -179,6 +179,8 @@ export type RootStackParamList = {
   PlayerTabs: NavigatorScreenParams<PlayerTabParamList>;
   OrgTabs: NavigatorScreenParams<OrganizerTabParamList>;
   AppTabs: NavigatorScreenParams<AppTabParamList>;
+  /** The events-first app (src/v2). */
+  V2: undefined;
   PublicPlayerRecap: { userId: string };
   ProfileSetup: undefined;
   TournamentPublic: { tournamentId?: string; slug?: string };

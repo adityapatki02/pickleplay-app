@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from './types';
 import { AuthNavigator } from './AuthNavigator';
 import { YoidenTabNavigator } from './YoidenTabNavigator';
+import { V2Navigator } from '../v2/navigation';
 import { useAuthStore } from '../store/authStore';
 import PlayerRecapScreen from '../screens/yoiden/PlayerRecapScreen';
 import { ProfileSetupScreen } from '../screens/auth/ProfileSetupScreen';
@@ -132,6 +133,19 @@ export const RootNavigator: React.FC = () => {
       screens: {
         PublicPlayerRecap: 'player/:userId',
         TournamentPublic: 't/:slug',
+        // Events-first app: same paths as yoiden.com, so a shared link opens in place.
+        V2: {
+          screens: {
+            Tabs: {
+              screens: { HomeTab: '', EventsTab: 'events', MyEventsTab: 'my-events', MeTab: 'me' },
+            },
+            Event: 'events/:id',
+            Match: 'events/:eventId/match/:matchId',
+            Player: 'events/:eventId/player/:slug',
+            Search: 'search',
+            Manage: 'manage/:eventId/:slug',
+          },
+        },
         // Deep link straight to a tournament's dashboard (e.g. Mumbai Open):
         //   /event/<leagueId>  → AppTabs > HomeTab > LeagueDashboard
         // The dashboard auto-resolves the latest season, so only leagueId is needed.
@@ -164,12 +178,20 @@ export const RootNavigator: React.FC = () => {
             <Stack.Screen name="TournamentPublic" component={TournamentPublicScreen} />
             <Stack.Screen name="TournamentStandings" component={StandingsScreen as any} />
           </>
-        ) : !isAuthenticated ? (
-          <Stack.Screen name="Auth" component={AuthNavigator} />
+        ) : IS_LEAGUE_KIOSK ? (
+          // League kiosk sites keep the old shell and its sign-in gate.
+          !isAuthenticated ? (
+            <Stack.Screen name="Auth" component={AuthNavigator} />
+          ) : needsProfile ? (
+            <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen as any} />
+          ) : (
+            <Stack.Screen name="AppTabs" component={YoidenTabNavigator} />
+          )
         ) : needsProfile ? (
           <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen as any} />
         ) : (
-          <Stack.Screen name="AppTabs" component={YoidenTabNavigator} />
+          // The events-first app: anyone can browse; sign-in opens from Me / follow / register.
+          <Stack.Screen name="V2" component={V2Navigator} />
         )}
       </Stack.Navigator>
     </NavigationContainer>

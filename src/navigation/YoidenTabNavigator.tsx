@@ -77,7 +77,7 @@ import { CityPickerScreen } from '../screens/auth/CityPickerScreen';
 import { IS_LEAGUE_KIOSK, LEAGUE_KIOSK_ID } from '../config/appMode';
 
 // ─── Shared screen registration helper ──────────────────────────
-function registerDetailAndManageScreens<T extends DetailAndManageRoutes>(
+export function registerDetailAndManageScreens<T extends DetailAndManageRoutes>(
   Stack: ReturnType<typeof createNativeStackNavigator<T>>,
 ) {
   const S = Stack.Screen as any;
