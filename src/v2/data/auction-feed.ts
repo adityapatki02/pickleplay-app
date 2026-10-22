@@ -89,13 +89,13 @@ export async function fetchAuctionsServer(tokens: string[]): Promise<AuctionFeed
 export const teamLogo = (t: AuctionTeam) =>
   !t.logoUrl ? null : t.logoUrl.startsWith("http") ? t.logoUrl : `${AUCTION_BASE}${t.logoUrl}`;
 
-/** ₹ in Indian units: 4,20,00,000 → "₹4.2 Cr", 7,00,000 → "₹7 L", 52,000 → "₹52,000". */
+/** Amounts in Indian units with no currency sign: 4,20,00,000 → "4.2 Cr", 7,00,000 → "7 L", 52,000 → "52,000". */
 export function formatMoney(n: number | null | undefined): string {
   if (n == null) return "–";
   const trim = (x: number) => x.toFixed(2).replace(/\.?0+$/, "");
-  if (n >= 1e7) return `₹${trim(n / 1e7)} Cr`;
-  if (n >= 1e5) return `₹${trim(n / 1e5)} L`;
-  return `₹${n.toLocaleString("en-IN")}`;
+  if (n >= 1e7) return `${trim(n / 1e7)} Cr`;
+  if (n >= 1e5) return `${trim(n / 1e5)} L`;
+  return n.toLocaleString("en-IN");
 }
 
 export const soldPlayers = (f: AuctionFeed) => f.players.filter((p) => p.status === "sold" && p.soldTo);

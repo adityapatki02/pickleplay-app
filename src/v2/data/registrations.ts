@@ -25,7 +25,7 @@ export type Registration = {
   ran?: string;
   /** Live seat counts from the form's own public endpoint. */
   seats?: "ashmavir" | "cns";
-  /** Shown when there are no live counts, e.g. ["Teams of 15", "Fee ₹2,499"]. */
+  /** Shown when there are no live counts, e.g. ["Teams of 15", "Business cricket league"]. */
   facts?: string[];
 };
 
