@@ -75,7 +75,7 @@ export function RoleRows({ roles, compact }: { roles: EventRole[]; compact?: boo
     <View>
       {roles.map((r, i) => (
         <Pressable
-          key={`${r.event.id}-${r.slug}-${r.role}`}
+          key={`${r.event.id}-${r.slug}-${r.role}-${r.team?.id ?? ''}`}
           onPress={() => nav.navigate('Event', { id: r.event.id })}
           style={({ pressed }) => [s.row, compact && { paddingVertical: 9 }, i === roles.length - 1 && { borderBottomWidth: 0 }, pressed && { backgroundColor: C.page }]}
         >
@@ -84,7 +84,9 @@ export function RoleRows({ roles, compact }: { roles: EventRole[]; compact?: boo
             <Text style={body(14.5, C.ink, 'semi')} numberOfLines={1}>
               {r.event.name}
             </Text>
-            {r.label && (r.event.leagues?.length ?? 0) > 1 ? <Text style={body(12.5, C.soft)}>{r.label}</Text> : null}
+            {r.team || (r.label && (r.event.leagues?.length ?? 0) > 1) ? (
+              <Text style={body(12.5, C.soft)}>{[r.team?.name, (r.event.leagues?.length ?? 0) > 1 ? r.label : null].filter(Boolean).join(' · ')}</Text>
+            ) : null}
           </View>
           <View style={s.badge}>
             <Text style={label(11.5, C.bar)}>{ROLE_TEXT[r.role]}</Text>
@@ -99,23 +101,27 @@ export function RoleRows({ roles, compact }: { roles: EventRole[]; compact?: boo
 function Guest() {
   const nav = useNavigation<any>();
   const points = [
-    ['Your records', 'Every match you have played on Yoiden, across every league and event.'],
-    ['Your roles', 'Events where you are an admin, scorer or captain, one tap away.'],
-    ['Follows saved', 'The events you follow stay with your phone number.'],
-    ['Faster registration', 'Your saved profile fills every registration form.'],
+    ['Your playing record', 'Matches, results and stats across your leagues.'],
+    ['Your events, together', 'Saved follows and your captain, scorer or admin roles.'],
+    ['Ready to register', 'One saved profile for your next event.'],
   ];
   return (
     <Page>
       <View style={{ paddingTop: 16 }}>
-        <Panel title="Log in to Yoiden">
+        <View style={[card, { overflow: 'hidden' }]}>
+          <View style={{ backgroundColor: C.bar, padding: 22, overflow: 'hidden' }}>
+            <View style={{ position: 'absolute', right: -40, width: 100, top: 0, bottom: 0, opacity: 0.35 }}><Stripes height={150} /></View>
+            <Text style={head(32, C.white)}>Your game. Your Yoiden.</Text>
+            <Text style={[body(13, 'rgba(255,255,255,0.8)'), { marginTop: 10, lineHeight: 20, maxWidth: 250 }]}>A home for every league you follow and every match you play.</Text>
+          </View>
           <View style={{ padding: 16, gap: 14 }}>
-            <Text style={body(14, C.soft)}>Your phone number is your Yoiden identity. Log in once and everything ties to it.</Text>
+
             {points.map(([t, d]) => (
               <View key={t} style={{ flexDirection: 'row', gap: 10 }}>
                 <View style={s.dot} />
                 <View style={{ flex: 1 }}>
                   <Text style={body(14.5, C.ink, 'semi')}>{t}</Text>
-                  <Text style={[body(13, C.soft), { marginTop: 2 }]}>{d}</Text>
+                  <Text style={[body(13, C.soft), { marginTop: 4, lineHeight: 20 }]}>{d}</Text>
                 </View>
               </View>
             ))}
@@ -124,7 +130,7 @@ function Guest() {
             </View>
             <Text style={[body(12, C.mute), { textAlign: 'center' }]}>Browsing events, scores and players needs no login.</Text>
           </View>
-        </Panel>
+        </View>
       </View>
       <SettingsPanel signedIn={false} />
     </Page>

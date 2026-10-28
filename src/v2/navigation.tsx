@@ -19,6 +19,8 @@ import MatchScreen from './screens/MatchScreen';
 import PlayerScreen from './screens/PlayerScreen';
 import ManageScreen from './screens/ManageScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
+import './store/event-list';
+import { usePushTaps } from './store/push';
 
 export type V2Params = {
   Tabs: undefined;
@@ -46,6 +48,7 @@ function Tabs() {
 const Stack = createNativeStackNavigator<any>();
 
 export function V2Navigator() {
+  usePushTaps();
   const S = Stack.Screen as any;
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   return (

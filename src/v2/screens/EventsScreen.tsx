@@ -8,16 +8,17 @@ import { AppHeader, Page } from '../components/chrome';
 import { EventRow, RegistrationRow, useAllRegistrations } from '../components/tiles';
 import { Chip, ChipRow, Empty, SegTabs } from '../components/ui';
 import { SearchIcon } from '../components/icons';
+import { useEventListState } from '../store/event-list';
 import { EVENTS, byDateDesc, isAuction, statusOf, type YoidenEvent } from '../data/events';
 import { useNow } from '../hooks';
-import { C, MAX_W, card } from '../theme';
+import { C, MAX_W, body, head, card } from '../theme';
 
 const TABS = [
   { key: 'live', label: 'Live' },
   { key: 'upcoming', label: 'Upcoming' },
-  { key: 'registrations', label: 'Registrations' },
-  { key: 'past', label: 'Past events' },
-  { key: 'auctions', label: 'Past auctions' },
+  { key: 'registrations', label: 'Join' },
+  { key: 'past', label: 'Results' },
+  { key: 'auctions', label: 'Auctions' },
 ] as const;
 type Tab = (typeof TABS)[number]['key'];
 
@@ -26,6 +27,7 @@ export default function EventsScreen() {
   const route = useRoute<any>();
   const now = useNow();
   const { width } = useWindowDimensions();
+  const listVersion = useEventListState((s) => s.version);
   const anyLive = EVENTS.some((e) => statusOf(e, now) === 'live');
   const [tab, setTab] = useState<Tab>(anyLive ? 'live' : 'upcoming');
   const [sport, setSport] = useState<string>('All');
@@ -54,7 +56,8 @@ export default function EventsScreen() {
       default:
         return [];
     }
-  }, [tab, now]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, now, listVersion]);
 
   const sports = useMemo(() => [...new Set(list.map((e) => e.sport))], [list]);
   const shown = sport === 'All' ? list : list.filter((e) => e.sport === sport);
@@ -70,6 +73,10 @@ export default function EventsScreen() {
         }
       />
       <Page padded={false}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 22, paddingBottom: 4 }}>
+          <Text style={head(28, C.bar)}>Find your next event.</Text>
+          <Text style={[body(13, C.soft), { marginTop: 6 }]}>Follow the action or get in the game.</Text>
+        </View>
         <View style={{ paddingHorizontal: 16, paddingTop: 14 }}>
           <SegTabs
             tabs={TABS}

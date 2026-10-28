@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, MAX_W, body, label } from '../theme';
 import { CloseIcon, SearchIcon } from '../components/icons';
 import { EVENTS, formatWhen } from '../data/events';
+import { useEventListState } from '../store/event-list';
 
 export type SearchEntry = { k: 'Event' | 'Team' | 'Player' | 'Auction player'; n: string; s: string; h: string };
 
@@ -53,7 +54,7 @@ function rank(index: SearchEntry[], q: string): SearchEntry[] {
 }
 
 /** Events are searchable instantly from the app's own list; teams and players join once the index loads. */
-const LOCAL: SearchEntry[] = EVENTS.map((e) => ({
+const localEntries = (): SearchEntry[] => EVENTS.map((e) => ({
   k: 'Event' as const,
   n: e.name,
   s: `${e.sport} · ${e.city} · ${formatWhen(e)}`,
@@ -65,7 +66,9 @@ export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const [q, setQ] = useState('');
   const [remote, setRemote] = useState<SearchEntry[]>([]);
-  const index = useMemo(() => [...LOCAL, ...remote.filter((x) => x.k !== 'Event')], [remote]);
+  const listVersion = useEventListState((s) => s.version);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const index = useMemo(() => [...localEntries(), ...remote.filter((x) => x.k !== 'Event')], [remote, listVersion]);
 
   useEffect(() => {
     let alive = true;

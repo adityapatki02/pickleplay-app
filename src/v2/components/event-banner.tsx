@@ -32,7 +32,8 @@ export function EventBanner({
   const following = useFollows((s) => s.ids.includes(event.id));
   const toggle = useFollows((s) => s.toggle);
   const { roles } = useMyRoles();
-  const mine = roles.filter((r) => r.event.id === event.id);
+  // Manage opens the league admin screens; scorer, captain and football modes come next.
+  const mine = roles.filter((r) => r.event.id === event.id && r.kind === 'league' && r.role === 'admin' && r.leagueId);
 
   const share = async () => {
     const url = `https://yoiden.com/events/${event.id}`;
@@ -49,15 +50,15 @@ export function EventBanner({
 
   return (
     <View style={s.wrap}>
-      <Stripes height={220} wide />
+      <View style={{ position: 'absolute', right: -45, top: 0, bottom: 0, width: 125, opacity: 0.35 }}><Stripes height={220} wide /></View>
       <View style={s.inner}>
         <Text style={label(13, C.hl)}>
           {status === 'live' ? '● Live now' : status === 'past' ? 'Completed' : 'Upcoming'} · {event.sport}
         </Text>
         <View style={s.row}>
-          <EventLogo e={event} size={64} />
+          <EventLogo e={event} size={52} />
           <View style={{ flex: 1 }}>
-            <Text style={head(28, C.white)} numberOfLines={3}>
+            <Text style={head(27, C.white)} numberOfLines={3}>
               {event.name}
             </Text>
             <Text style={[body(13, 'rgba(255,255,255,0.75)'), { marginTop: 4 }]}>
@@ -71,7 +72,7 @@ export function EventBanner({
             {stats.map(([k, v], i) => (
               <View key={k} style={[s.stat, i === stats.length - 1 && { borderRightWidth: 0 }]}>
                 <Text style={head(26, C.white)}>{v}</Text>
-                <Text style={label(11, 'rgba(255,255,255,0.6)')}>{k}</Text>
+                <Text style={body(11, 'rgba(255,255,255,0.6)')}>{k}</Text>
               </View>
             ))}
           </View>
@@ -121,13 +122,13 @@ export function EventBanner({
 const s = StyleSheet.create({
   wrap: { backgroundColor: C.bar, overflow: 'hidden' },
   inner: { width: '100%', maxWidth: MAX_W, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 10, paddingRight: 40 },
-  stats: { flexDirection: 'row', marginTop: 16, borderRadius: 8, borderWidth: 1, borderColor: C.barSoft, overflow: 'hidden', alignSelf: 'flex-start', backgroundColor: C.bar },
-  stat: { paddingHorizontal: 16, paddingVertical: 8, borderRightWidth: 1, borderRightColor: C.barSoft, alignItems: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, paddingRight: 0 },
+  stats: { flexDirection: 'row', marginTop: 16, overflow: 'hidden', alignSelf: 'flex-start' },
+  stat: { paddingHorizontal: 18, paddingVertical: 2, borderRightWidth: 1, borderRightColor: C.barSoft, alignItems: 'center' },
   actions: { flexDirection: 'row', gap: 8, marginTop: 16, flexWrap: 'wrap' },
-  act: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 7, paddingHorizontal: 13, paddingVertical: 9 },
+  act: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 7, paddingHorizontal: 13, minHeight: 44, justifyContent: 'center', paddingVertical: 10 },
   actOn: { backgroundColor: C.hl },
   actOff: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   roleRow: { flexDirection: 'row', gap: 10, marginTop: 12, flexWrap: 'wrap' },
-  role: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.hl, borderRadius: 7, paddingHorizontal: 13, paddingVertical: 9 },
+  role: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.hl, borderRadius: 7, paddingHorizontal: 13, minHeight: 44, justifyContent: 'center', paddingVertical: 10 },
 });
