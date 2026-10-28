@@ -51,7 +51,11 @@ export function AppHeader({
   const insets = useSafeAreaInsets();
   const nav = useNavigation<any>();
   return (
-    <View style={[s.header, { paddingTop: insets.top + 10 }]}>
+    <View style={[s.header, { paddingTop: insets.top + 10, overflow: 'hidden' }]}>
+      {search && <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <View style={{ position: 'absolute', top: -40, bottom: -40, right: 78, width: 14, backgroundColor: C.accent, transform: [{ skewX: '-20deg' }] }} />
+        <View style={{ position: 'absolute', top: -40, bottom: -40, right: 32, width: 34, backgroundColor: C.hl, transform: [{ skewX: '-20deg' }] }} />
+      </View>}
       <View style={s.inner}>
         <View style={s.row}>
           {back ? (
@@ -96,6 +100,7 @@ export function Page({
 }) {
   return (
     <ScrollView
+      showsVerticalScrollIndicator={false}
       style={{ flex: 1, backgroundColor: C.page }}
       contentContainerStyle={{ paddingBottom: 40 }}
       refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} /> : undefined}
@@ -127,11 +132,14 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
             onPress={() => {
               if (!on) navigation.navigate(route.name);
             }}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: on }}
+            accessibilityLabel={t.label}
             style={s.tab}
           >
             <View style={[s.tabTop, on && { backgroundColor: C.hl }]} />
             <t.Icon size={22} color={on ? C.bar : C.mute} />
-            <Text style={label(12, on ? C.bar : C.mute)}>{t.label}</Text>
+            <Text style={body(11, on ? C.bar : C.mute, on ? 'bold' : 'medium')}>{t.label}</Text>
           </Pressable>
         );
       })}
@@ -144,11 +152,11 @@ const s = StyleSheet.create({
   inner: { width: '100%', maxWidth: MAX_W, alignSelf: 'center', paddingHorizontal: 16 },
   column: { width: '100%', maxWidth: MAX_W, alignSelf: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 34 },
-  bell: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.1)' },
+  bell: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: C.barSoft },
   bellDot: { position: 'absolute', top: 7, right: 8, width: 9, height: 9, borderRadius: 5, backgroundColor: C.hl, borderWidth: 1.5, borderColor: C.bar },
   back: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.1)' },
-  search: { marginTop: 12, backgroundColor: C.white, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  search: { marginTop: 12, backgroundColor: C.white, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', gap: 8 },
   tabbar: { flexDirection: 'row', backgroundColor: C.white, borderTopWidth: 1, borderTopColor: C.line },
-  tab: { flex: 1, alignItems: 'center', paddingTop: 8, gap: 3 },
+  tab: { flex: 1, alignItems: 'center', paddingTop: 12, paddingBottom: 4, minHeight: 60, gap: 5 },
   tabTop: { position: 'absolute', top: 0, height: 3, width: 36, borderRadius: 2, backgroundColor: 'transparent' },
 });

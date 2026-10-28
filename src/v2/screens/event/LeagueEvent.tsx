@@ -317,24 +317,25 @@ function TopPlayers({ feed, open, onSeeAll }: { feed: LeagueFeed; open: Open; on
 
 // ── Standings ──────────────────────────────────────────────────────────
 
-const ST = { rank: 44, team: 200, num: 52, games: 64, diff: 72, pts: 72 };
+const ST = { rank: 36, team: 164, num: 44, games: 64, diff: 72, pts: 60 };
 
 function StandingsTab({ feed }: { feed: LeagueFeed }) {
   return (
     <View style={{ gap: 18 }}>
       {feed.groups.map((g) => (
         <Panel key={g.name} title={g.name}>
+          <Text style={[body(11, C.soft), { paddingHorizontal: 14, paddingVertical: 10 }]}>Points first · Swipe for the full table →</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
             <View style={{ minWidth: 600, flexGrow: 1 }}>
               <View style={t.headRow}>
                 <Cell w={ST.rank} head>#</Cell>
                 <Cell w={ST.team} flex head>Team</Cell>
+                <Cell w={ST.pts} right head strong>Points</Cell>
                 <Cell w={ST.num} right head>P</Cell>
                 <Cell w={ST.num} right head>W</Cell>
                 <Cell w={ST.num} right head>L</Cell>
                 <Cell w={ST.games} right head>Games</Cell>
                 <Cell w={ST.diff} right head>Pts +/-</Cell>
-                <Cell w={ST.pts} right head strong>Points</Cell>
               </View>
               {g.rows.map((r, i) => (
                 <View key={r.team.id} style={[t.row, i === g.rows.length - 1 && { borderBottomWidth: 0 }]}>
@@ -351,12 +352,12 @@ function StandingsTab({ feed }: { feed: LeagueFeed }) {
                       </Text>
                     </View>
                   </Cell>
+                  <Cell w={ST.pts} right strong>{r.tiePoints}</Cell>
                   <Cell w={ST.num} right>{r.played}</Cell>
                   <Cell w={ST.num} right>{r.won}</Cell>
                   <Cell w={ST.num} right>{r.lost}</Cell>
                   <Cell w={ST.games} right>{r.gamesWon}</Cell>
                   <Cell w={ST.diff} right>{signed(r.pointsFor - r.pointsAgainst)}</Cell>
-                  <Cell w={ST.pts} right strong>{r.tiePoints}</Cell>
                 </View>
               ))}
             </View>

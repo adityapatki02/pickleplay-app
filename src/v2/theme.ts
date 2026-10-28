@@ -12,13 +12,13 @@ export const C = {
   hl: '#D7F205', // lime: highlights, primary buttons
   hlInk: '#5B6B00', // lime-ish text on white ("Upcoming")
   accent: '#2952E3', // stripes, links, event tile edge
-  page: '#F3F5F8',
+  page: '#F2F4F7',
   white: '#FFFFFF',
   line: '#E3E6EB',
   lineStrong: '#C9CED6',
   ink: '#0B0F1A',
   soft: '#4B5565',
-  mute: '#8A93A3',
+  mute: '#6B7585',
   live: '#E11D2E',
   green: '#16A34A',
   greenSoft: '#DCFCE7',
@@ -66,7 +66,7 @@ export const card = {
   backgroundColor: C.white,
   borderWidth: 1,
   borderColor: C.line,
-  borderRadius: 10,
+  borderRadius: 14,
 } as const;
 
 /** Width of a tile in the horizontal rows on Home. */

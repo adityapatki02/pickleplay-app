@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { C, F, TILE_W, body, card, head, label } from '../theme';
 import { EventLogo, StatusLabel } from './ui';
-import { ExternalIcon, StarIcon } from './icons';
+import { ChevronRight, ExternalIcon, StarIcon } from './icons';
 import { formatWhen, hasPage, type EventStatus, type YoidenEvent } from '../data/events';
 import { REGISTRATIONS, fetchSeats, isOpen, type Registration, type SeatLine } from '../data/registrations';
 import { useFollows } from '../store/follows';
@@ -133,16 +133,14 @@ export function EventRow({
     >
       <EventLogo e={e} size={44} />
       <View style={{ flex: 1 }}>
-        <Text style={head(15.5, C.ink)} numberOfLines={2}>
-          {e.name}
-        </Text>
-        <Text style={[body(12, C.soft), { marginTop: 2 }]} numberOfLines={1}>
-          {e.sport} · {e.city} · {formatWhen(e)}
-        </Text>
+        <Text style={body(14, C.ink, 'bold')} numberOfLines={2}>{e.name}</Text>
+        <Text style={[body(12, C.soft), { marginTop: 5 }]}>{e.sport} · {e.city}</Text>
+        <Text style={[body(12, C.soft), { marginTop: 3 }]}>{formatWhen(e)}</Text>
       </View>
-      <View style={{ alignItems: 'flex-end', gap: 4 }}>
+      <View style={{ alignItems: 'flex-end', gap: 10 }}>
         {!hideStatus && <StatusLabel status={status} auction={auction} />}
         {followed && <StarIcon size={12} color={C.bar} fill={C.hl} />}
+        <ChevronRight size={15} color={C.mute} />
       </View>
     </Pressable>
   );
@@ -287,28 +285,28 @@ export function RegistrationRow({ r, seats, closed, last }: OpenRegistration & {
         )}
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={head(15.5, C.ink)} numberOfLines={2}>
+        <Text style={body(14, C.ink, 'bold')} numberOfLines={2}>
           {r.name}
         </Text>
-        <Text style={[body(12, C.soft), { marginTop: 2 }]} numberOfLines={1}>
+        <Text style={[body(12, C.soft), { marginTop: 5, lineHeight: 18 }]} numberOfLines={3}>
           {r.sport} · {closed && r.ran ? r.ran : r.eventWhen}
         </Text>
       </View>
       <View style={{ backgroundColor: chip.bg, borderRadius: 4, paddingHorizontal: 7, paddingVertical: 3 }}>
-        <Text style={label(11, chip.fg)}>{chip.text}</Text>
+        <Text style={body(10, chip.fg, 'bold')}>{chip.text}</Text>
       </View>
     </Pressable>
   );
 }
 
 const s = StyleSheet.create({
-  tile: { borderTopWidth: 3, padding: 14, minHeight: 190 },
+  tile: { borderTopWidth: 3, padding: 16, minHeight: 190 },
   compact: { width: 172, borderTopWidth: 3, padding: 11 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 11, backgroundColor: C.white },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 16, backgroundColor: C.white },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   mid: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 },
   foot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: C.line, paddingTop: 11, marginTop: 12 },
   site: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   regLogo: { width: 52, height: 52, borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: C.white, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  regBtn: { alignSelf: 'flex-start', backgroundColor: C.hl, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 8, marginTop: 12 },
+  regBtn: { alignSelf: 'flex-start', backgroundColor: C.hl, borderRadius: 9, minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 10, marginTop: 12 },
 });

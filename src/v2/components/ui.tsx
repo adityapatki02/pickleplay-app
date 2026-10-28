@@ -1,7 +1,7 @@
 // Shared v2 pieces: the navy title bar with stripes, segmented tabs, chips,
 // team badges, score boxes and the plain panel. Same shapes as the website's
 // components/sport.tsx and components/event/parts.tsx.
-import React from 'react';
+import React, { useState } from 'react';
 import { Image, Pressable, ScrollView, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { C, F, body, card, head, isLight, label } from '../theme';
 import type { FeedTeam } from '../data/league-feed';
@@ -75,20 +75,19 @@ export function SegTabs<T extends string>({
   onChange: (key: T) => void;
 }) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.seg} style={s.segWrap}>
-      {tabs.map((t, i) => {
-        const on = t.key === value;
-        return (
-          <Pressable
-            key={t.key}
-            onPress={() => onChange(t.key)}
-            style={[s.segCell, on && { backgroundColor: C.bar }, i === tabs.length - 1 && { borderRightWidth: 0 }]}
-          >
-            <Text style={label(14, on ? C.hl : C.ink)}>{t.label}</Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
+    <View style={s.segWrap} accessibilityRole="tablist">
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.seg}>
+        {tabs.map((t) => {
+          const on = t.key === value;
+          return (
+            <Pressable key={t.key} onPress={() => onChange(t.key)} accessibilityRole="tab" accessibilityState={{ selected: on }}
+              style={[s.segCell, on && { backgroundColor: C.bar }]}>
+              <Text style={body(12, on ? C.hl : C.soft, 'semi')}>{t.label}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -166,10 +165,11 @@ export function ScoreBox({ score, won, lost, big }: { score: number | string; wo
 /** An event's logo on a white tile (navy for white logos), or its initials. */
 export function EventLogo({ e, size = 52 }: { e: YoidenEvent; size?: number }) {
   const url = logoUrl(e.logo);
-  if (url) {
+  const [failed, setFailed] = useState(false);
+  if (url && !failed) {
     return (
       <View style={[s.logo, { width: size, height: size }, e.logoOnDark ? { backgroundColor: C.bar, borderWidth: 0 } : null]}>
-        <Image source={{ uri: url }} style={{ width: size * 0.88, height: size * 0.88 }} resizeMode="contain" />
+        <Image onError={() => setFailed(true)} source={{ uri: url }} style={{ width: size * 0.88, height: size * 0.88 }} resizeMode="contain" />
       </View>
     );
   }
@@ -219,7 +219,7 @@ export function Button({
       onPress={onPress}
       style={({ pressed }) => [
         s.btn,
-        small && { paddingVertical: 7, paddingHorizontal: 11 },
+        small && { paddingVertical: 10, paddingHorizontal: 14 },
         { backgroundColor: bg, opacity: pressed ? 0.85 : 1 },
         tone === 'ghost' && { borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)' },
         tone === 'white' && { borderWidth: 1, borderColor: C.line },
@@ -242,7 +242,7 @@ export function Empty({ children }: { children: string }) {
 export function SectionLabel({ children, color = C.bar, right }: { children: string; color?: string; right?: React.ReactNode }) {
   return (
     <View style={s.sectionLabel}>
-      <Text style={label(14, color)}>{children}</Text>
+      <Text style={head(19, color)}>{children}</Text>
       {right}
     </View>
   );
@@ -275,12 +275,12 @@ const s = StyleSheet.create({
     gap: 10,
   },
   barIcon: { width: 32, height: 32, borderRadius: 6, backgroundColor: C.hl, alignItems: 'center', justifyContent: 'center' },
-  segWrap: { flexGrow: 0, borderWidth: 1, borderColor: C.line, borderRadius: 9, backgroundColor: C.white },
-  seg: { flexGrow: 1 },
-  segCell: { flexGrow: 1, minWidth: 84, alignItems: 'center', paddingVertical: 11, paddingHorizontal: 14, borderRightWidth: 1, borderRightColor: C.line },
-  chip: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 12, paddingVertical: 6 },
+  segWrap: { flexGrow: 0, borderBottomWidth: 1, borderColor: C.line, backgroundColor: C.page },
+  seg: { flexGrow: 1, gap: 6, paddingBottom: 10 },
+  segCell: { flexGrow: 1, minHeight: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7 },
+  chip: { borderWidth: 1, borderRadius: 9, minHeight: 40, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 8 },
   logo: { borderRadius: 8, borderWidth: 1, borderColor: C.line, backgroundColor: C.white, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 7, paddingVertical: 11, paddingHorizontal: 16 },
-  sectionLabel: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: 22, marginBottom: 10 },
+  btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16 },
+  sectionLabel: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: 26, marginBottom: 12 },
   detail: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.line },
 });

@@ -43,8 +43,8 @@ export default function MyEventsScreen() {
             ))}
           </View>
         ) : (
-          <View style={[card, { padding: 20, alignItems: 'center', gap: 14 }]}>
-            <Text style={[body(14, C.soft), { textAlign: 'center' }]}>Follow an event to keep it here and at the top of Home.</Text>
+          <View style={[card, { padding: 16, alignItems: 'flex-start', gap: 12 }]}>
+            <Text style={[body(14, C.soft), { lineHeight: 21 }]}>Follow an event to keep it here and at the top of Home.</Text>
             <Button title="Browse events" tone="navy" small onPress={() => nav.navigate('EventsTab')} />
           </View>
         )}
@@ -64,7 +64,7 @@ export default function MyEventsScreen() {
           </>
         )}
 
-        <SectionLabel>Registrations</SectionLabel>
+        <SectionLabel>Open to join</SectionLabel>
         {regs.length ? (
           <View style={{ gap: 12 }}>
             {regs.map((o) => (
@@ -77,7 +77,7 @@ export default function MyEventsScreen() {
           </View>
         )}
         <Text style={[body(12.5, C.mute), { marginTop: 10, textAlign: 'center' }]}>
-          Your registrations will show here once you register through the app.
+          These events are accepting players. Tap a card to view its registration form.
         </Text>
       </Page>
     </View>
