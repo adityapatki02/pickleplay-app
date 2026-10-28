@@ -15,7 +15,8 @@ import { AuthStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
 import { authApi } from '../../api/auth.api';
 import { SkillLevel } from '../../types';
-import { YColors, YFonts } from '../../config/yoiden';
+// v2 look: the same token names, mapped onto the broadcast theme.
+import { AY as YColors, AF as YFonts, AuthHeader, authButton, authTitle } from '../../v2/components/auth-chrome';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'ProfileSetup'>;
 
@@ -64,31 +65,16 @@ export const ProfileSetupScreen: React.FC<Props> = () => {
   return (
     <View style={s.outer}>
       {/* Editorial logo header */}
-      <View style={s.logoHeader}>
-        <View style={s.sideStripe} />
-        <Image
-          source={require('../../../assets/Logo.png')}
-          style={s.iconMark}
-          resizeMode="contain"
-        />
-        <Image
-          source={require('../../../assets/name_logo.png')}
-          style={s.wordMark}
-          resizeMode="contain"
-        />
-        <View style={s.stepBadge}>
-          <Text style={s.stepText}>STEP 1 OF 2</Text>
-        </View>
-      </View>
+      <AuthHeader closable={false} />
 
       <ScrollView
         style={s.scroll}
         contentContainerStyle={s.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={s.eyebrow}>YOUR PROFILE</Text>
-        <Text style={s.title}>BUILD YOUR</Text>
-        <Text style={s.titleAccent}>PLAYER PROFILE.</Text>
+        <Text style={[s.eyebrow, authTitle.eyebrow]}>YOUR PROFILE · STEP 1 OF 2</Text>
+        <Text style={[s.title, authTitle.main]}>BUILD YOUR</Text>
+        <Text style={[s.titleAccent, authTitle.accent]}>PLAYER PROFILE.</Text>
         <Text style={s.subtitle}>
           This helps us match you with the right tournaments and opponents.
         </Text>
@@ -164,13 +150,14 @@ export const ProfileSetupScreen: React.FC<Props> = () => {
         <TouchableOpacity
           style={[
             s.ctaButton,
+            authButton.btn,
             (!fullName.trim() || !skill) && s.ctaButtonDisabled,
           ]}
           onPress={handleSubmit}
           disabled={!fullName.trim() || !skill || loading}
           activeOpacity={0.85}
         >
-          <Text style={s.ctaText}>
+          <Text style={[s.ctaText, authButton.text]}>
             {loading ? 'SAVING...' : "LET'S PLAY"}
           </Text>
           {!loading && <Text style={s.ctaArrow}>→</Text>}
@@ -251,7 +238,6 @@ const s = StyleSheet.create({
   title: {
     fontFamily: YFonts.display,
     fontSize: 40,
-    transform: [{ skewX: '-10deg' }],
     color: YColors.ink,
     letterSpacing: 0.5,
     lineHeight: 44,
@@ -259,7 +245,6 @@ const s = StyleSheet.create({
   titleAccent: {
     fontFamily: YFonts.display,
     fontSize: 40,
-    transform: [{ skewX: '-10deg' }],
     color: YColors.accent,
     letterSpacing: 0.5,
     lineHeight: 44,
@@ -333,7 +318,6 @@ const s = StyleSheet.create({
   },
   skillRating: {
     fontFamily: YFonts.display,
-    transform: [{ skewX: '-10deg' }],
     fontSize: 20,
     color: YColors.ink3,
   },
@@ -360,7 +344,7 @@ const s = StyleSheet.create({
     letterSpacing: 2,
   },
   ctaArrow: {
-    color: YColors.bg,
+    color: '#001E40',
     fontSize: 18,
     fontWeight: '700',
   },

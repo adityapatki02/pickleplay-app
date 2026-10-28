@@ -1,9 +1,10 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Image } from 'react-native';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
-import { Colors, Fonts } from '../../theme';
+import { Mark, Wordmark } from '../../v2/components/wordmark';
+import { C, F } from '../../v2/theme';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Splash'>;
 
@@ -56,22 +57,12 @@ export const SplashScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <View style={styles.center}>
-        <Animated.Image
-          source={require('../../../assets/Logo.png')}
-          style={[
-            styles.glyph,
-            { opacity: glyphOpacity, transform: [{ scale: glyphScale }] },
-          ]}
-          resizeMode="contain"
-        />
-        <Animated.Image
-          source={require('../../../assets/name_logo.png')}
-          style={[
-            styles.wordmark,
-            { opacity: wordOpacity, transform: [{ translateY: wordShift }] },
-          ]}
-          resizeMode="contain"
-        />
+        <Animated.View style={{ opacity: glyphOpacity, transform: [{ scale: glyphScale }] }}>
+          <Mark height={80} />
+        </Animated.View>
+        <Animated.View style={[styles.wordmark, { opacity: wordOpacity, transform: [{ translateY: wordShift }] }]}>
+          <Wordmark height={40} />
+        </Animated.View>
         <Animated.View
           style={[
             styles.accentLine,
@@ -84,7 +75,7 @@ export const SplashScreen: React.FC<Props> = ({ navigation }) => {
           ]}
         />
       </View>
-      <Text style={styles.tagline}>RACKET SPORTS, ORGANIZED</Text>
+      <Text style={styles.tagline}>LOCAL LEAGUES. EVERY SCORE.</Text>
     </View>
   );
 };
@@ -94,34 +85,28 @@ export default SplashScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: C.bar,
     alignItems: 'center',
     justifyContent: 'center',
   },
   center: {
     alignItems: 'center',
   },
-  glyph: {
-    width: 96,
-    height: 96,
-  },
   wordmark: {
-    width: 200,
-    height: 56,
-    marginTop: 12,
+    marginTop: 22,
   },
   accentLine: {
     height: 3,
     borderRadius: 2,
-    backgroundColor: Colors.lime,
+    backgroundColor: C.hl,
     marginTop: 20,
   },
   tagline: {
     position: 'absolute',
     bottom: 56,
-    fontFamily: Fonts.bodySemibold,
-    fontSize: 11,
+    fontFamily: F.condBold,
+    fontSize: 14,
     letterSpacing: 3,
-    color: Colors.muted,
+    color: 'rgba(255,255,255,0.7)',
   },
 });

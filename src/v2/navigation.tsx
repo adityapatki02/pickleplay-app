@@ -51,6 +51,9 @@ function Tabs() {
 
 const Stack = createNativeStackNavigator<any>();
 
+/** Sign-in opens straight on the phone + PIN screen; the brand splash is for app start only. */
+const SignIn = () => <AuthNavigator initialRouteName="PhoneInput" />;
+
 export function V2Navigator() {
   usePushTaps();
   const S = Stack.Screen as any;
@@ -68,7 +71,7 @@ export function V2Navigator() {
       <S name="Notifications" component={NotificationsScreen} />
       {/* Sign-in is only reachable while signed out; once the phone is verified the
           screen drops out of the stack and the player lands back where they were. */}
-      {!isAuthenticated && <S name="Auth" component={AuthNavigator} options={{ presentation: 'modal' }} />}
+      {!isAuthenticated && <S name="Auth" component={SignIn} options={{ presentation: 'modal' }} />}
       {registerDetailAndManageScreens(Stack as any)}
     </Stack.Navigator>
   );

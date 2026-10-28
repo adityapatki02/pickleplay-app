@@ -9,9 +9,10 @@ import { ForgotPinScreen } from '../screens/auth/ForgotPinScreen';
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
-export const AuthNavigator: React.FC = () => {
+export const AuthNavigator: React.FC<{ initialRouteName?: keyof AuthStackParamList }> = ({ initialRouteName }) => {
   return (
     <Stack.Navigator
+      initialRouteName={initialRouteName}
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',

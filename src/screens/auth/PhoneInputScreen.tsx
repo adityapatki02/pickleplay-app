@@ -20,7 +20,8 @@ import { useAuthStore } from '../../store/authStore';
 import { authApi } from '../../api/auth.api';
 import { openMsg91Widget } from '../../config/msg91';
 import { sendMobileOtp, verifyMobileOtp, retryMobileOtp } from '../../config/msg91mobile';
-import { YColors, YFonts } from '../../config/yoiden';
+// v2 look: the same token names, mapped onto the broadcast theme.
+import { AY as YColors, AF as YFonts, AuthHeader, authButton, authTitle } from '../../v2/components/auth-chrome';
 
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'PhoneInput'>;
@@ -231,7 +232,7 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
     ? "Enter the 6-digit code we just sent to your number."
     : (mode === 'login'
         ? "Phone + PIN. That's it."
-        : 'Create your account to find and join tournaments.');
+        : 'One account for every event you follow, play and run.');
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -247,24 +248,12 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
           keyboardShouldPersistTaps="handled"
         >
           {/* Logo header */}
-          <View style={s.logoHeader}>
-            <View style={s.sideStripe} />
-            <Image
-              source={require('../../../assets/Logo.png')}
-              style={s.iconMark}
-              resizeMode="contain"
-            />
-            <Image
-              source={require('../../../assets/name_logo.png')}
-              style={s.wordMark}
-              resizeMode="contain"
-            />
-          </View>
+          <AuthHeader />
 
           <Animated.View style={[s.body, { opacity: fadeIn }]}>
-            <Text style={s.eyebrow}>{eyebrow}</Text>
-            <Text style={s.title}>{titleMain}</Text>
-            <Text style={s.titleAccent}>{titleAccent}</Text>
+            <Text style={[s.eyebrow, authTitle.eyebrow]}>{eyebrow}</Text>
+            <Text style={[s.title, authTitle.main]}>{titleMain}</Text>
+            <Text style={[s.titleAccent, authTitle.accent]}>{titleAccent}</Text>
             <Text style={s.subtitle}>{subtitle}</Text>
 
             {/* ── Native register: OTP step ── */}
@@ -304,14 +293,14 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
                 </View>
 
                 <TouchableOpacity
-                  style={[s.submitBtn, (!otpComplete || loading) && s.submitBtnDisabled]}
+                  style={[s.submitBtn, authButton.btn, (!otpComplete || loading) && s.submitBtnDisabled]}
                   onPress={handleOtpVerify}
                   disabled={!otpComplete || loading}
                   activeOpacity={0.85}
                 >
                   {loading
-                    ? <ActivityIndicator color={YColors.bg} size="small" />
-                    : <Text style={s.submitText}>VERIFY & CREATE ACCOUNT</Text>}
+                    ? <ActivityIndicator color="#001E40" size="small" />
+                    : <Text style={[s.submitText, authButton.text]}>VERIFY & CREATE ACCOUNT</Text>}
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -348,7 +337,7 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
                   <Text style={s.label}>PHONE NUMBER</Text>
                   <View style={s.phoneRow}>
                     <View style={s.countryBox}>
-                      <Text style={s.countryText}>🇮🇳 +91</Text>
+                      <Text style={s.countryText}>+91</Text>
                     </View>
                     <TextInput
                       style={[s.input, { flex: 1 }]}
@@ -419,7 +408,7 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
 
                 {/* Submit */}
                 <TouchableOpacity
-                  style={[s.submitBtn, (!formOk || loading) && s.submitBtnDisabled]}
+                  style={[s.submitBtn, authButton.btn, (!formOk || loading) && s.submitBtnDisabled]}
                   onPress={
                     mode === 'login'
                       ? handleLogin
@@ -429,9 +418,9 @@ export const PhoneInputScreen: React.FC<Props> = ({ navigation }) => {
                   activeOpacity={0.85}
                 >
                   {loading ? (
-                    <ActivityIndicator color={YColors.bg} size="small" />
+                    <ActivityIndicator color="#001E40" size="small" />
                   ) : (
-                    <Text style={s.submitText}>
+                    <Text style={[s.submitText, authButton.text]}>
                       {mode === 'login'
                         ? 'LOG IN'
                         : (IS_WEB ? 'VERIFY & CREATE ACCOUNT' : 'SEND OTP')}
@@ -511,7 +500,6 @@ const s = StyleSheet.create({
   title: {
     fontFamily: YFonts.display,
     fontSize: 48,
-    transform: [{ skewX: '-10deg' }],
     color: YColors.ink,
     letterSpacing: 0.5,
     lineHeight: 52,
@@ -519,7 +507,6 @@ const s = StyleSheet.create({
   titleAccent: {
     fontFamily: YFonts.display,
     fontSize: 48,
-    transform: [{ skewX: '-10deg' }],
     color: YColors.accent,
     letterSpacing: 0.5,
     lineHeight: 52,

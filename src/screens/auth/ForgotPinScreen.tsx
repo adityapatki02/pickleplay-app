@@ -20,7 +20,8 @@ import { useAuthStore } from '../../store/authStore';
 import { authApi } from '../../api/auth.api';
 import { openMsg91Widget } from '../../config/msg91';
 import { sendMobileOtp, verifyMobileOtp, retryMobileOtp } from '../../config/msg91mobile';
-import { YColors, YFonts } from '../../config/yoiden';
+// v2 look: the same token names, mapped onto the broadcast theme.
+import { AY as YColors, AF as YFonts, AuthHeader, authButton, authTitle } from '../../v2/components/auth-chrome';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'ForgotPin'>;
 
@@ -226,37 +227,25 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
           keyboardShouldPersistTaps="handled"
         >
           {/* Logo header */}
-          <View style={s.logoHeader}>
-            <View style={s.sideStripe} />
-            <Image
-              source={require('../../../assets/Logo.png')}
-              style={s.iconMark}
-              resizeMode="contain"
-            />
-            <Image
-              source={require('../../../assets/name_logo.png')}
-              style={s.wordMark}
-              resizeMode="contain"
-            />
-          </View>
+          <AuthHeader />
 
           <Animated.View style={[s.body, { opacity: fadeIn }]}>
-            <Text style={s.eyebrow}>{eyebrow}</Text>
-            <Text style={s.title}>{titleMain}</Text>
-            <Text style={s.titleAccent}>{titleAccent}</Text>
+            <Text style={[s.eyebrow, authTitle.eyebrow]}>{eyebrow}</Text>
+            <Text style={[s.title, authTitle.main]}>{titleMain}</Text>
+            <Text style={[s.titleAccent, authTitle.accent]}>{titleAccent}</Text>
             <Text style={s.subtitle}>{subtitle}</Text>
 
             {/* ── Web: verify button (step 1) ── */}
             {IS_WEB && !accessToken && (
               <TouchableOpacity
-                style={[s.primaryBtn, loading && s.btnDisabled]}
+                style={[s.primaryBtn, authButton.btn, loading && s.btnDisabled]}
                 onPress={handleWebVerify}
                 disabled={loading}
                 activeOpacity={0.85}
               >
                 {loading
-                  ? <ActivityIndicator color={YColors.bg} size="small" />
-                  : <Text style={s.primaryBtnText}>VERIFY YOUR PHONE</Text>}
+                  ? <ActivityIndicator color="#001E40" size="small" />
+                  : <Text style={[s.primaryBtnText, authButton.text]}>VERIFY YOUR PHONE</Text>}
               </TouchableOpacity>
             )}
 
@@ -287,14 +276,14 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
                   </View>
                 </View>
                 <TouchableOpacity
-                  style={[s.primaryBtn, (!phoneOk || loading) && s.btnDisabled]}
+                  style={[s.primaryBtn, authButton.btn, (!phoneOk || loading) && s.btnDisabled]}
                   onPress={handleSendOtp}
                   disabled={!phoneOk || loading}
                   activeOpacity={0.85}
                 >
                   {loading
-                    ? <ActivityIndicator color={YColors.bg} size="small" />
-                    : <Text style={s.primaryBtnText}>SEND OTP</Text>}
+                    ? <ActivityIndicator color="#001E40" size="small" />
+                    : <Text style={[s.primaryBtnText, authButton.text]}>SEND OTP</Text>}
                 </TouchableOpacity>
               </>
             )}
@@ -334,14 +323,14 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
                   )}
                 </View>
                 <TouchableOpacity
-                  style={[s.primaryBtn, (!otpComplete || loading) && s.btnDisabled]}
+                  style={[s.primaryBtn, authButton.btn, (!otpComplete || loading) && s.btnDisabled]}
                   onPress={handleOtpVerify}
                   disabled={!otpComplete || loading}
                   activeOpacity={0.85}
                 >
                   {loading
-                    ? <ActivityIndicator color={YColors.bg} size="small" />
-                    : <Text style={s.primaryBtnText}>VERIFY OTP</Text>}
+                    ? <ActivityIndicator color="#001E40" size="small" />
+                    : <Text style={[s.primaryBtnText, authButton.text]}>VERIFY OTP</Text>}
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={s.linkRow}
@@ -401,14 +390,14 @@ export const ForgotPinScreen: React.FC<Props> = ({ navigation, route }) => {
                   )}
                 </View>
                 <TouchableOpacity
-                  style={[s.primaryBtn, !canReset && s.btnDisabled]}
+                  style={[s.primaryBtn, authButton.btn, !canReset && s.btnDisabled]}
                   onPress={handleReset}
                   disabled={!canReset}
                   activeOpacity={0.85}
                 >
                   {loading
-                    ? <ActivityIndicator color={YColors.bg} size="small" />
-                    : <Text style={s.primaryBtnText}>RESET PIN & LOG IN</Text>}
+                    ? <ActivityIndicator color="#001E40" size="small" />
+                    : <Text style={[s.primaryBtnText, authButton.text]}>RESET PIN & LOG IN</Text>}
                 </TouchableOpacity>
                 {!IS_WEB && (
                   <TouchableOpacity
@@ -497,7 +486,6 @@ const s = StyleSheet.create({
   title: {
     fontFamily: YFonts.display,
     fontSize: 44,
-    transform: [{ skewX: '-10deg' }],
     color: YColors.ink,
     letterSpacing: 0.5,
     lineHeight: 48,
@@ -505,7 +493,6 @@ const s = StyleSheet.create({
   titleAccent: {
     fontFamily: YFonts.display,
     fontSize: 44,
-    transform: [{ skewX: '-10deg' }],
     color: YColors.accent,
     letterSpacing: 0.5,
     lineHeight: 48,
