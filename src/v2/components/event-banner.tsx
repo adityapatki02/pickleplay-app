@@ -1,6 +1,6 @@
 // The navy banner at the top of every event page: logo, name, status line,
-// headline numbers, and the three actions (Follow, Share, and Manage for
-// people with a role in the event).
+// headline numbers, the actions (Follow, Share, Site), and an entry into each role
+// mode the signed-in phone has in the event (admin, scorer, captain).
 import React from 'react';
 import { Linking, Platform, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -10,6 +10,7 @@ import { ExternalIcon, GearIcon, ShareIcon, StarIcon } from './icons';
 import { formatWhen, statusOf, type YoidenEvent } from '../data/events';
 import { useFollows } from '../store/follows';
 import { useMyRoles } from '../store/roles';
+import { MODE_NAME } from './mode-bar';
 import { useNow } from '../hooks';
 
 export function EventBanner({
@@ -32,8 +33,9 @@ export function EventBanner({
   const following = useFollows((s) => s.ids.includes(event.id));
   const toggle = useFollows((s) => s.toggle);
   const { roles } = useMyRoles();
-  // Manage opens the league admin screens; scorer, captain and football modes come next.
-  const mine = roles.filter((r) => r.event.id === event.id && r.kind === 'league' && r.role === 'admin' && r.leagueId);
+  // Admin outranks scorer for the same league or football event; a captain keeps their own entry.
+  const all = roles.filter((r) => r.event.id === event.id);
+  const mine = all.filter((r) => !(r.role === 'scorer' && all.some((x) => x.role === 'admin' && x.slug === r.slug)));
 
   const share = async () => {
     const url = `https://yoiden.com/events/${event.id}`;
@@ -97,19 +99,23 @@ export function EventBanner({
 
         {mine.length > 0 && (
           <View style={s.roleRow}>
-            {mine.map((r) => (
-              <Pressable
-                key={`${r.slug}-${r.role}`}
-                onPress={() => nav.navigate('Manage', { eventId: event.id, leagueId: r.leagueId, slug: r.slug })}
-                style={s.role}
-              >
-                <GearIcon size={15} color={C.bar} />
-                <Text style={label(14, C.bar)}>
-                  Manage{mine.length > 1 ? ` · ${r.label}` : ''}
-                </Text>
-              </Pressable>
-            ))}
-            <Text style={[body(12, 'rgba(255,255,255,0.7)'), { alignSelf: 'center' }]}>You're an admin of this event</Text>
+            {mine.map((r) => {
+              const division = (event.leagues?.length ?? 0) > 1 && r.label ? ` · ${r.label}` : '';
+              const text = r.role === 'captain' ? `Captain · ${r.team?.name ?? 'your team'}` : `${MODE_NAME[r.role]}${division}`;
+              return (
+                <Pressable
+                  key={`${r.slug}-${r.role}-${r.team?.id ?? ''}`}
+                  onPress={() =>
+                    nav.navigate('Mode', { eventId: event.id, role: r.role, kind: r.kind, slug: r.slug, leagueId: r.leagueId, teamId: r.team?.id })
+                  }
+                  style={s.role}
+                  accessibilityRole="button"
+                >
+                  <GearIcon size={15} color={C.bar} />
+                  <Text style={label(14, C.bar)}>{text}</Text>
+                </Pressable>
+              );
+            })}
           </View>
         )}
 

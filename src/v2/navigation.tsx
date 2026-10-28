@@ -19,6 +19,8 @@ import MatchScreen from './screens/MatchScreen';
 import PlayerScreen from './screens/PlayerScreen';
 import ManageScreen from './screens/ManageScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
+import ModeScreen from './screens/mode/ModeScreen';
+import ScoreTieScreen from './screens/mode/ScoreTieScreen';
 import './store/event-list';
 import { usePushTaps } from './store/push';
 
@@ -29,6 +31,8 @@ export type V2Params = {
   Player: { eventId: string; slug: string };
   Search: undefined;
   Manage: { eventId: string; leagueId: string; slug: string };
+  Mode: { eventId: string; role: 'admin' | 'scorer' | 'captain'; kind: 'league' | 'football' | 'event'; slug: string | null; leagueId?: string; teamId?: string };
+  ScoreTie: { eventId: string; slug: string; seasonId: string; tieId: string; role: 'admin' | 'scorer' | 'captain' };
   Auth: undefined;
   Notifications: undefined;
 };
@@ -59,6 +63,8 @@ export function V2Navigator() {
       <S name="Player" component={PlayerScreen} />
       <S name="Search" component={SearchScreen} options={{ animation: 'fade' }} />
       <S name="Manage" component={ManageScreen} />
+      <S name="Mode" component={ModeScreen} />
+      <S name="ScoreTie" component={ScoreTieScreen} />
       <S name="Notifications" component={NotificationsScreen} />
       {/* Sign-in is only reachable while signed out; once the phone is verified the
           screen drops out of the stack and the player lands back where they were. */}

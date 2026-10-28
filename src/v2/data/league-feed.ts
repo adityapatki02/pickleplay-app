@@ -4,7 +4,8 @@
  * and the player table. No auth; CORS is open.
  */
 
-export const API_BASE = "https://yoiden-api-lonnxhto7a-el.a.run.app/api/v1";
+// The app build can point at another API (EXPO_PUBLIC_API_URL, e.g. a local one); the website copy uses prod.
+export const API_BASE = process.env.EXPO_PUBLIC_API_URL || "https://yoiden-api-lonnxhto7a-el.a.run.app/api/v1";
 
 export type FeedTeam = { id: string; name: string; shortName: string; color: string | null };
 
