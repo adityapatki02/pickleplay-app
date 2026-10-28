@@ -43,6 +43,10 @@ function TieRow({ t, me, onPress }: { t: ScoreTie; me: string; onPress: () => vo
   const home = t.homeTeam ?? { name: 'TBD', shortName: '' };
   const away = t.awayTeam ?? { name: 'TBD', shortName: '' };
   const played = t.status === 'completed' || t.status === 'in_progress';
+  // The server totals a tie when it's finished; until then count games won.
+  const won = (side: 'a' | 'b') =>
+    t.matches.filter((g) => g.status === 'completed' && (side === 'a' ? (g.teamAScore ?? 0) > (g.teamBScore ?? 0) : (g.teamBScore ?? 0) > (g.teamAScore ?? 0))).length;
+  const score = (i: number) => (t.status === 'completed' ? (i === 0 ? t.homeScore : t.awayScore) : won(i === 0 ? 'a' : 'b'));
   const holder = t.scorerId && t.scorerId !== me ? t.scorerName ?? 'Another scorer' : null;
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [card, s.tie, pressed && { opacity: 0.85 }]} accessibilityRole="button">
@@ -59,7 +63,7 @@ function TieRow({ t, me, onPress }: { t: ScoreTie; me: string; onPress: () => vo
           <Text style={[body(14.5, C.ink, 'semi'), { flex: 1 }]} numberOfLines={1}>
             {team.name}
           </Text>
-          {played ? <Text style={head(20, C.ink)}>{i === 0 ? t.homeScore : t.awayScore}</Text> : null}
+          {played ? <Text style={head(20, C.ink)}>{score(i)}</Text> : null}
         </View>
       ))}
       <View style={s.tieFoot}>
