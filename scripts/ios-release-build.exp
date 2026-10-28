@@ -1,0 +1,11 @@
+#!/usr/bin/expect -f
+# Runs ios-release-build.sh and accepts each EAS question with its default (Return):
+# set up Push Notifications = Yes, generate a new push key = Yes, and so on.
+# Questions are matched on their hint text, since the prompt itself is wrapped in colour codes.
+set timeout 900
+spawn zsh [file dirname [info script]]/ios-release-build.sh
+expect {
+  -re {Use arrow-keys|\(Y/n\)|\(y/N\)} { sleep 1; send "\r"; exp_continue }
+  -re {See logs: (https://expo.dev/\S+)} { puts "\nBUILD QUEUED: $expect_out(1,string)"; exp_continue }
+  eof
+}
