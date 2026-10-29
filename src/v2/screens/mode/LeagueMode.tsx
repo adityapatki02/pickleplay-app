@@ -1,18 +1,19 @@
 // Scorer and admin mode for a league: every tie of the season, live ones first, then
 // today's, then what's next and what's done. Tapping a tie opens it for scoring. Admins
 // also get the league tools (teams, groups, standings), which still open the existing
-// screens.
+// screens, and the Scorers and Links tabs of the event site's admin.
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Page } from '../../components/chrome';
-import { Empty, SectionLabel, TeamBadge } from '../../components/ui';
+import { Empty, SectionLabel, SegTabs, TeamBadge } from '../../components/ui';
 import { ChevronRight } from '../../components/icons';
 import { fetchLeague, roundLabel } from '../../data/league-feed';
 import { scorer, type ScoreTie } from '../../data/modes-api';
 import type { YoidenEvent } from '../../data/events';
 import type { Role } from '../../store/roles';
 import { useLoad } from '../../hooks';
+import { LinksTab, ScorersTab } from './league-admin';
 import { C, body, card, head, label } from '../../theme';
 
 const todayIST = () => new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);
@@ -77,6 +78,7 @@ function TieRow({ t, me, onPress }: { t: ScoreTie; me: string; onPress: () => vo
 export default function LeagueMode({ event, slug, leagueId, role }: { event: YoidenEvent; slug: string; leagueId?: string; role: Role }) {
   const nav = useNavigation<any>();
   const [showAllDone, setShowAllDone] = useState(false);
+  const [tab, setTab] = useState<'ties' | 'scorers' | 'links'>('ties');
   const { state, reload } = useLoad(
     `mode-${slug}`,
     async () => {
@@ -112,8 +114,8 @@ export default function LeagueMode({ event, slug, leagueId, role }: { event: Yoi
       </>
     ) : null;
 
-  return (
-    <Page padded={false} onRefresh={reload}>
+  const tiesView = (
+    <>
       {role === 'admin' && leagueId && state.status === 'ready' ? (
         <AdminTools leagueId={leagueId} seasonId={state.data.season.id} />
       ) : null}
@@ -142,6 +144,27 @@ export default function LeagueMode({ event, slug, leagueId, role }: { event: Yoi
           ) : null}
         </>
       ) : null}
+    </>
+  );
+
+  return (
+    <Page padded={false} onRefresh={reload}>
+      {role === 'admin' && leagueId ? (
+        <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+          <SegTabs
+            tabs={[{ key: 'ties', label: 'Ties' }, { key: 'scorers', label: 'Scorers' }, { key: 'links', label: 'Links' }] as const}
+            value={tab}
+            onChange={setTab}
+          />
+        </View>
+      ) : null}
+      {role === 'admin' && leagueId && tab === 'scorers' ? (
+        <ScorersTab leagueId={leagueId} />
+      ) : role === 'admin' && leagueId && tab === 'links' ? (
+        <LinksTab leagueId={leagueId} eventUrl={event.url} />
+      ) : (
+        tiesView
+      )}
       <View style={{ height: 32 }} />
     </Page>
   );
