@@ -13,6 +13,7 @@ import HomeScreen from './screens/HomeScreen';
 import EventsScreen from './screens/EventsScreen';
 import MyEventsScreen from './screens/MyEventsScreen';
 import MeScreen from './screens/MeScreen';
+import MyRecordScreen from './screens/MyRecordScreen';
 import SearchScreen from './screens/SearchScreen';
 import EventScreen from './screens/EventScreen';
 import MatchScreen from './screens/MatchScreen';
@@ -35,6 +36,7 @@ export type V2Params = {
   ScoreTie: { eventId: string; slug: string; seasonId: string; tieId: string; role: 'admin' | 'scorer' | 'captain' };
   Auth: undefined;
   Notifications: undefined;
+  MyRecord: undefined;
 };
 
 const Tab = createBottomTabNavigator();
@@ -69,6 +71,7 @@ export function V2Navigator() {
       <S name="Mode" component={ModeScreen} />
       <S name="ScoreTie" component={ScoreTieScreen} />
       <S name="Notifications" component={NotificationsScreen} />
+      <S name="MyRecord" component={MyRecordScreen} />
       {/* Sign-in is only reachable while signed out; once the phone is verified the
           screen drops out of the stack and the player lands back where they were. */}
       {!isAuthenticated && <S name="Auth" component={SignIn} options={{ presentation: 'modal' }} />}

@@ -144,6 +144,7 @@ export const RootNavigator: React.FC = () => {
             Player: 'events/:eventId/player/:slug',
             Search: 'search',
             Notifications: 'notifications',
+            MyRecord: 'me/record',
             Manage: 'manage/:eventId/:slug',
           },
         },
