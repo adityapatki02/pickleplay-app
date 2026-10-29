@@ -52,7 +52,7 @@ const maskPhone = (phone?: string) => {
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
 /** Best-effort match of a career league name to an event in EVENTS (the API returns names, not slugs). */
-function eventForLeague(leagueName: string, seasonName: string): YoidenEvent | undefined {
+export function eventForLeague(leagueName: string, seasonName: string): YoidenEvent | undefined {
   const l = norm(leagueName);
   const ls = norm(`${leagueName} ${seasonName}`);
   if (!l) return undefined;
@@ -222,7 +222,7 @@ function SignedIn() {
     <Page onRefresh={reload}>
       {/* Profile banner */}
       <View style={s.banner}>
-        <Stripes height={150} wide />
+        <View pointerEvents="none" style={s.stripeBand}><Stripes height={96} wide /></View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
           {avatar ? (
             <Image source={{ uri: avatar }} style={s.avatar} />
@@ -266,6 +266,13 @@ function SignedIn() {
 
       {/* Records */}
       <SectionLabel>Your records</SectionLabel>
+      <Pressable onPress={() => nav.navigate('MyRecord')} style={({ pressed }) => [card, s.recordLink, pressed && { backgroundColor: C.page }]}>
+        <View style={{ flex: 1 }}>
+          <Text style={body(14.5, C.ink, 'semi')}>My record</Text>
+          <Text style={[body(12.5, C.soft), { marginTop: 1 }]}>Every match by sport, format and league</Text>
+        </View>
+        <ChevronRight size={16} color={C.mute} />
+      </Pressable>
       {state.status === 'loading' ? (
         <View style={[card, { padding: 18 }]}>
           <ActivityIndicator color={C.accent} />
@@ -355,9 +362,11 @@ export default function MeScreen() {
 const s = StyleSheet.create({
   banner: { backgroundColor: C.bar, borderRadius: 10, marginTop: 16, padding: 16, overflow: 'hidden' },
   avatar: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, borderColor: C.hl },
+  stripeBand: { position: 'absolute', top: 0, left: 0, right: 0, height: 96 },
   stats: { flexDirection: 'row', marginTop: 16, borderTopWidth: 1, borderTopColor: C.barSoft, paddingTop: 12 },
   stat: { flex: 1, alignItems: 'center', gap: 2 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.line },
+  recordLink: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 12, borderLeftWidth: 4, borderLeftColor: C.hl },
   badge: { backgroundColor: C.hl, borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2 },
   dot: { width: 8, height: 8, borderRadius: 2, backgroundColor: C.hl, marginTop: 6, borderWidth: 1, borderColor: C.hlInk },
   detail: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.line },
