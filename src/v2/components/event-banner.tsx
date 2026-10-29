@@ -69,6 +69,12 @@ export function EventBanner({
           </View>
         </View>
 
+        {event.notice ? (
+          <View style={s.notice}>
+            <Text style={[body(13, 'rgba(255,255,255,0.9)'), { lineHeight: 19 }]}>{event.notice}</Text>
+          </View>
+        ) : null}
+
         {stats && stats.length > 0 && (
           <View style={s.stats}>
             {stats.map(([k, v], i) => (
@@ -129,6 +135,7 @@ const s = StyleSheet.create({
   wrap: { backgroundColor: C.bar, overflow: 'hidden' },
   inner: { width: '100%', maxWidth: MAX_W, alignSelf: 'center', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, paddingRight: 0 },
+  notice: { marginTop: 14, borderLeftWidth: 3, borderLeftColor: C.hl, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 6, paddingHorizontal: 12, paddingVertical: 9 },
   stats: { flexDirection: 'row', marginTop: 16, overflow: 'hidden', alignSelf: 'flex-start' },
   stat: { paddingHorizontal: 18, paddingVertical: 2, borderRightWidth: 1, borderRightColor: C.barSoft, alignItems: 'center' },
   actions: { flexDirection: 'row', gap: 8, marginTop: 16, flexWrap: 'wrap' },

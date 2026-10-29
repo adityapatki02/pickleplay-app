@@ -50,6 +50,8 @@ export type YoidenEvent = {
   videos?: { title: string; url: string }[];
   /** Venue line for the event page. */
   venue?: string;
+  /** Short note shown under the event name on its page, e.g. that a league is a sample structure. */
+  notice?: string;
   /** Short facts shown on the card, e.g. ["16 teams", "40 ties"]. */
   facts: string[];
   /** Numbers that feed the totals band. */
