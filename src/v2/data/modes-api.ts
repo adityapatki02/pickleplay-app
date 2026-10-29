@@ -83,6 +83,40 @@ export const scorer = {
   complete: (tieId: string) => apiClient.post(`/scorer/complete-tie/${tieId}`),
 };
 
+// ── League admin (/admin) ─────────────────────────────────────────
+// The web admin's own endpoints (event-site /admin), which take the same login.
+
+export type AdminScorer = { userId: string; name: string; phone: string; defaultCourt: number | null; isAdmin: boolean };
+
+export type AdminTeam = {
+  id: string;
+  name: string;
+  shortName: string | null;
+  captainName: string | null;
+  captainPhone: string | null;
+  captainToken: string | null;
+  hasPin: boolean;
+};
+
+export type AdminData = {
+  /** The league's event site (https://society.yoiden.com, path of its public page), if it has one. */
+  site: { host: string; path: string } | null;
+  season: { id: string; slug: string | null };
+  scorers: AdminScorer[];
+  franchises: AdminTeam[];
+};
+
+export const leagueAdmin = {
+  data: (leagueId: string) => apiClient.get('/admin/data', { params: { leagueId } }).then(unwrap<AdminData>),
+  addScorer: (leagueId: string, body: { name?: string; phone: string; pin?: string }) =>
+    apiClient
+      .post('/admin/scorers', { leagueId, ...body })
+      .then(unwrap<{ userId: string; name: string | null; phone: string; generatedPin: string | null }>),
+  removeScorer: (leagueId: string, userId: string) => apiClient.post(`/admin/scorers/${userId}/remove`, { leagueId }),
+  scorerPin: (leagueId: string, userId: string) =>
+    apiClient.post(`/admin/scorers/${userId}/reveal-pin`, { leagueId }).then(unwrap<{ pin: string | null }>),
+};
+
 // ── Captain (/captain-portal) ─────────────────────────────────────
 
 export type CaptainTeam = { token: string; team: string; league: string; franchiseId?: string };
