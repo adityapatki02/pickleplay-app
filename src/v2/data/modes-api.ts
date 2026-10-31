@@ -115,6 +115,12 @@ export const leagueAdmin = {
   removeScorer: (leagueId: string, userId: string) => apiClient.post(`/admin/scorers/${userId}/remove`, { leagueId }),
   scorerPin: (leagueId: string, userId: string) =>
     apiClient.post(`/admin/scorers/${userId}/reveal-pin`, { leagueId }).then(unwrap<{ pin: string | null }>),
+  /** Put a tie on a court (1-8), or clear it with null. */
+  assignCourt: (leagueId: string, tieId: string, courtNumber: number | null) =>
+    apiClient.post('/admin/assign-court', { leagueId, tieId, courtNumber }),
+  /** Rename a team (the league organiser's own franchise endpoint). */
+  renameTeam: (franchiseId: string, name: string, shortName?: string) =>
+    apiClient.patch(`/franchises/${franchiseId}`, { name, ...(shortName ? { shortName } : {}) }),
 };
 
 // ── Captain (/captain-portal) ─────────────────────────────────────

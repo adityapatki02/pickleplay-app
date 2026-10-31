@@ -319,7 +319,11 @@ function TopPlayers({ feed, open, onSeeAll }: { feed: LeagueFeed; open: Open; on
 
 const ST = { rank: 36, team: 164, num: 44, games: 64, diff: 72, pts: 60 };
 
-function StandingsTab({ feed }: { feed: LeagueFeed }) {
+/** Tie-break notes name teams by code ("Beat CB-M head-to-head"); spell them out. */
+const fullNames = (note: string, rows: { team: { name: string; shortName: string } }[]) =>
+  rows.reduce((n, r) => (r.team.shortName && r.team.shortName !== r.team.name ? n.split(r.team.shortName).join(r.team.name) : n), note);
+
+export function StandingsTab({ feed }: { feed: LeagueFeed }) {
   return (
     <View style={{ gap: 18 }}>
       {feed.groups.map((g) => (
@@ -368,7 +372,7 @@ function StandingsTab({ feed }: { feed: LeagueFeed }) {
                 .filter((r) => r.note)
                 .map((r) => (
                   <Text key={r.team.id} style={body(12.5, C.soft)}>
-                    <Text style={body(12.5, C.ink, 'bold')}>{r.team.name}:</Text> {r.note}
+                    <Text style={body(12.5, C.ink, 'bold')}>{r.team.name}:</Text> {fullNames(r.note!, g.rows)}
                   </Text>
                 ))}
             </View>

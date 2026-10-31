@@ -1,10 +1,10 @@
-// Admin mode's Scorers and Links tabs, like the event site's /admin: add, check and remove
+// Admin mode's Teams, Scorers and Links tabs, like the event site's /admin: rename teams; add, check and remove
 // scorers; hand out the league's links (public page, captains, scorers) and each team's
 // captain link. Reads and writes go through the web admin's endpoints.
 import React, { useState } from 'react';
-import { Platform, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Platform, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { Empty } from '../../components/ui';
+import { Empty, TeamBadge } from '../../components/ui';
 import { errorText, leagueAdmin, type AdminData } from '../../data/modes-api';
 import { useLoad } from '../../hooks';
 import { API_BASE_URL } from '../../../config/constants';
@@ -218,3 +218,85 @@ const s = StyleSheet.create({
   small: { borderRadius: 8, paddingHorizontal: 11, paddingVertical: 8 },
   smallLine: { borderWidth: 1, borderColor: C.lineStrong },
 });
+
+// ── Teams ─────────────────────────────────────────────────────────
+
+/** Every team with its captain. Tap Edit to fix a team's name; captains themselves are
+ *  changed on the event site's admin, since that also changes the captain's own account. */
+export function TeamsTab({ leagueId, colors }: { leagueId: string; colors: Record<string, string | null> }) {
+  const { state, reload } = useAdminData(leagueId);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<Note>(null);
+
+  if (state.status !== 'ready') {
+    return (
+      <View style={{ paddingHorizontal: 16 }}>
+        <Loading state={state} />
+      </View>
+    );
+  }
+
+  const save = async (id: string) => {
+    if (!name.trim()) return setNote({ ok: false, text: 'Enter a team name.' });
+    setBusy(true);
+    try {
+      await leagueAdmin.renameTeam(id, name.trim());
+      setNote({ ok: true, text: `Renamed to ${name.trim()}.` });
+      setEditing(null);
+      reload();
+    } catch (e) {
+      setNote({ ok: false, text: errorText(e, 'Could not rename the team.') });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const teams = state.data.franchises;
+  return (
+    <View style={{ paddingHorizontal: 16, gap: 12 }}>
+      <NoteBox note={note} />
+      <Heading>{`Teams · ${teams.length}`}</Heading>
+      {teams.length ? (
+        <View style={[card, { paddingVertical: 4 }]}>
+          {teams.map((f, i) => (
+            <View key={f.id} style={[s.row, i > 0 && s.rowLine, { flexWrap: 'wrap' }]}>
+              <TeamBadge team={{ name: f.name, shortName: f.shortName ?? '', color: colors[f.id] ?? null }} size={30} />
+              {editing === f.id ? (
+                <View style={{ flex: 1, gap: 8 }}>
+                  <TextInput value={name} onChangeText={setName} autoFocus placeholder="Team name" placeholderTextColor={C.mute} style={s.input} />
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <SmallButton title={busy ? 'Saving…' : 'Save'} tone="lime" onPress={() => (busy ? undefined : save(f.id))} />
+                    <SmallButton title="Cancel" onPress={() => setEditing(null)} />
+                  </View>
+                </View>
+              ) : (
+                <>
+                  <View style={{ flex: 1 }}>
+                    <Text style={body(14.5, C.ink, 'semi')}>{f.name}</Text>
+                    <Text style={body(12, C.mute)}>
+                      {f.captainName ? `Captain: ${f.captainName}` : 'No captain set'}
+                      {f.captainPhone ? ` · ${f.captainPhone}` : ''}
+                    </Text>
+                  </View>
+                  {f.captainPhone && Platform.OS !== 'web' ? <SmallButton title="Call" onPress={() => Linking.openURL(`tel:${f.captainPhone}`)} /> : null}
+                  <SmallButton
+                    title="Edit"
+                    onPress={() => {
+                      setName(f.name);
+                      setNote(null);
+                      setEditing(f.id);
+                    }}
+                  />
+                </>
+              )}
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Empty>No teams in this league yet.</Empty>
+      )}
+    </View>
+  );
+}
