@@ -2,7 +2,7 @@
 // Signed-in players see their profile banner with headline stats, the events
 // where they hold a role, their records across events (from the career API),
 // the saved profile that fills registration forms, and settings.
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { ActivityIndicator, Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { C, body, card, head, label } from '../theme';
@@ -16,6 +16,7 @@ import { useAuthStore } from '../../store/authStore';
 import { getPlayerCareer } from '../../api/leagues.api';
 import { authApi } from '../../api/auth.api';
 import { xAlert, xConfirm } from '../../utils/alert';
+import { MISSING_LABEL, passportApi, type PassportView } from '../data/passport-api';
 
 const PRIVACY = 'https://yoiden.com/privacy';
 const TERMS = 'https://yoiden.com/terms';
@@ -41,12 +42,6 @@ const initialsOf = (name: string) => {
   const p = (name || '').trim().split(/\s+/).filter(Boolean);
   if (!p.length) return '?';
   return (p.length === 1 ? p[0][0] : p[0][0] + p[p.length - 1][0]).toUpperCase();
-};
-
-const maskPhone = (phone?: string) => {
-  const d = (phone || '').replace(/\D/g, '');
-  if (d.length < 4) return phone || '—';
-  return `•••••• ${d.slice(-4)}`;
 };
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -186,6 +181,10 @@ function SignedIn() {
   const { roles, loading: rolesLoading } = useMyRoles();
   const { state, reload } = useLoad<Career>(`career-${user.id}`, () => getPlayerCareer(user.id, 'private'));
   const career = state.status === 'ready' ? state.data : null;
+  const pp = useLoad<PassportView>(`passport-me-${user.id}`, () => passportApi.get());
+  const passport = pp.state.status === 'ready' ? pp.state.data : null;
+  // Back from the passport screen: show the new percentage.
+  useEffect(() => nav.addListener('focus', pp.reload), [nav]);
 
   const name = user.displayName || user.fullName || career?.player.fullName || 'Yoiden player';
   const city = user.city || career?.player.city || '';
@@ -219,7 +218,7 @@ function SignedIn() {
   ];
 
   return (
-    <Page onRefresh={reload}>
+    <Page onRefresh={() => (reload(), pp.reload())}>
       {/* Profile banner */}
       <View style={s.banner}>
         <View pointerEvents="none" style={s.stripeBand}><Stripes height={96} wide /></View>
@@ -318,31 +317,26 @@ function SignedIn() {
         </View>
       )}
 
-      {/* Saved profile */}
-      <SectionLabel
-        right={
-          <Pressable onPress={() => nav.navigate('EditProfile')} hitSlop={8}>
-            <Text style={label(13, C.accent)}>Edit</Text>
-          </Pressable>
-        }
-      >
-        Saved profile
-      </SectionLabel>
-      <View style={[card, { overflow: 'hidden' }]}>
-        {(
-          [
-            ['Name', name],
-            ['Phone', maskPhone(user.phone)],
-            ['City', city || 'Not set'],
-          ] as [string, string][]
-        ).map(([k, v]) => (
-          <View key={k} style={s.detail}>
-            <Text style={body(12, C.mute, 'medium')}>{k}</Text>
-            <Text style={[body(14, C.ink, 'semi'), { marginTop: 2 }]}>{v}</Text>
-          </View>
-        ))}
-        <Text style={[body(12.5, C.soft), { padding: 14 }]}>This fills every registration form on Yoiden, so you only type it once.</Text>
-      </View>
+      {/* Passport */}
+      <SectionLabel>My passport</SectionLabel>
+      <Pressable onPress={() => nav.navigate('Passport')} style={({ pressed }) => [card, s.recordLink, pressed && { backgroundColor: C.page }]}>
+        <View style={{ flex: 1 }}>
+          <Text style={body(14.5, C.ink, 'semi')}>{passport ? `${passport.completeness}% ready` : 'Your registration details'}</Text>
+          <Text style={[body(12.5, C.soft), { marginTop: 1 }]} numberOfLines={2}>
+            {!passport
+              ? 'Kit sizes, sports and emergency contact, saved once for every form.'
+              : passport.missing.length
+                ? `Add ${passport.missing.slice(0, 2).map((m) => (MISSING_LABEL[m] ?? m).toLowerCase()).join(' and ')}${passport.missing.length > 2 ? ` and ${passport.missing.length - 2} more` : ''}`
+                : 'Registration forms opened from the app fill themselves in.'}
+          </Text>
+          {passport ? (
+            <View style={s.meter}>
+              <View style={[s.meterFill, { width: `${passport.completeness}%` }]} />
+            </View>
+          ) : null}
+        </View>
+        <ChevronRight size={16} color={C.mute} />
+      </Pressable>
 
       <SettingsPanel signedIn />
     </Page>
@@ -369,5 +363,7 @@ const s = StyleSheet.create({
   recordLink: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 12, borderLeftWidth: 4, borderLeftColor: C.hl },
   badge: { backgroundColor: C.hl, borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2 },
   dot: { width: 8, height: 8, borderRadius: 2, backgroundColor: C.hl, marginTop: 6, borderWidth: 1, borderColor: C.hlInk },
+  meter: { height: 5, borderRadius: 3, backgroundColor: C.line, marginTop: 8, overflow: 'hidden' },
+  meterFill: { height: 5, borderRadius: 3, backgroundColor: C.hlInk },
   detail: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.line },
 });

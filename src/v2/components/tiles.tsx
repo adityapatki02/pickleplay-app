@@ -5,6 +5,7 @@ import { C, F, TILE_W, body, card, head, label } from '../theme';
 import { EventLogo, StatusLabel } from './ui';
 import { ChevronRight, ExternalIcon, StarIcon } from './icons';
 import { formatWhen, hasPage, type EventStatus, type YoidenEvent } from '../data/events';
+import { registrationLink } from '../data/passport-api';
 import { REGISTRATIONS, fetchSeats, isOpen, type Registration, type SeatLine } from '../data/registrations';
 import { useFollows } from '../store/follows';
 import { logoUrl } from '../data/events';
@@ -205,7 +206,7 @@ export function RegistrationTile({
   const url = logoUrl(r.logo);
   return (
     <Pressable
-      onPress={() => Linking.openURL(r.url)}
+      onPress={async () => Linking.openURL(closed ? r.url : await registrationLink(r.id, r.url))}
       style={({ pressed }) => [card, compact ? s.compact : s.tile, { width: compact ? 200 : width, borderTopColor: C.green, opacity: pressed ? 0.92 : 1 }]}
     >
       <View style={s.top}>
@@ -274,7 +275,7 @@ export function RegistrationRow({ r, seats, closed, last }: OpenRegistration & {
   const url = logoUrl(r.logo);
   return (
     <Pressable
-      onPress={() => Linking.openURL(r.url)}
+      onPress={async () => Linking.openURL(closed ? r.url : await registrationLink(r.id, r.url))}
       style={({ pressed }) => [s.row, !last && { borderBottomWidth: 1, borderBottomColor: C.line }, pressed && { backgroundColor: C.page }]}
     >
       <View style={[s.regLogo, { width: 44, height: 44 }, r.logoOnDark ? { backgroundColor: C.bar, borderWidth: 0 } : !url ? { backgroundColor: '#EEF0F3', borderWidth: 0 } : null]}>
