@@ -31,6 +31,18 @@ export type Registration = {
 
 export const REGISTRATIONS: Registration[] = [
   {
+    id: "crwa-sports-carnival-2026",
+    name: "CRWA Sports Carnival 2026",
+    kind: "Player registration",
+    sport: "Multi-sport",
+    city: "Bengaluru",
+    eventWhen: "Cricket from 21 Nov",
+    url: "https://crwa.yoiden.com",
+    initials: "CRWA",
+    closes: "2026-11-15",
+    facts: ["Cricket, badminton, carrom, TT, volleyball", "Choodasandra RWA"],
+  },
+  {
     id: "ashmavir-cup-s11",
     name: "Ashmavir Cup S11",
     kind: "Player auction registration",
