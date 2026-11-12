@@ -12,6 +12,7 @@ import { C } from '../../theme';
 import LeagueMode from './LeagueMode';
 import CaptainMode from './CaptainMode';
 import FootballMode from './FootballMode';
+import MultiSportBroadcast from './multisport-broadcast';
 
 export type ModeParams = {
   eventId: string;
@@ -33,6 +34,8 @@ export default function ModeScreen() {
   else if (p.kind === 'football' && event.football) body = <FootballMode event={event} role={p.role} />;
   else if (p.kind === 'league' && p.slug && p.role === 'captain') body = <CaptainMode event={event} slug={p.slug} teamId={p.teamId} />;
   else if (p.kind === 'league' && p.slug) body = <LeagueMode event={event} slug={p.slug} leagueId={p.leagueId} role={p.role} />;
+  // A multi-sport league on the auction server (SHPL): its broadcast links, found by the auction's display token.
+  else if (p.kind === 'event' && p.role === 'admin' && event.auctions?.length) body = <MultiSportBroadcast token={event.auctions[0].token} />;
   else body = <Empty>Tools for this role aren't in the app yet. Your organiser can help from the web console.</Empty>;
 
   return (

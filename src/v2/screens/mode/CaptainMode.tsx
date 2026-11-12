@@ -32,7 +32,7 @@ function eligible(d: CaptainData, sl: CaptainSlot, seat: 0 | 1) {
   return d.roster.filter((r) => !allowed.length || allowed.includes(r.categorySlug));
 }
 
-function PlayerChips({ options, value, onPick, disabled }: { options: { id: string; name: string }[]; value: string | null; onPick: (id: string) => void; disabled?: boolean }) {
+export function PlayerChips({ options, value, onPick, disabled }: { options: { id: string; name: string }[]; value: string | null; onPick: (id: string) => void; disabled?: boolean }) {
   return (
     <View style={s.chips}>
       {options.map((o) => {
