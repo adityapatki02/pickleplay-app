@@ -9,8 +9,8 @@
 //
 // On native, toasts render through the mounted <NotifyHost/>; if the host isn't
 // mounted yet we fall back to Alert (native) / window.alert (web) so a message
-// is never lost. Confirmation uses the native Alert on native and window.confirm
-// on web (reliable + already the pattern used in the app).
+// is never lost. Confirmation uses the native Alert on native and the host's
+// in-page sheet on web (window.confirm only before the host mounts).
 
 import { Alert, Platform } from 'react-native';
 
@@ -107,7 +107,21 @@ export type ConfirmOptions = {
 export function confirmAction(opts: ConfirmOptions): Promise<boolean> {
   return new Promise((resolve) => {
     if (Platform.OS === 'web') {
-      // Alert.alert's buttons don't work on web; window.confirm is reliable.
+      // The in-page sheet, as chooseAction uses: window.confirm is silently blocked
+      // in some in-app browsers and embedded previews, and a blocked confirm is a
+      // button that does nothing (AFL's half-time button, 7 Oct 2026).
+      if (choiceListener) {
+        choiceListener({
+          id: seq++,
+          title: opts.title,
+          message: opts.message,
+          options: [{ label: opts.confirmLabel ?? 'Confirm', value: 'ok', destructive: opts.destructive }],
+          cancelLabel: opts.cancelLabel,
+          resolve: (v) => resolve(v === 'ok'),
+        });
+        return;
+      }
+      // Before the host mounts, the browser's own dialog.
       const text = opts.title ? `${opts.title}\n\n${opts.message}` : opts.message;
       // eslint-disable-next-line no-alert
       resolve(typeof window !== 'undefined' ? window.confirm(text) : false);

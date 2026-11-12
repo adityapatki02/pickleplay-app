@@ -4,8 +4,8 @@
  * categories and every player with sold price and buying team. CORS is open.
  */
 
-/** Override with NEXT_PUBLIC_AUCTION_BASE (e.g. http://localhost:3001) to test against a local auction server. */
-export const AUCTION_BASE = "https://auction.yoiden.com";
+/** Override with EXPO_PUBLIC_AUCTION_BASE (e.g. http://localhost:3001) to test against a local auction server. */
+export const AUCTION_BASE = process.env.EXPO_PUBLIC_AUCTION_BASE || "https://auction.yoiden.com";
 
 export type AuctionTeam = {
   id: string;

@@ -98,12 +98,64 @@ export type AdminTeam = {
   hasPin: boolean;
 };
 
+/** A card given to a team. What it costs comes from the league's card rules. */
+export type AdminCard = { id: string; franchiseId: string; type: 'yellow' | 'red'; reason: string | null; createdAt: string };
+
+/** Points off for each yellow and each red card. */
+export type CardRules = { yellow: number; red: number };
+
+export type AdminTeamRef = { id: string; name: string; shortName: string | null };
+
+export type AdminLineupRow = { slotNumber: number; categorySlug: string; player1Id: string | null; player2Id: string | null; powerplay?: boolean };
+
+export type AdminTieSlot = { slot: number; category: string; allowedCategories: string[]; mixed?: boolean; singles?: boolean; pairing: string; points: number };
+
+export type AdminTie = {
+  id: string;
+  round: string;
+  status: string;
+  home: AdminTeamRef | null;
+  away: AdminTeamRef | null;
+  court: number | null;
+  scheduledStart: string | null;
+  tieSheetDeadline: string | null;
+  presentTeamIds: string[];
+  scorerId: string | null;
+  sheets: { franchiseId: string; status: string; lineupData: AdminLineupRow[] }[];
+  slots: AdminTieSlot[];
+  matchDay?: string | null;
+  /** Each game's result, for a filled tie sheet. */
+  games?: { slotNumber: number; played: boolean; homeScore: number | null; awayScore: number | null }[];
+};
+
 export type AdminData = {
   /** The league's event site (https://society.yoiden.com, path of its public page), if it has one. */
   site: { host: string; path: string } | null;
-  season: { id: string; slug: string | null };
+  season: {
+    id: string;
+    slug: string | null;
+    releaseOnCommand?: boolean;
+    noDeadline?: boolean;
+    /** The rules line printed under a paper tie sheet; null = the default wording. */
+    sheetRule?: string | null;
+    /** League-stage progress, for the knockout card. */
+    leagueTies?: number;
+    leagueDone?: number;
+    knockoutSeeded?: boolean;
+    teamCount?: number;
+  };
+  leagueName?: string;
+  powerplayPoints: number;
   scorers: AdminScorer[];
   franchises: AdminTeam[];
+  squads: Record<string, { playerId: string; name: string; cat: string }[]>;
+  ties: AdminTie[];
+  cards: AdminCard[];
+  cardRules?: CardRules;
+  /** Points each team has lost to cards, by team id. */
+  cardPenalty?: Record<string, number>;
+  /** Courts the league's ties and games are on (1-8), for per-court broadcast links. */
+  courts?: number[];
 };
 
 export const leagueAdmin = {
@@ -118,6 +170,39 @@ export const leagueAdmin = {
   /** Put a tie on a court (1-8), or clear it with null. */
   assignCourt: (leagueId: string, tieId: string, courtNumber: number | null) =>
     apiClient.post('/admin/assign-court', { leagueId, tieId, courtNumber }),
+  /** Move one game to a court (1-8), or clear it with null. */
+  gameCourt: (leagueId: string, tieId: string, slotNumber: number, courtNumber: number | null) =>
+    apiClient.post('/admin/game-court', { leagueId, tieId, slotNumber, courtNumber }),
+  assignScorer: (leagueId: string, tieId: string, scorerId: string | null) =>
+    apiClient.post('/admin/assign-scorer', { leagueId, tieId, scorerId }),
+  /** Save one team's lineup for a tie, on the captain's behalf. */
+  saveLineup: (leagueId: string, tieId: string, franchiseId: string, lineupData: AdminLineupRow[]) =>
+    apiClient.post('/admin/lineup', { leagueId, tieId, franchiseId, lineupData }),
+  /** Lock both lineups (in release-on-command leagues this also publishes them). */
+  lockLineups: (leagueId: string, tieId: string) => apiClient.post(`/admin/lock/${tieId}`, { leagueId }),
+  /** Open the captain portal for this tie for 15, 30 or 60 minutes from now. */
+  openCaptains: (leagueId: string, tieId: string, minutes: 15 | 30 | 60) => apiClient.post('/admin/open-captain-portal', { leagueId, tieId, minutes }),
+  captainPin: (leagueId: string, franchiseId: string) =>
+    apiClient.post('/admin/captain-pin/reveal', { leagueId, franchiseId }).then(unwrap<{ pin: string | null; reason: string | null }>),
+  setCaptainPin: (leagueId: string, franchiseId: string, pin: string) => apiClient.post('/admin/captain-pin', { leagueId, franchiseId, pin }),
+  /** The court a scorer covers; also puts them on that court's remaining ties. */
+  scorerCourt: (leagueId: string, userId: string, court: number | null) => apiClient.post('/admin/scorer-court', { leagueId, userId, court }),
+  /** Replace a squad player. Played games stay with the outgoing player. */
+  swapPlayer: (leagueId: string, franchiseId: string, outPlayerId: string, newName: string) =>
+    apiClient.post('/admin/roster/swap', { leagueId, franchiseId, outPlayerId, newName }).then(unwrap<{ outName: string; inName: string; gamesMoved: number; sheetsMoved: number }>),
+  /** Add a player to a squad. With a phone, the entry is that person's own account. */
+  addPlayer: (leagueId: string, franchiseId: string, body: { name: string; category: string; phone?: string }) =>
+    apiClient.post('/admin/roster/add', { leagueId, franchiseId, ...body }).then(unwrap<{ playerId: string; name: string; existingAccount: boolean }>),
+  addCard: (leagueId: string, franchiseId: string, type: 'yellow' | 'red', reason?: string) =>
+    apiClient.post('/admin/cards', { leagueId, franchiseId, type, reason }),
+  /** Draw the knockout from the final table (top 4: 1v4, 2v3; three teams: 2nd v 3rd, winner meets 1st). */
+  knockout: (leagueId: string) => apiClient.post('/admin/knockout', { leagueId }).then(unwrap<{ sf1?: string; sf2?: string; final?: string }>),
+  /** Points off for each yellow and each red; re-prices cards already given. */
+  setCardRules: (leagueId: string, rules: CardRules) => apiClient.post('/admin/card-rules', { leagueId, ...rules }),
+  removeCard: (leagueId: string, cardId: string) => apiClient.post(`/admin/cards/${cardId}/remove`, { leagueId }),
+  setPresence: (leagueId: string, tieId: string, franchiseId: string, present: boolean) => apiClient.post('/admin/presence', { leagueId, tieId, franchiseId, present }),
+  /** Put a finished league tie back in play to correct a result. */
+  reopenTie: (leagueId: string, tieId: string) => apiClient.post(`/admin/reopen-tie/${tieId}`, { leagueId }),
   /** Rename a team (the league organiser's own franchise endpoint). */
   renameTeam: (franchiseId: string, name: string, shortName?: string) =>
     apiClient.patch(`/franchises/${franchiseId}`, { name, ...(shortName ? { shortName } : {}) }),

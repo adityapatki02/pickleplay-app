@@ -1,6 +1,6 @@
 // Scorer and admin mode for a league: every tie of the season, live ones first, then
 // today's, then what's next and what's done. Tapping a tie opens it for scoring. Admins
-// also get Standings (the public table), Teams, Scorers and Links tabs, and can put a
+// also get Standings (the public table), Teams and Management tabs, and can put a
 // tie on a court from its card.
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -13,7 +13,7 @@ import { errorText, leagueAdmin, scorer, type ScoreTie } from '../../data/modes-
 import type { YoidenEvent } from '../../data/events';
 import type { Role } from '../../store/roles';
 import { useLoad } from '../../hooks';
-import { LinksTab, ScorersTab, TeamsTab } from './league-admin';
+import { ManagementTab, TeamsTab } from './league-admin';
 import { StandingsTab } from '../event/LeagueEvent';
 import { C, body, card, head, label } from '../../theme';
 
@@ -41,16 +41,15 @@ function StatusChip({ t }: { t: ScoreTie }) {
   );
 }
 
-/** Admin-only: the tie's court, tap to pick 1-8 or clear it. */
-function CourtPicker({ t, leagueId, onSaved }: { t: ScoreTie; leagueId: string; onSaved: () => void }) {
+/** Admin-only: a tie's or game's court, tap to pick 1-8 or clear it. */
+export function CourtPicker({ court, save }: { court: number | null; save: (court: number | null) => Promise<unknown> }) {
   const [open, setOpen] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const pick = async (court: number | null) => {
+  const pick = async (n: number | null) => {
     setOpen(false);
     try {
-      await leagueAdmin.assignCourt(leagueId, t.id, court);
+      await save(n);
       setErr(null);
-      onSaved();
     } catch (e) {
       setErr(errorText(e, 'Could not set the court.'));
     }
@@ -58,16 +57,16 @@ function CourtPicker({ t, leagueId, onSaved }: { t: ScoreTie; leagueId: string; 
   return (
     <View style={{ gap: 8 }}>
       <Pressable onPress={() => setOpen((o) => !o)} style={({ pressed }) => [s.courtBtn, pressed && { opacity: 0.8 }]} accessibilityRole="button">
-        <Text style={label(11.5, C.bar)}>{t.courtNumber ? `Court ${t.courtNumber}` : 'Set court'} ▾</Text>
+        <Text style={label(11.5, C.bar)}>{court ? `Court ${court}` : 'Set court'} ▾</Text>
       </Pressable>
       {open ? (
         <View style={s.courts}>
           {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-            <Pressable key={n} onPress={() => pick(n)} style={[s.court, t.courtNumber === n && { backgroundColor: C.bar }]}>
-              <Text style={label(13, t.courtNumber === n ? C.hl : C.bar)}>{n}</Text>
+            <Pressable key={n} onPress={() => pick(n)} style={[s.court, court === n && { backgroundColor: C.bar }]}>
+              <Text style={label(13, court === n ? C.hl : C.bar)}>{n}</Text>
             </Pressable>
           ))}
-          {t.courtNumber ? (
+          {court ? (
             <Pressable onPress={() => pick(null)} style={[s.court, { paddingHorizontal: 10 }]}>
               <Text style={label(11.5, C.soft)}>None</Text>
             </Pressable>
@@ -106,7 +105,7 @@ function TieRow({ t, me, onPress, admin, colors }: { t: ScoreTie; me: string; on
           {played ? <Text style={head(20, C.ink)}>{score(i)}</Text> : null}
         </View>
       ))}
-      {admin && t.status !== 'completed' ? <CourtPicker t={t} leagueId={admin.leagueId} onSaved={admin.onSaved} /> : null}
+      {admin && t.status !== 'completed' ? <CourtPicker court={t.courtNumber} save={(c) => leagueAdmin.assignCourt(admin.leagueId, t.id, c).then(admin.onSaved)} /> : null}
       <View style={s.tieFoot}>
         <Text style={body(12, holder ? C.amber : C.mute)}>{holder ? `Being scored by ${holder}` : t.status === 'completed' ? 'Open to check or fix' : 'Tap to score'}</Text>
         <ChevronRight color={C.mute} />
@@ -118,7 +117,7 @@ function TieRow({ t, me, onPress, admin, colors }: { t: ScoreTie; me: string; on
 export default function LeagueMode({ event, slug, leagueId, role }: { event: YoidenEvent; slug: string; leagueId?: string; role: Role }) {
   const nav = useNavigation<any>();
   const [showAllDone, setShowAllDone] = useState(false);
-  const [tab, setTab] = useState<'ties' | 'standings' | 'teams' | 'scorers' | 'links'>('ties');
+  const [tab, setTab] = useState<'ties' | 'standings' | 'teams' | 'manage'>('ties');
   const [feed, setFeed] = useState<Awaited<ReturnType<typeof fetchLeague>> | null>(null);
   const { state, reload } = useLoad(
     `mode-${slug}`,
@@ -143,13 +142,13 @@ export default function LeagueMode({ event, slug, leagueId, role }: { event: Yoi
     const ties = state.data.ties.filter((t) => t.homeTeam || t.awayTeam);
     const live = ties.filter((t) => t.status === 'in_progress');
     const todays = ties.filter((t) => t.status !== 'in_progress' && t.status !== 'completed' && t.matchDay === today);
-    const next = ties.filter((t) => t.status !== 'in_progress' && t.status !== 'completed' && t.matchDay !== today && (!t.matchDay || t.matchDay > today));
+    const next = ties.filter((t) => t.status !== 'in_progress' && t.status !== 'completed' && t.matchDay !== today);
     const done = ties.filter((t) => t.status === 'completed').reverse();
     return { live, todays, next, done };
   }, [state]);
 
   const open = (t: ScoreTie) =>
-    state.status === 'ready' && nav.navigate('ScoreTie', { eventId: event.id, slug, seasonId: state.data.season.id, tieId: t.id, role });
+    state.status === 'ready' && nav.navigate('ScoreTie', { eventId: event.id, slug, seasonId: state.data.season.id, tieId: t.id, role, leagueId });
 
   const section = (title: string, list: ScoreTie[], color?: string) =>
     list.length ? (
@@ -203,8 +202,7 @@ export default function LeagueMode({ event, slug, leagueId, role }: { event: Yoi
                 { key: 'ties', label: 'Matches' },
                 { key: 'standings', label: 'Standings' },
                 { key: 'teams', label: 'Teams' },
-                { key: 'scorers', label: 'Scorers' },
-                { key: 'links', label: 'Links' },
+                { key: 'manage', label: 'Management' },
               ] as const
             }
             value={tab}
@@ -216,10 +214,8 @@ export default function LeagueMode({ event, slug, leagueId, role }: { event: Yoi
         <View style={{ paddingHorizontal: 16, paddingTop: 14 }}>{feed ? <StandingsTab feed={feed} /> : <Empty>Loading…</Empty>}</View>
       ) : isAdmin && tab === 'teams' ? (
         <TeamsTab leagueId={leagueId!} colors={colors} />
-      ) : isAdmin && tab === 'scorers' ? (
-        <ScorersTab leagueId={leagueId!} />
-      ) : isAdmin && tab === 'links' ? (
-        <LinksTab leagueId={leagueId!} eventUrl={event.url} />
+      ) : isAdmin && tab === 'manage' ? (
+        <ManagementTab leagueId={leagueId!} eventUrl={event.url} />
       ) : (
         tiesView
       )}

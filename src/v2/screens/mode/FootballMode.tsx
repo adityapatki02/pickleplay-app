@@ -46,7 +46,7 @@ function MatchControl({ feed, m, slug, reload }: { feed: FootballFeed; m: FbMatc
 
   const fullTime = () => {
     if (knockout && m.homeScore === m.awayScore) {
-      xAlert('Pick the winner', 'A knockout needs a winner. Record the shoot-out or use "Winner" below.');
+      xAlert('Pick the winner', 'A knockout needs a winner. Record the shoot-out or use "Award to" below.');
       return;
     }
     xConfirm('End the match?', `${home} ${m.homeScore}–${m.awayScore} ${away}`, () => clock('fulltime'), 'Full time');
@@ -68,6 +68,11 @@ function MatchControl({ feed, m, slug, reload }: { feed: FootballFeed; m: FbMatc
 
   const phase = m.phase;
   const live = isLiveMatch(m);
+  // A walkover also works after kick-off (started by mistake, or a side walks off),
+  // as long as no goal is in: the server refuses one with goals, so then the
+  // choice is to end the match with that side as the winner, goals kept.
+  const noGoals = !m.homeScore && !m.awayScore;
+  const walkover = phase === 'pre' || (live && noGoals);
   return (
     <View style={s.control}>
       <View style={s.board}>
@@ -92,20 +97,20 @@ function MatchControl({ feed, m, slug, reload }: { feed: FootballFeed; m: FbMatc
         {live ? <Button title="Full time" tone="navy" onPress={fullTime} /> : null}
         {phase === 'ft' ? <Button title="Reopen match" tone="white" onPress={() => clock('reopen')} /> : null}
       </View>
-      {phase === 'pre' || (knockout && live && m.homeScore === m.awayScore) ? (
+      {phase === 'pre' || live ? (
         <View style={s.row}>
           {(['home', 'away'] as const).map((side) => (
             <Pressable
               key={side}
               onPress={() =>
-                phase === 'pre'
-                  ? xConfirm('Walkover?', `${side === 'home' ? home : away} win without playing.`, () => clock('walkover', side), 'Walkover')
-                  : xConfirm('End with this winner?', `${side === 'home' ? home : away} go through.`, () => clock('fulltime', side), 'Full time')
+                walkover
+                  ? xConfirm('Walkover?', `${side === 'home' ? home : away} win without playing${phase === 'pre' ? '' : ' (the match is closed now)'}.`, () => clock('walkover', side), 'Walkover')
+                  : xConfirm('End with this winner?', `${side === 'home' ? home : away} ${knockout ? 'go through' : 'win'}. The goals scored stay as they are.`, () => clock('fulltime', side), 'Full time')
               }
               style={s.link}
             >
               <Text style={label(12.5, C.accent)}>
-                {phase === 'pre' ? 'Walkover' : 'Winner'}: {side === 'home' ? home : away}
+                {walkover ? 'Walkover' : 'Award to'}: {side === 'home' ? home : away}
               </Text>
             </Pressable>
           ))}
